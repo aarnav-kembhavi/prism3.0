@@ -34,7 +34,10 @@ import cv2
 import numpy as np
 from normalization import normalize_image_pil
 from normalization.region_adaptive import preprocess_crop, RegionArtifactProfile
-from models_interface import run_text_ocr, run_math_recognition, run_table_extraction, get_math_latencies, get_text_latencies, get_table_latencies
+from models_interface import (
+    run_text_ocr, run_text_ocr_batched, run_math_recognition, run_table_extraction,
+    get_math_latencies, get_text_latencies, get_table_latencies, get_text_batch_latencies
+)
 from layout_utils import apply_semantic_reading_order, sort_detections_geometric, xyxy_to_pil_crop, detect_column_count, split_detections_by_column
 from latex_builder import wrap_content, assemble_document, save_tex
 from detection_postprocess import postprocess_detections
@@ -159,6 +162,8 @@ def run_detection(model: YOLO, image_norm: Image.Image, image_fidelity: Image.Im
 def route_and_extract(detections, figures_dir: str, figure_start: int = 0):
     """
     Route each detection to the correct specialist model.
+    Optimized: Batches text regions for a single OCR pass to save CPU latency.
+    
     Returns:
         body_parts      : List[str]  — LaTeX-wrapped content in reading order
         list_indices    : set of int — indices in body_parts that are list items
@@ -169,12 +174,24 @@ def route_and_extract(detections, figures_dir: str, figure_start: int = 0):
     list_indices = set()
     figure_counter = figure_start
 
+    # Stage 3a: Identify text regions and pre-process in batch
+    text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
+    if text_indices:
+        text_crops = [detections[i]["crop"] for i in text_indices]
+        # Perform batched OCR pass
+        raw_texts = run_text_ocr_batched(text_crops)
+        # Store back into detection objects
+        for idx, raw in zip(text_indices, raw_texts):
+            detections[idx]["raw_text"] = raw
+
+    # Stage 3b: Build body parts sequentially (preserving reading order)
     for det in detections:
         class_name = det["class_name"]
         crop = det["crop"]
 
         if class_name in TEXT_CLASSES:
-            raw = run_text_ocr(crop)
+            # Use pre-computed raw text from batch
+            raw = det.get("raw_text", "")
             wrapped = wrap_content(class_name, raw)
             if class_name == LIST_ITEM_CLASS:
                 list_indices.add(len(body_parts))
@@ -483,17 +500,21 @@ def main():
         math_lats = get_math_latencies()
         text_lats = get_text_latencies()
         table_lats = get_table_latencies()
+        text_batch_lats = get_text_batch_latencies()
         
         math_mean = round(sum(math_lats)/len(math_lats), 2) if math_lats else 0.0
         text_mean = round(sum(text_lats)/len(text_lats), 2) if text_lats else 0.0
         table_mean = round(sum(table_lats)/len(table_lats), 2) if table_lats else 0.0
+        batch_total = round(sum(text_batch_lats), 2) if text_batch_lats else 0.0
 
         print(f"\n[*] Profiling Results:")
         print(f"    Latency : {metrics['latency_sec']}s")
         print(f"    CPU     : Mean {metrics['cpu_mean_pct']}%, Peak {metrics['cpu_peak_pct']}%")
         print(f"    Memory  : Mean {metrics['mem_mean_mb']} MB, Peak {metrics['mem_peak_mb']} MB")
+        if text_batch_lats:
+            print(f"    OCR Bat: Total {batch_total} ms (over {len(text_batch_lats)} batches)")
         if text_lats:
-            print(f"    Text Lat: Mean {text_mean} ms (over {len(text_lats)} regions)")
+            print(f"    Text Seq: Mean {text_mean} ms (over {len(text_lats)} regions)")
         if math_lats:
             print(f"    Math Lat: Mean {math_mean} ms (over {len(math_lats)} equations)")
         if table_lats:
@@ -504,8 +525,8 @@ def main():
         file_exists = os.path.exists(log_file)
         with open(log_file, "a") as f:
             if not file_exists:
-                f.write("Image_Name,Latency_s,CPU_Mean_%,CPU_Peak_%,Mem_Mean_MB,Mem_Peak_MB,Text_Mean_ms,Math_Mean_ms,Table_Mean_ms\n")
-            f.write(f"{image_stem},{metrics['latency_sec']},{metrics['cpu_mean_pct']},{metrics['cpu_peak_pct']},{metrics['mem_mean_mb']},{metrics['mem_peak_mb']},{text_mean},{math_mean},{table_mean}\n")
+                f.write("Image_Name,Latency_s,CPU_Mean_%,CPU_Peak_%,Mem_Mean_MB,Mem_Peak_MB,OCR_Batch_ms,Math_Mean_ms,Table_Mean_ms\n")
+            f.write(f"{image_stem},{metrics['latency_sec']},{metrics['cpu_mean_pct']},{metrics['cpu_peak_pct']},{metrics['mem_mean_mb']},{metrics['mem_peak_mb']},{batch_total},{math_mean},{table_mean}\n")
 
     print(f"\n[✓] Done.")
     print(f"    Upload folder '{output_dir}/' to Overleaf and compile main.tex")
