@@ -34,8 +34,8 @@ import cv2
 import numpy as np
 from normalization import normalize_image_pil
 from normalization.region_adaptive import preprocess_crop, RegionArtifactProfile
-from models_interface import run_text_ocr, run_math_recognition, run_table_extraction, get_math_latencies
-from layout_utils import sort_detections_reading_order, xyxy_to_pil_crop, detect_column_count, split_detections_by_column
+from models_interface import run_text_ocr, run_math_recognition, run_table_extraction, get_math_latencies, get_text_latencies, get_table_latencies
+from layout_utils import apply_semantic_reading_order, sort_detections_geometric, xyxy_to_pil_crop, detect_column_count, split_detections_by_column
 from latex_builder import wrap_content, assemble_document, save_tex
 from detection_postprocess import postprocess_detections
 
@@ -348,25 +348,8 @@ def main():
 
     # ----------------------------------------------------------------
     # Header zone suppression + logo heuristic
-    #
-    # The top strip of a journal page contains:
-    #   - A running header line ("Author et al: …")  → Page-header
-    #   - A publisher logo (IEEE Access, Elsevier…)  → should be Picture
-    #
-    # YOLO frequently mislabels the logo region as Section-header or
-    # Page-header, which sends it through OCR and produces garbled text
-    # like "\subsection*{IEEE Access}" mid-column.
-    #
-    # Strategy:
-    #   1. Suppress ALL Section-header and Page-header detections whose
-    #      bottom edge sits within the top HEADER_SUPPRESS_H_FRAC of the
-    #      page — these are header-strip artefacts, not body headings.
-    #   2. If no Picture detection exists in the top-right logo zone,
-    #      inject a synthetic one from the fidelity image.
     # ----------------------------------------------------------------
-    HEADER_H_FRAC         = 0.065  # logo crop height: top 6.5% of page
-    HEADER_W_FRAC         = 0.25   # logo crop width: right 25% of page
-    HEADER_SUPPRESS_H_FRAC = 0.10  # suppress any Section/Page-header
+    HEADER_SUPPRESS_H_FRAC = 0.12  # suppress any Section/Page-header
                                     # whose bottom (y2) is above this line
 
     header_suppress_y = img_height * HEADER_SUPPRESS_H_FRAC
@@ -383,6 +366,11 @@ def main():
         print(f"  [header-suppress] Removed {suppressed} header-zone "
               f"Section-header/Page-header detection(s)")
 
+    # ----------------------------------------------------------------
+    # Logo Injection Heuristic
+    # ----------------------------------------------------------------
+    HEADER_H_FRAC = 0.065
+    HEADER_W_FRAC = 0.25
     header_right_box = [
         img_width * (1 - HEADER_W_FRAC), 0,
         img_width,                         img_height * HEADER_H_FRAC,
@@ -407,8 +395,6 @@ def main():
                 "crop": header_crop,
                 "is_header_logo": True,
             })
-        else:
-            print(f"  [logo-heuristic] Header zone crop too small — skipping logo injection")
 
     for det in detections:
         if det["class_name"] in IMAGE_CLASSES:
@@ -423,18 +409,6 @@ def main():
         if profile.any_detected():
             print(f"  [region-prep] {profile.summary()}")
 
-    # Summary log
-    if _region_profiles:
-        corrected_count = sum(1 for p in _region_profiles if p.any_applied())
-        print(f"[✓] Region preprocessing: {corrected_count}/{len(_region_profiles)} crops corrected")
-        for label, flag in [("Glare", "glare_corrected"), ("Shadow", "shadow_corrected"),
-                             ("Moiré", "moire_corrected"), ("Contrast", "contrast_corrected")]:
-            n = sum(1 for p in _region_profiles if getattr(p, flag))
-            if n:
-                print(f"    {label:<10}: {n} region(s)")
-    else:
-        print("[✓] Region preprocessing: no non-Picture regions to process")
-
     # Detect layout type (single vs two-column)
     col_count = detect_column_count(detections, img_width)
     print(f"[*] Detected layout: {col_count}-column")
@@ -444,9 +418,23 @@ def main():
     # ================================================================
     print(f"\n[*] Stage 3: Content Extraction")
 
+    # Re-enable DAG everywhere as per user request
+    use_dag = True
+
+    # Fix: Extract header logos to pass as a separate parameter
+    header_logo_dets = [d for d in detections if d.get("is_header_logo")]
+    body_detections  = [d for d in detections if not d.get("is_header_logo")]
+    
+    header_logo_fname = None
+    if header_logo_dets:
+        logo_det = header_logo_dets[0]
+        header_logo_fname = "figure_header_logo.png"
+        logo_det['crop'].save(output_dir / header_logo_fname)
+        print(f"  [logo] Header logo extracted: {header_logo_fname}")
+
     if col_count == 2:
         full_width_dets, left_dets, right_dets = split_detections_by_column(
-            detections, img_width
+            body_detections, img_width, img_height, use_dag=use_dag
         )
         # Process each group separately, chaining figure counter
         full_parts, full_indices, fig_count = route_and_extract(
@@ -466,18 +454,24 @@ def main():
             left_list_regions=left_indices,
             right_parts=right_parts,
             right_list_regions=right_indices,
+            header_logo=header_logo_fname
         )
     else:
-        detections = sort_detections_reading_order(
-            detections, image_width=img_width
-        )
+        if use_dag:
+            body_detections = apply_semantic_reading_order(
+                body_detections, image_width=img_width, image_height=img_height
+            )
+        else:
+            body_detections = sort_detections_geometric(body_detections)
+            
         body_parts, list_indices, _ = route_and_extract(
-            detections, str(output_dir)
+            body_detections, str(output_dir)
         )
         document = assemble_document(
             body_parts=body_parts,
             list_regions=list_indices,
             is_two_column=False,
+            header_logo=header_logo_fname
         )
 
     # Save main.tex inside the output folder
@@ -487,22 +481,31 @@ def main():
     if profiler:
         metrics = profiler.stop()
         math_lats = get_math_latencies()
+        text_lats = get_text_latencies()
+        table_lats = get_table_latencies()
+        
         math_mean = round(sum(math_lats)/len(math_lats), 2) if math_lats else 0.0
+        text_mean = round(sum(text_lats)/len(text_lats), 2) if text_lats else 0.0
+        table_mean = round(sum(table_lats)/len(table_lats), 2) if table_lats else 0.0
 
         print(f"\n[*] Profiling Results:")
         print(f"    Latency : {metrics['latency_sec']}s")
         print(f"    CPU     : Mean {metrics['cpu_mean_pct']}%, Peak {metrics['cpu_peak_pct']}%")
         print(f"    Memory  : Mean {metrics['mem_mean_mb']} MB, Peak {metrics['mem_peak_mb']} MB")
+        if text_lats:
+            print(f"    Text Lat: Mean {text_mean} ms (over {len(text_lats)} regions)")
         if math_lats:
             print(f"    Math Lat: Mean {math_mean} ms (over {len(math_lats)} equations)")
+        if table_lats:
+            print(f"    Table Lat: Mean {table_mean} ms (over {len(table_lats)} tables)")
         
         # Log to CSV
         log_file = "profiling_report.csv"
         file_exists = os.path.exists(log_file)
         with open(log_file, "a") as f:
             if not file_exists:
-                f.write("Image_Name,Latency_s,CPU_Mean_%,CPU_Peak_%,Mem_Mean_MB,Mem_Peak_MB,Math_Mean_ms\n")
-            f.write(f"{image_stem},{metrics['latency_sec']},{metrics['cpu_mean_pct']},{metrics['cpu_peak_pct']},{metrics['mem_mean_mb']},{metrics['mem_peak_mb']},{math_mean}\n")
+                f.write("Image_Name,Latency_s,CPU_Mean_%,CPU_Peak_%,Mem_Mean_MB,Mem_Peak_MB,Text_Mean_ms,Math_Mean_ms,Table_Mean_ms\n")
+            f.write(f"{image_stem},{metrics['latency_sec']},{metrics['cpu_mean_pct']},{metrics['cpu_peak_pct']},{metrics['mem_mean_mb']},{metrics['mem_peak_mb']},{text_mean},{math_mean},{table_mean}\n")
 
     print(f"\n[✓] Done.")
     print(f"    Upload folder '{output_dir}/' to Overleaf and compile main.tex")

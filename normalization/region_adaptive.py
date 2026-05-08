@@ -111,15 +111,11 @@ from .frequency_filter import (
 # ================================================================
 
 GLARE_LIGHTNESS_THRESH: int   = 230    # LAB L threshold for glare pixels
-GLARE_AREA_THRESH: float      = 0.005  # min fraction of crop area to trigger (phone photos)
-GLARE_AREA_THRESH_SCREENSHOT: float = 0.25  # stricter threshold for screenshots:
-                                             # white page backgrounds easily have >0.5% of
-                                             # pixels at L>230, so we need 25% to be truly
-                                             # glare-bright before inpainting (which destroys text).
+GLARE_AREA_THRESH: float      = 0.05   # increased from 0.005 to 5% (phone photos)
+GLARE_AREA_THRESH_SCREENSHOT: float = 0.25  # min 25% area for screenshots
 SHADOW_GRADIENT_THRESH: float = 0.25   # DoG background ratio std-dev trigger
-MOIRE_SPIKE_RATIO_THRESH: float = 1.8  # FFT peak/mean ratio trigger (phone photos)
-MOIRE_SPIKE_RATIO_THRESH_SCREENSHOT: float = 5.0  # screenshots have no sensor moiré;
-                                                    # only trigger on extreme FFT spikes
+MOIRE_SPIKE_RATIO_THRESH: float = 3.5  # increased from 1.8 to 3.5 (phone photos)
+MOIRE_SPIKE_RATIO_THRESH_SCREENSHOT: float = 8.0  # increased from 5.0 to 8.0
 CONTRAST_RMS_THRESH: float    = 18.0   # grayscale RMS contrast trigger
 
 
@@ -418,7 +414,7 @@ def preprocess_crop(
 
     # --- Full detection pass for all other classes ----------------
 
-    # Step 1: Glare
+    # Step 1: Glare (Keep — localized glare is common)
     glare_det, glare_sev = detect_glare(result, is_screenshot=is_screenshot)
     profile.glare_detected = glare_det
     profile.glare_severity = glare_sev
@@ -426,28 +422,10 @@ def preprocess_crop(
         result = remove_glare(result, lightness_threshold=GLARE_LIGHTNESS_THRESH)
         profile.glare_corrected = True
 
-    # Step 2: Shadow  (skipped for Formula — DoG degrades thin strokes)
-    # Also skip for screenshots — DoG flattens JPEG compression gradients
-    # that look like shadows but are actually compression artifacts
-    shadow_det, shadow_sev = detect_shadow(result)
-    profile.shadow_detected = shadow_det
-    profile.shadow_severity = shadow_sev
-    if shadow_det:
-        if class_name in _SKIP_SHADOW or is_screenshot:
-            profile.skipped_corrections.append("shadow")
-        else:
-            result = remove_shadows(result)
-            profile.shadow_corrected = True
+    # Step 2: Shadow (DISABLED in Stage 1.5 — already handled globally in Stage 1)
+    # Step 3: Moiré (DISABLED in Stage 1.5 — redundancy causes ringing/blur on text)
 
-    # Step 3: Moiré
-    moire_det, moire_sev = detect_moire(result, is_screenshot=is_screenshot)
-    profile.moire_detected = moire_det
-    profile.moire_severity = moire_sev
-    if moire_det:
-        result = remove_moire(result)
-        profile.moire_corrected = True
-
-    # Step 4: Contrast  (run last — polish after artifact removal)
+    # Step 4: Contrast (Keep — polish after artifact removal)
     low_c, rms = detect_low_contrast(result)
     profile.low_contrast_detected = low_c
     profile.contrast_rms = rms

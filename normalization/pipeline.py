@@ -52,15 +52,15 @@ def _smart_dpi_resize(img, target_dpi, source_dpi):
     h, w = img.shape[:2]
     scale_factor = target_dpi / source_dpi
 
-    # If the image is already large (likely a high-res phone photo),
-    # don't upscale — only downscale if needed
-    LARGE_THRESHOLD = 2000  # pixels on the shorter side
+    # If the image is already large enough (likely a high-res phone photo),
+    # don't upscale — only downscale if needed to keep compute bounded.
+    LARGE_THRESHOLD = 1000  # lowered from 2000
     shorter_side = min(h, w)
 
     if shorter_side >= LARGE_THRESHOLD and scale_factor > 1.0:
-        # Image is already high-res, cap the scale to avoid bloating
-        # Target: shorter side around 2500px
-        desired_shorter = 2500
+        # Image is already at workable resolution, cap the scale to avoid bloating
+        # and magnifying physical artifacts/sensor noise.
+        desired_shorter = 1500 # lowered from 2500
         if shorter_side > desired_shorter:
             scale_factor = desired_shorter / shorter_side
             print(f"  [norm] High-res input detected ({w}x{h}), "

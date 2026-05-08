@@ -73,9 +73,17 @@ def _get_easyocr():
 
 # Store execution times for profiling
 math_latencies = []
+text_latencies = []
+table_latencies = []
 
 def get_math_latencies():
     return math_latencies
+
+def get_text_latencies():
+    return text_latencies
+
+def get_table_latencies():
+    return table_latencies
 
 def _get_texo():
     """Load Texo Math OCR model, tokenizer, and processor."""
@@ -111,12 +119,21 @@ def run_text_ocr(crop: Image.Image) -> str:
     Input:  PIL crop of a text/header/caption/list region
     Output: recognized plaintext string
     """
+    import time
+    global text_latencies
     try:
+        t_start = time.perf_counter()
         import numpy as np
         reader = _get_easyocr()
         img_array = np.array(crop)
         results = reader.readtext(img_array, detail=0)
         text = " ".join(results)
+        t_end = time.perf_counter()
+        
+        latency_ms = (t_end - t_start) * 1000
+        text_latencies.append(latency_ms)
+        print(f"    [text] EasyOCR latency: {latency_ms:.2f} ms")
+        
         return escape_latex_chars(text)
     except Exception as e:
         print(f"[OCR ERROR] {type(e).__name__}: {e}")
@@ -195,7 +212,10 @@ def run_table_extraction(crop: Image.Image) -> str:
     Output: LaTeX tabular environment string, complete,
             e.g. "\\begin{tabular}{cc}\\hline A & B \\\\ \\hline \\end{tabular}"
     """
+    import time
+    global table_latencies
     try:
+        t_start = time.perf_counter()
         solver = _get_table_solver()
         
         # The solver expects an OpenCV/NumPy format and a region dictionary
@@ -208,6 +228,11 @@ def run_table_extraction(crop: Image.Image) -> str:
         
         # .solve() executes TATR -> OCR -> postprocessing cascade
         result = solver.solve(region)
+        t_end = time.perf_counter()
+        
+        latency_ms = (t_end - t_start) * 1000
+        table_latencies.append(latency_ms)
+        print(f"    [table] TATR latency: {latency_ms:.2f} ms")
         
         return result.get("latex", "")
     except Exception as e:
