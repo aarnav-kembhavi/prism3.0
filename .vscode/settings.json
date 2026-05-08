@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^\\.venv/Scripts/python test_rapid_ocr\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

@@ -1,0 +1,12 @@
+# Python artifacts
+__pycache__/
+*.py[oc]
+.venv/
+
+# Large Model weights (DO NOT UPLOAD)
+yolov11n-doclaynet.pt
+Texo/model/
+
+# Local Outputs
+*_output/
+profiling_report.csv

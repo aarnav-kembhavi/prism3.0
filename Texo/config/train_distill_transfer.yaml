@@ -1,0 +1,11 @@
+defaults:
+  - global
+  - hydra: default
+  - model: formulanet-S-distill-transfer
+  - data: UniMER-1M
+  - training: finetune_distill_transfer
+  - trainer: default
+  - _self_
+
+trainer:
+  val_check_interval: 100
