@@ -14,18 +14,17 @@ CONFIG = {
     "preprocess_contrast_factor": 2.2,  # contrast strength
     "preprocess_binarize":     False,    # adaptive thresholding
     "preprocess_sharpen":      True,     # unsharp mask
-    "tatr_confidence":         0.5,      # TATR detection threshold (lowered for better col recall)
-    "ocr_confidence":          0.2,      # EasyOCR minimum confidence (lowered to catch more text)
-    "use_slanet":              False,    # SLANet disabled — use TATR+EasyOCR instead
+    "tatr_confidence":         0.5,      # TATR detection threshold
+    "ocr_confidence":          0.2,      # EasyOCR minimum confidence
+    "use_slanet":              True,     # ENABLED: Use PaddleOCR PP-Structure (SLANet) for tables
     "table_upscale":           2.0,      # higher upscale = better OCR on table cells
     "table_min_col_width_ratio": 0.04,  # merge very narrow columns
     "table_merge_dollar_cols": True,    # merge columns that only contain "$"
     "table_merge_currency_prefix": True, # merge leading "$" into the next cell value
     "ppstructure_lang":        "en",    # PaddleOCR PP-StructureV3 language
     "ppstructure_text_recognition_model_name": "ch_PP-OCRv4_rec",  # Default robust model
-    # OCR backend: "easyocr" (default) or "paddle" (more accurate, requires paddleocr)
     "ocr_backend":             "paddle",
 }
 
-# TATR pretrained model — Microsoft, trained on PubTables-1M
+# TATR pretrained model — Microsoft
 TATR_MODEL = "microsoft/table-transformer-structure-recognition"

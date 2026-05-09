@@ -3,11 +3,11 @@ orchestrate.py
 --------------
 CLI entry point for the Screen2LaTeX orchestration pipeline.
 
-Optimized with Inference Engineering:
-  1. YOLO Unloading: Explicit memory management frees ~650MB RAM.
-  2. Batched Math: Texo now processes all equations in one pass.
-  3. Parallel Routing: Text and Math OCR run concurrently via multithreading.
-  4. ONNX Inference: YOLO runs via ONNX Runtime for 30% CPU speedup.
+Restored to Initial Methodology (v3.9):
+  1. Detailed LaTeX Wrappers (Detailed Titles, resizebox Tables).
+  2. Sequential Specialist Routing (Robust Table Handling).
+  3. RapidOCR Unified Backend (RAM Safe).
+  4. YOLO ONNX + Unloading (Speed Optimized).
 """
 
 import sys
@@ -19,14 +19,13 @@ import torch
 from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
-import concurrent.futures
 
 import cv2
 import numpy as np
 from normalization import normalize_image_pil
 from normalization.region_adaptive import preprocess_crop, RegionArtifactProfile
 from models_interface import (
-    run_text_ocr, run_text_ocr_batched, run_math_recognition, run_math_recognition_batched,
+    run_text_ocr_batched, run_math_recognition_batched,
     run_table_extraction, get_math_latencies, get_math_batch_latencies,
     get_text_latencies, get_table_latencies, get_text_batch_latencies
 )
@@ -41,15 +40,8 @@ except ImportError:
     HAS_PROFILER = False
 
 
-# ----------------------------------------------------------------
-# YOLO MODEL (ONNX Optimized)
-# ----------------------------------------------------------------
 YOLO_MODEL_PATH = "yolov11n-doclaynet.onnx"
 
-
-# ----------------------------------------------------------------
-# Classes handled by each specialist model
-# ----------------------------------------------------------------
 TEXT_CLASSES = {"Text", "Title", "Section-header", "Caption",
                 "Footnote", "Page-footer", "Page-header", "List-item"}
 MATH_CLASSES = {"Formula"}
@@ -60,15 +52,12 @@ LIST_ITEM_CLASS = "List-item"
 
 
 def load_model(model_path: str) -> YOLO:
-    """Load YOLO model (supports .pt and .onnx)."""
     print(f"[*] Loading YOLO model: {model_path}")
     try:
         model = YOLO(model_path, task='detect')
     except Exception as e:
-        print(f"[!] Could not load {model_path}: {e}")
-        print("[!] Attempting fallback to yolov11n-doclaynet.pt")
+        print(f"[!] Falling back to .pt: {e}")
         model = YOLO("yolov11n-doclaynet.pt")
-    print("[✓] Model loaded.")
     return model
 
 
@@ -110,133 +99,108 @@ def run_detection(model: YOLO, image_norm: Image.Image, image_fidelity: Image.Im
             "confidence": confidence,
             "crop": crop,
         })
-
-    print(f"[✓] Detected {len(detections)} regions.")
     return detections
 
 
 def route_and_extract(detections, figures_dir: str, figure_start: int = 0):
     """
-    Route detections to specialist models with parallel batching.
+    Route detections to specialist models.
+    Sequential execution restored to prevent threading-related table failures.
     """
     os.makedirs(figures_dir, exist_ok=True)
-    body_parts = [""] * len(detections)
+    body_parts = []
     list_indices = set()
-    
-    # 1. Collect Tasks
+    figure_counter = figure_start
+
+    # 1. Batch Text and Math for efficiency
     text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
     math_indices = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
-    table_indices = [i for i, d in enumerate(detections) if d["class_name"] in TABLE_CLASSES]
-    image_indices = [i for i, d in enumerate(detections) if d["class_name"] in IMAGE_CLASSES]
     
-    # 2. Parallel Execution (Text and Math)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {}
-        
-        if text_indices:
-            text_crops = [detections[i]["crop"] for i in text_indices]
-            futures["text"] = executor.submit(run_text_ocr_batched, text_crops)
+    if text_indices:
+        text_crops = [detections[i]["crop"] for i in text_indices]
+        raw_texts = run_text_ocr_batched(text_crops)
+        for idx, raw in zip(text_indices, raw_texts):
+            detections[idx]["raw_content"] = raw
             
-        if math_indices:
-            math_crops = [detections[i]["crop"] for i in math_indices]
-            # Texo Fallback counter needs to be shared/managed
-            math_counter = [0]
-            futures["math"] = executor.submit(run_math_recognition_batched, math_crops, figures_dir, math_counter)
+    if math_indices:
+        math_crops = [detections[i]["crop"] for i in math_indices]
+        # Texo Fallback counter needs to be shared/managed
+        math_counter = [0]
+        raw_maths = run_math_recognition_batched(math_crops, figures_dir, math_counter)
+        for idx, raw in zip(math_indices, raw_maths):
+            detections[idx]["raw_content"] = raw
 
-        # 3. Tables (Run sequentially in main thread to avoid TATR RAM spikes)
-        for i in table_indices:
-            raw = run_table_extraction(detections[i]["crop"])
-            body_parts[i] = wrap_content(detections[i]["class_name"], raw)
+    # 2. Sequential Wrap and Table/Picture processing
+    for i, det in enumerate(detections):
+        class_name = det["class_name"]
+        crop = det["crop"]
 
-        # 4. Images (Fast, IO-bound)
-        fig_count = figure_start
-        for i in image_indices:
-            fig_count += 1
-            fname = f"figure_{fig_count:03d}.png"
-            detections[i]["crop"].save(os.path.join(figures_dir, fname))
-            body_parts[i] = wrap_content("Picture", fname)
+        if class_name in TEXT_CLASSES or class_name in MATH_CLASSES:
+            raw = det.get("raw_content", "")
+            wrapped = wrap_content(class_name, raw)
+            if class_name == LIST_ITEM_CLASS:
+                list_indices.add(len(body_parts))
+            body_parts.append(wrapped)
 
-        # 5. Retrieve Parallel Results
-        if "text" in futures:
-            raw_texts = futures["text"].result()
-            for idx, raw in zip(text_indices, raw_texts):
-                body_parts[idx] = wrap_content(detections[idx]["class_name"], raw)
-                if detections[idx]["class_name"] == LIST_ITEM_CLASS:
-                    list_indices.add(idx)
-                    
-        if "math" in futures:
-            raw_maths = futures["math"].result()
-            for idx, raw in zip(math_indices, raw_maths):
-                body_parts[idx] = wrap_content(detections[idx]["class_name"], raw)
+        elif class_name in TABLE_CLASSES:
+            print(f"  [table] Extracting table structure...")
+            raw = run_table_extraction(crop)
+            if raw:
+                wrapped = wrap_content(class_name, raw)
+                body_parts.append(wrapped)
+            else:
+                print(f"  [table] WARNING: Extraction returned empty.")
 
-    # Return body_parts filtered for empty strings (unknown/errors) and mapping count
-    return body_parts, list_indices, fig_count
+        elif class_name in IMAGE_CLASSES:
+            figure_counter += 1
+            fname = f"figure_{figure_counter:03d}.png"
+            crop.save(os.path.join(figures_dir, fname))
+            body_parts.append(wrap_content("Picture", fname))
+
+    return body_parts, list_indices, figure_counter
 
 
 def main():
     parser = argparse.ArgumentParser(description="Screen2LaTeX Orchestrator")
     parser.add_argument("image_path", type=str)
-    parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--skip-normalize", action="store_true")
-    parser.add_argument("--target-dpi", type=int, default=250)
-    parser.add_argument("--source-dpi", type=int, default=96)
     parser.add_argument("--profile", action="store_true")
     args = parser.parse_args()
 
-    if not os.path.exists(args.image_path):
-        print(f"[✗] Image not found: {args.image_path}")
-        sys.exit(1)
-
     image_stem = Path(args.image_path).stem
     output_dir = Path(f"{image_stem}_output")
-    import shutil
-    if output_dir.exists(): shutil.rmtree(output_dir)
+    if output_dir.exists(): import shutil; shutil.rmtree(output_dir)
     output_dir.mkdir(exist_ok=True)
     tex_path = output_dir / "main.tex"
 
-    print(f"\n[*] Input image  : {args.image_path}")
-    print(f"[*] Output folder: {output_dir.absolute()}")
-
     profiler = None
-    if args.profile:
-        if HAS_PROFILER:
-            profiler = BackgroundProfiler(interval=0.1)
-            profiler.start()
+    if args.profile and HAS_PROFILER:
+        profiler = BackgroundProfiler(interval=0.1); profiler.start()
 
     # Stage 1: Normalization
     import psutil
     process = psutil.Process(os.getpid())
     t_stage1_start = time.perf_counter()
     
-    if args.skip_normalize:
-        image_norm = Image.open(args.image_path).convert("RGB")
-        image_fidelity = image_norm
-        is_screenshot = False
-    else:
-        image_norm, image_fidelity, modality_result = normalize_image_pil(args.image_path, target_dpi=args.target_dpi, source_dpi=args.source_dpi)
-        is_screenshot = (modality_result.modality.value == "screenshot")
-        image_norm.save(output_dir / "normalized.png")
+    print("[*] Stage 1: Image Normalization")
+    image_norm, image_fidelity, modality_result = normalize_image_pil(args.image_path)
+    is_screenshot = (modality_result.modality.value == "screenshot")
+    image_norm.save(output_dir / "normalized.png")
 
-    t_stage1_end = time.perf_counter()
-    mem_stage1_end = process.memory_info().rss / 1024 / 1024
+    t_stage1_end = time.perf_counter(); mem_stage1_end = process.memory_info().rss / 1024 / 1024
 
     # Stage 2: Layout
     t_stage2_start = time.perf_counter()
     model = load_model(YOLO_MODEL_PATH)
-    yolo_input = str(output_dir / "normalized.png") if not args.skip_normalize else args.image_path
+    yolo_input = str(output_dir / "normalized.png")
     detections = run_detection(model, image_norm, image_fidelity, yolo_input)
-    
     img_width, img_height = image_norm.width, image_norm.height
     detections = postprocess_detections(detections, img_width, img_height)
 
-    # YOLO UNLOADING (Optimization 4)
+    # YOLO UNLOADING
     print("[*] Unloading YOLO model to free RAM...")
-    del model
-    gc.collect()
-    if torch.cuda.is_available(): torch.cuda.empty_cache()
+    del model; gc.collect(); torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
-    t_stage2_end = time.perf_counter()
-    mem_stage2_end = process.memory_info().rss / 1024 / 1024
+    t_stage2_end = time.perf_counter(); mem_stage2_end = process.memory_info().rss / 1024 / 1024
 
     # Stage 1.5: Adaptive Prep
     t_stage15_start = time.perf_counter()
@@ -259,18 +223,16 @@ def main():
         corrected_bgr, _ = preprocess_crop(crop_bgr, det['class_name'], is_screenshot=is_screenshot)
         det['crop'] = Image.fromarray(cv2.cvtColor(corrected_bgr, cv2.COLOR_BGR2RGB))
 
-    t_stage15_end = time.perf_counter()
-    mem_stage15_end = process.memory_info().rss / 1024 / 1024
+    t_stage15_end = time.perf_counter(); mem_stage15_end = process.memory_info().rss / 1024 / 1024
 
     # Stage 3: Extraction
+    print(f"\n[*] Stage 3: Content Extraction")
     t_stage3_start = time.perf_counter()
     col_count = detect_column_count(detections, img_width)
     header_logo_dets = [d for d in detections if d.get("is_header_logo")]
     body_detections  = [d for d in detections if not d.get("is_header_logo")]
-    header_logo_fname = None
-    if header_logo_dets:
-        header_logo_fname = "figure_header_logo.png"
-        header_logo_dets[0]['crop'].save(output_dir / header_logo_fname)
+    header_logo_fname = "figure_header_logo.png" if header_logo_dets else None
+    if header_logo_fname: header_logo_dets[0]['crop'].save(output_dir / header_logo_fname)
 
     if col_count == 2:
         full_dets, left_dets, right_dets = split_detections_by_column(body_detections, img_width, img_height, use_dag=True)
@@ -283,24 +245,22 @@ def main():
         body_parts, list_idx, _ = route_and_extract(body_sorted, str(output_dir))
         document = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
 
-    t_stage3_end = time.perf_counter()
-    mem_stage3_end = process.memory_info().rss / 1024 / 1024
+    t_stage3_end = time.perf_counter(); mem_stage3_end = process.memory_info().rss / 1024 / 1024
 
     # Stage 4: Assembly
     t_stage4_start = time.perf_counter()
     save_tex(document, str(tex_path))
-    t_stage4_end = time.perf_counter()
-    mem_stage4_end = process.memory_info().rss / 1024 / 1024
+    t_stage4_end = time.perf_counter(); mem_stage4_end = process.memory_info().rss / 1024 / 1024
 
     if profiler:
         metrics = profiler.stop()
-        print(f"\n[*] Component Profiling ({image_stem}) [ENGINEERING OPTIMIZED]:")
+        print(f"\n[*] Component Profiling ({image_stem}) [RESTORED v3.9]:")
         print(f"    {'Component':<15} | {'Latency':<8} | {'RAM (Peak)':<10}")
         print(f"    {'-'*15}-|-{'-'*8}-|-{'-'*10}")
         print(f"    {'Normalization':<15} | {t_stage1_end-t_stage1_start:6.2f}s | {mem_stage1_end:7.1f} MB")
         print(f"    {'YOLO (ONNX)':<15} | {t_stage2_end-t_stage2_start:6.2f}s | {mem_stage2_end:7.1f} MB")
         print(f"    {'Adaptive Prep':<15} | {t_stage15_end-t_stage15_start:6.2f}s | {mem_stage15_end:7.1f} MB")
-        print(f"    {'OCR (Batched)':<15} | {t_stage3_end-t_stage3_start:6.2f}s | {mem_stage3_end:7.1f} MB")
+        print(f"    {'OCR (Unified)':<15} | {t_stage3_end-t_stage3_start:6.2f}s | {mem_stage3_end:7.1f} MB")
         print(f"    {'Assembly':<15} | {t_stage4_end-t_stage4_start:6.2f}s | {mem_stage4_end:7.1f} MB")
         print(f"    {'-'*40}")
         print(f"    {'TOTAL':<15} | {metrics['latency_sec']:6.2f}s | {metrics['mem_peak_mb']:7.1f} MB")
