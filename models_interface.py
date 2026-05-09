@@ -148,7 +148,6 @@ def run_text_ocr(crop: Image.Image) -> str:
 def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 12) -> list[str]:
     """
     Batched text recognition using a Horizontal Montage strategy.
-    Updated chunk_size to 12 as more RAM is available after YOLO unloading.
     """
     import time
     global text_batch_latencies
@@ -185,15 +184,24 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 12) -> list
             img_array = np.array(montage)
             results = reader.readtext(img_array, detail=1)
             
+            # Logging detections
+            char_count = sum(len(r[1]) for r in results)
+            print(f"    [text] Montage OCR: detected {len(results)} boxes, {char_count} chars")
+            
             # 3. Map Results back to original crops
             grouped_texts = [[] for _ in range(len(chunk))]
+            mapped_count = 0
             for bbox, text, conf in results:
                 xs = [p[0] for p in bbox]
                 cx = sum(xs) / len(xs)
                 for i, (x_start, x_end) in enumerate(x_offsets):
                     if x_start <= cx <= x_end:
                         grouped_texts[i].append(text)
+                        mapped_count += 1
                         break
+            
+            if mapped_count < len(results):
+                print(f"    [text] WARNING: {len(results) - mapped_count} boxes lost in mapping")
             
             t_end = time.perf_counter()
             latency_ms = (t_end - t_start) * 1000
@@ -216,7 +224,6 @@ def run_math_recognition_batched(crops: list[Image.Image], fallback_figures_dir:
                                  fallback_counter: list = None) -> list[str]:
     """
     Batched math recognition using Texo.
-    Significantly faster than sequential calls.
     """
     import time
     global math_batch_latencies
@@ -255,7 +262,6 @@ def run_math_recognition_batched(crops: list[Image.Image], fallback_figures_dir:
             if clean_res:
                 final_results.append(clean_res)
             else:
-                # Fallback per-item if Texo returns empty for one item in batch
                 final_results.append(_math_fallback(crops[i], fallback_figures_dir, fallback_counter))
                 
         return final_results
