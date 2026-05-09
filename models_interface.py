@@ -71,12 +71,16 @@ def _get_easyocr():
 
 # Store execution times for profiling
 math_latencies = []
+math_batch_latencies = []
 text_latencies = []
 table_latencies = []
 text_batch_latencies = []
 
 def get_math_latencies():
     return math_latencies
+
+def get_math_batch_latencies():
+    return math_batch_latencies
 
 def get_text_latencies():
     return text_latencies
@@ -141,13 +145,10 @@ def run_text_ocr(crop: Image.Image) -> str:
         return ""
 
 
-def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[str]:
+def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 12) -> list[str]:
     """
     Batched text recognition using a Horizontal Montage strategy.
-    
-    Combines multiple crops into one large horizontal image with buffers.
-    This creates a more "Square" aspect ratio which is significantly faster
-    for the CRAFT detector and more memory-efficient than vertical stacking.
+    Updated chunk_size to 12 as more RAM is available after YOLO unloading.
     """
     import time
     global text_batch_latencies
@@ -159,16 +160,15 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[
         
         final_results = [""] * len(crops)
         
-        # Process in small chunks to strictly control RAM usage
+        # Process in chunks to manage memory
         for chunk_idx in range(0, len(crops), chunk_size):
             chunk = crops[chunk_idx : chunk_idx + chunk_size]
             
             t_start = time.perf_counter()
             
             # 1. Build Horizontal Montage
-            # Stacking horizontally is better for tall/narrow document regions
             max_h = max(c.height for c in chunk)
-            gap = 150 # Wide gap to strictly prevent character/line merging
+            gap = 150
             
             total_w = sum(c.width for c in chunk) + (len(chunk) * gap)
             montage = Image.new("RGB", (total_w, max_h), (255, 255, 255))
@@ -176,7 +176,6 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[
             x_offsets = []
             current_x = 0
             for c in chunk:
-                # Center vertically in the montage strip
                 y_off = (max_h - c.height) // 2
                 montage.paste(c, (current_x, y_off))
                 x_offsets.append((current_x, current_x + c.width))
@@ -187,15 +186,10 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[
             results = reader.readtext(img_array, detail=1)
             
             # 3. Map Results back to original crops
-            # grouped_texts: List of lists (one list of strings per crop)
             grouped_texts = [[] for _ in range(len(chunk))]
-            
             for bbox, text, conf in results:
-                # Calculate X-center of the detected text box
                 xs = [p[0] for p in bbox]
                 cx = sum(xs) / len(xs)
-                
-                # Find which crop this cx belongs to
                 for i, (x_start, x_end) in enumerate(x_offsets):
                     if x_start <= cx <= x_end:
                         grouped_texts[i].append(text)
@@ -206,7 +200,7 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[
             text_batch_latencies.append(latency_ms)
             print(f"    [text] EasyOCR Montage Batch ({len(chunk)} regions): {latency_ms:.2f} ms")
 
-            # 4. Finalize strings for this chunk
+            # 4. Finalize strings
             for i, parts in enumerate(grouped_texts):
                 combined = " ".join(parts)
                 final_results[chunk_idx + i] = escape_latex_chars(combined)
@@ -215,95 +209,97 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 6) -> list[
         
     except Exception as e:
         print(f"[MONTAGE OCR ERROR] {type(e).__name__}: {e}")
-        # Fallback to sequential if batching fails
-        print("    [text] Falling back to sequential OCR...")
         return [run_text_ocr(c) for c in crops]
 
 
-def run_math_recognition(crop: Image.Image, fallback_figures_dir: str = None,
-                          fallback_counter: list = None) -> str:
+def run_math_recognition_batched(crops: list[Image.Image], fallback_figures_dir: str = None,
+                                 fallback_counter: list = None) -> list[str]:
     """
-    Math/formula recognition using Texo.
-    Input:  PIL crop of a formula/equation region
-    Output: LaTeX math string WITHOUT delimiters
+    Batched math recognition using Texo.
+    Significantly faster than sequential calls.
     """
     import time
-    global math_latencies
+    global math_batch_latencies
+    if not crops:
+        return []
+
     try:
         model, tokenizer, processor = _get_texo()
-
-        image_rgb = crop.convert("RGB")
-        processed_image = processor(image_rgb).unsqueeze(0).to(_device)
-
+        
         t_start = time.perf_counter()
+        
+        # Prepare batch
+        image_list = [c.convert("RGB") for c in crops]
+        processed_images = processor(image_list).to(_device)
+
         with torch.no_grad():
-            outputs = model.generate(pixel_values=processed_image)
+            outputs = model.generate(pixel_values=processed_images)
+        
         t_end = time.perf_counter()
-
         latency_ms = (t_end - t_start) * 1000
-        math_latencies.append(latency_ms)
-        print(f"    [math] Texo latency: {latency_ms:.2f} ms")
+        math_batch_latencies.append(latency_ms)
+        print(f"    [math] Texo Batch ({len(crops)} equations): {latency_ms:.2f} ms")
 
-        result = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
-
-        if result:
-            result = result.strip()
-            for delim in ("$$", "$", r"\[", r"\]", r"\(", r"\)"):
-                if result.startswith(delim):
-                    result = result[len(delim):]
-                if result.endswith(delim):
-                    result = result[:-len(delim)]
-            result = result.strip()
-
-        if result:
-            return result
-
-        # ---- Fallback: save crop as image --------------------------------
-        raise ValueError("Texo returned empty string")
+        results_raw = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        
+        final_results = []
+        for i, result in enumerate(results_raw):
+            clean_res = ""
+            if result:
+                clean_res = result.strip()
+                for delim in ("$$", "$", r"\[", r"\]", r"\(", r"\)"):
+                    if clean_res.startswith(delim): clean_res = clean_res[len(delim):]
+                    if clean_res.endswith(delim): clean_res = clean_res[:-len(delim)]
+                clean_res = clean_res.strip()
+            
+            if clean_res:
+                final_results.append(clean_res)
+            else:
+                # Fallback per-item if Texo returns empty for one item in batch
+                final_results.append(_math_fallback(crops[i], fallback_figures_dir, fallback_counter))
+                
+        return final_results
 
     except Exception as e:
-        print(f"    [math] Texo failed: {e}")
-        # Fix D fallback: save formula crop as image so it is NOT lost
-        if fallback_figures_dir and fallback_counter is not None:
-            import os
-            fallback_counter[0] += 1
-            fname = f"formula_{fallback_counter[0]:03d}.png"
-            fpath = os.path.join(fallback_figures_dir, fname)
-            try:
-                crop.save(fpath)
-                print(f"    [math] Saved formula crop → {fname}")
-                return f"\\includegraphics[width=0.5\\linewidth]{{{fname}}}"
-            except Exception as save_err:
-                print(f"    [math] Could not save formula crop: {save_err}")
-        return ""
+        print(f"    [math] Texo batch failed: {e}")
+        return [_math_fallback(c, fallback_figures_dir, fallback_counter) for c in crops]
+
+def _math_fallback(crop: Image.Image, fallback_figures_dir: str, fallback_counter: list) -> str:
+    """Helper for saving formula crop on failure."""
+    if fallback_figures_dir and fallback_counter is not None:
+        import os
+        fallback_counter[0] += 1
+        fname = f"formula_{fallback_counter[0]:03d}.png"
+        fpath = os.path.join(fallback_figures_dir, fname)
+        try:
+            crop.save(fpath)
+            return f"\\includegraphics[width=0.5\\linewidth]{{{fname}}}"
+        except: pass
+    return ""
+
+def run_math_recognition(crop: Image.Image, fallback_figures_dir: str = None,
+                          fallback_counter: list = None) -> str:
+    """Sequential wrapper for run_math_recognition_batched."""
+    return run_math_recognition_batched([crop], fallback_figures_dir, fallback_counter)[0]
 
 
 def run_table_extraction(crop: Image.Image) -> str:
     """
     Table recognition using TATR Table Transformer + OCR fallback in text-table-latex.
-    Input:  PIL crop of a table region
-    Output: LaTeX tabular environment string
     """
     import time
     global table_latencies
     try:
         t_start = time.perf_counter()
         solver = _get_table_solver()
-        
         image_np = np.array(crop.convert("RGB"))
-        region = {
-            "type": "Table",
-            "image": image_np,
-            "region_id": "0" 
-        }
-        
+        region = {"type": "Table", "image": image_np, "region_id": "0"}
         result = solver.solve(region)
         t_end = time.perf_counter()
         
         latency_ms = (t_end - t_start) * 1000
         table_latencies.append(latency_ms)
         print(f"    [table] TATR latency: {latency_ms:.2f} ms")
-        
         return result.get("latex", "")
     except Exception as e:
         print(f"    [table] Table Transformer solver failed: {e}")
