@@ -54,10 +54,29 @@ class _PaddleOCRBackend:
         out = []
         if not result or result[0] is None:
             return out
+            
         for line in result[0]:
-            if line is None: continue
-            bbox, (text, conf) = line[0], line[1]
-            out.append((bbox, text, conf))
+            if not line or len(line) < 2: 
+                continue
+            
+            try:
+                bbox = line[0]
+                if not isinstance(bbox, (list, tuple)) or len(bbox) == 0:
+                    continue
+                
+                text_data = line[1]
+                if isinstance(text_data, (tuple, list)) and len(text_data) > 0:
+                    text = str(text_data[0])
+                    conf = float(text_data[1]) if len(text_data) > 1 else 1.0
+                else:
+                    text = str(text_data)
+                    conf = 1.0
+                    
+                if text.strip():  
+                    out.append((bbox, text.strip(), conf))
+            except Exception:
+                continue
+                
         return out
 
 
@@ -111,7 +130,7 @@ class TATRTableSolver:
 
         results = self.processor.post_process_object_detection(
             outputs,
-            threshold=CONFIG["tatr_confidence"],
+            threshold=0.15,  # Max recall. Let NMS handle duplicates.
             target_sizes=torch.tensor([pil_img.size[::-1]]),
         )[0]
 
@@ -122,6 +141,10 @@ class TATRTableSolver:
 
         tokens = self._ocr_tokens(img)
         grid = self._assign_tokens_to_grid(tokens, rows, cols, img.shape, img=img)
+        
+        # Heuristic cleanup: Merges stray columns, deletes empty ones, attaches currency symbols
+        grid = clean_table_grid(grid)
+        
         grid = [[latex_escape(cell) for cell in row] for row in grid]
         return {
             "latex":      self._grid_to_tabular(grid),
@@ -131,18 +154,53 @@ class TATRTableSolver:
 
     def _extract_rows_cols(self, results) -> tuple:
         id2label = self.model.config.id2label
-        rows, cols = [], []
+        row_boxes = []
+        col_boxes = []
+        
         for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
             name = id2label[label.item()].lower()
-            if "projected" in name or "spanning" in name: continue
-            if "row" in name: rows.append(box.tolist())
-            elif "column" in name: cols.append(box.tolist())
-        rows.sort(key=lambda b: b[1])
-        cols.sort(key=lambda b: b[0])
+            # Strictly rely on 'table row' and 'table column'. Spanning headers confuse grids.
+            if name == "table row": 
+                row_boxes.append((box.tolist(), score.item()))
+            elif name == "table column": 
+                col_boxes.append((box.tolist(), score.item()))
+                
+        # 1D Non-Maximum Suppression (NMS) using proper IoU
+        def nms_1d(items, i1, i2, thresh=0.25):
+            if not items: return []
+            # Sort by confidence score so we keep the best boxes
+            items.sort(key=lambda x: x[1], reverse=True)
+            keep = []
+            for box, score in items:
+                discard = False
+                for k_box in keep:
+                    overlap = max(0, min(box[i2], k_box[i2]) - max(box[i1], k_box[i1]))
+                    union = (box[i2] - box[i1]) + (k_box[i2] - k_box[i1]) - overlap
+                    iou = overlap / union if union > 0 else 0
+                    
+                    if iou > thresh:
+                        discard = True
+                        break
+                if not discard:
+                    keep.append(box)
+                    
+            # Sort back by spatial coordinate for top-to-bottom/left-to-right grid order
+            keep.sort(key=lambda b: b[i1])
+            return keep
+
+        # Apply strict IoU NMS to prevent row snowballing
+        rows = nms_1d(row_boxes, 1, 3, thresh=0.3)
+        cols = nms_1d(col_boxes, 0, 2, thresh=0.3)
         return rows, cols
 
     def _ocr_tokens(self, img: np.ndarray) -> list:
         results = self.ocr.readtext(img)
+        
+        if not results and isinstance(self.ocr, _PaddleOCRBackend):
+            print("  [table] PaddleOCR found no text, falling back to EasyOCR...")
+            fallback_ocr = _EasyOCRBackend()
+            results = fallback_ocr.readtext(img)
+            
         tokens = []
         for bbox, text, conf in results:
             pts = bbox
@@ -162,12 +220,29 @@ class TATRTableSolver:
 
     def _assign_tokens_to_grid(self, tokens: list, rows: list, cols: list, shape: tuple, img: np.ndarray = None) -> list:
         grid = [[[] for _ in cols] for _ in rows]
+        
         for tok in tokens:
             cx, cy = tok["cx"], tok["cy"]
-            row_idx = next((ri for ri, rb in enumerate(rows) if rb[1] <= cy <= rb[3]), None)
-            col_idx = next((ci for ci, cb in enumerate(cols) if cb[0] <= cx <= cb[2]), None)
-            if row_idx is not None and col_idx is not None:
-                grid[row_idx][col_idx].append(tok)
+            
+            best_row = None
+            min_row_dist = float('inf')
+            for ri, rb in enumerate(rows):
+                dist = 0 if (rb[1] <= cy <= rb[3]) else min(abs(cy - rb[1]), abs(cy - rb[3]))
+                if dist < min_row_dist:
+                    min_row_dist = dist
+                    best_row = ri
+                    
+            best_col = None
+            min_col_dist = float('inf')
+            for ci, cb in enumerate(cols):
+                dist = 0 if (cb[0] <= cx <= cb[2]) else min(abs(cx - cb[0]), abs(cx - cb[2]))
+                if dist < min_col_dist:
+                    min_col_dist = dist
+                    best_col = ci
+
+            if best_row is not None and best_col is not None:
+                grid[best_row][best_col].append(tok)
+                
         result = []
         for ri, row in enumerate(grid):
             cells = []
@@ -203,8 +278,16 @@ class SLANetTableSolver:
         try:
             from paddleocr import PPStructure
             self.engine = PPStructure(show_log=False, lang="en")
-        except Exception as e:
-            raise ImportError(f"PaddleOCR PPStructure failed: {e}")
+        except ImportError:
+            try:
+                from paddleocr.paddleocr import PPStructure
+                self.engine = PPStructure(show_log=False, lang="en")
+            except ImportError:
+                try:
+                    from paddleocr.ppstructure.predict_system import PPStructure
+                    self.engine = PPStructure(show_log=False, lang="en")
+                except ImportError as e:
+                    raise ImportError(f"PaddleOCR PPStructure failed to load from any known path: {e}")
 
     def parse(self, img: np.ndarray) -> dict:
         import cv2
@@ -241,7 +324,6 @@ class TextAndTableSolver:
     def solve(self, region: dict) -> dict:
         if region.get("type") == "Table":
             return self._solve_table(region)
-        # Standard text path
         img = preprocess_image(region["image"])
         lines = self._run_ocr_with_coords(img)
         text = " ".join(l["text"] for l in lines)
@@ -250,7 +332,9 @@ class TextAndTableSolver:
         return region
 
     def _solve_table(self, region: dict) -> dict:
+        # Pass the raw image directly. Aggressive contrast destroys thin text/single characters.
         img = region["image"]
+        
         if self.slanet:
             parsed = self.slanet.parse(img)
             if parsed.get("latex"):
