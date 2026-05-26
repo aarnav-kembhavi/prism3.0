@@ -15,7 +15,7 @@ from scipy import ndimage
 # Glare removal — LAB thresholding + inpainting
 # ----------------------------------------------------------------
 
-def detect_glare_mask(image_bgr, lightness_threshold=230, min_area=100):
+def detect_glare_mask(image_bgr, lightness_threshold=245, min_area=100):
     """
     Detect glare/specular highlight regions using LAB L-channel.
 
@@ -27,14 +27,15 @@ def detect_glare_mask(image_bgr, lightness_threshold=230, min_area=100):
     lab = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2LAB)
     l_channel = lab[:, :, 0]
 
-    # Threshold: L > threshold → glare
+    # Threshold: L > threshold → glare. 
+    # Use 245 to only target pure blown-out white where text is unrecoverable.
     _, glare_mask = cv2.threshold(
         l_channel, lightness_threshold, 255, cv2.THRESH_BINARY
     )
 
-    # Morphological ops: close small holes, dilate to cover edges of glare
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    glare_mask = cv2.morphologyEx(glare_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    # FIX: Shrink the kernel to 3x3 so we don't swallow thin text strokes!
+    # Remove MORPH_CLOSE as it destroys text structure inside the glare.
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     glare_mask = cv2.dilate(glare_mask, kernel, iterations=1)
 
     # Remove tiny detections (noise) — keep only substantial glare regions
@@ -49,16 +50,13 @@ def detect_glare_mask(image_bgr, lightness_threshold=230, min_area=100):
     return cleaned
 
 
-def remove_glare(image_bgr, lightness_threshold=230, inpaint_radius=5):
+def remove_glare(image_bgr, lightness_threshold=245, inpaint_radius=3):
     """
     Remove glare by detecting bright spots and inpainting them.
 
     Two-phase approach:
     1. Detect glare mask via LAB L-channel thresholding
     2. Inpaint the masked regions using Telea's algorithm
-
-    This fills in glare spots with data from surrounding pixels,
-    which is far better than just adjusting contrast (CLAHE).
     """
     glare_mask = detect_glare_mask(image_bgr, lightness_threshold)
 
@@ -73,7 +71,7 @@ def remove_glare(image_bgr, lightness_threshold=230, inpaint_radius=5):
 
     print(f"  [norm] Glare detected: {glare_pct:.1f}% of image, inpainting...")
 
-    # Inpaint: Telea method (fast marching) works well for document images
+    # FIX: Reduce inpaint radius to 3 to prevent wide smearing over text
     result = cv2.inpaint(image_bgr, glare_mask, inpaint_radius, cv2.INPAINT_TELEA)
 
     return result

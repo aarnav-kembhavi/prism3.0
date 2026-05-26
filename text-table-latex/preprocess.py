@@ -1,15 +1,9 @@
 # =============================================================================
 # preprocess.py — Screenshot preprocessing pipeline
 #
-# IMPROVEMENT 3 over PDF2LaTeX (2020):
-# The 2020 paper listed "noise removal and deskewing" as future work they
-# never completed (Section 6). This module implements exactly that for
-# screenshot-specific noise: anti-aliasing, DPI variance, sub-pixel noise.
-#
-# Three stages:
-#   1. Deskew   — corrects slight rotation from screen capture angle
-#   2. Denoise  — removes JPEG/screen compression artifacts
-#   3. Contrast — enhances text visibility on low-contrast backgrounds
+# UPDATED: Removed destructive denoising and harsh binarization.
+# Modern OCR engines (EasyOCR/PaddleOCR) perform their own internal thresholding.
+# Pre-binarizing or aggressive denoising shreds thin text and causes hallucinations.
 # =============================================================================
 
 import cv2
@@ -20,45 +14,26 @@ from config import CONFIG
 
 def preprocess_image(img: np.ndarray) -> np.ndarray:
     """
-    Applies all enabled preprocessing steps to a screenshot crop
+    Applies safe, non-destructive preprocessing steps to a crop
     before passing it to EasyOCR or TATR.
-
-    Steps are individually togglable in config.py.
     """
     result = img.copy()
 
-    if CONFIG["preprocess_deskew"]:
+    # 1. Deskew (Safe: fixes slight camera rotations)
+    if CONFIG.get("preprocess_deskew", False):
         result = _deskew(result)
 
-    if CONFIG["preprocess_denoise"]:
-        result = cv2.fastNlMeansDenoisingColored(
-            result, None,
-            h=10, hColor=10,
-            templateWindowSize=7,
-            searchWindowSize=21,
-        )
-
-    if CONFIG["preprocess_contrast"]:
+    # 2. Gentle Contrast Boost (Safe: helps OCR separate text from background)
+    if CONFIG.get("preprocess_contrast", False):
         pil      = Image.fromarray(result)
-        factor   = float(CONFIG.get("preprocess_contrast_factor", 1.5))
+        # Lowered factor to 1.2 to prevent blowing out the text
+        factor   = float(CONFIG.get("preprocess_contrast_factor", 1.2))
         pil      = ImageEnhance.Contrast(pil).enhance(factor)
         result   = np.array(pil)
 
-    if CONFIG.get("preprocess_binarize"):
-        gray = cv2.cvtColor(result, cv2.COLOR_RGB2GRAY)
-        bin_img = cv2.adaptiveThreshold(
-            gray, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            31, 10
-        )
-        result = cv2.cvtColor(bin_img, cv2.COLOR_GRAY2RGB)
-
-    if CONFIG.get("preprocess_sharpen"):
-        kernel = np.array([[0, -1, 0],
-                           [-1, 5, -1],
-                           [0, -1, 0]], dtype=np.float32)
-        result = cv2.filter2D(result, -1, kernel)
+    # 3. DISABLED: Denoise, Binarize, Sharpen
+    # We explicitly skip cv2.fastNlMeansDenoisingColored and cv2.adaptiveThreshold
+    # because they destroy the continuous-tone gradients that OCR models rely on.
 
     return result
 
@@ -89,6 +64,8 @@ def _deskew(img: np.ndarray) -> np.ndarray:
     median_angle = float(np.median(angles))
     h, w         = img.shape[:2]
     M            = cv2.getRotationMatrix2D((w // 2, h // 2), median_angle, 1.0)
+    
+    # Use border replicate so we don't introduce hard black triangles at the edges
     return cv2.warpAffine(
         img, M, (w, h),
         flags=cv2.INTER_LINEAR,

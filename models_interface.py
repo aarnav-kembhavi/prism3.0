@@ -3,10 +3,9 @@ models_interface.py
 -------------------
 Interfaces for downstream specialist models.
 
-Unified OCR Logic (v3.8 Stable):
-  - Backend: RapidOCR (ONNX + Big Montage)
-  - Memory: ~1.0 GB peak
-  - Optimization: Windows DLL fix and Parallel Routing active.
+Unified OCR Logic (v3.11):
+  - Backend: RapidOCR 
+  - Fix: Added White-Space Padding (Quiet Zone) and Anti-Downscale safety limits.
 """
 
 import io
@@ -14,7 +13,7 @@ import sys
 import os
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 # ----------------------------------------------------------------
 # Path handling and Windows DLL fix
@@ -58,7 +57,6 @@ def _get_rapidocr():
     global _rapid_ocr
     if _rapid_ocr is None:
         from rapidocr_onnxruntime import RapidOCR
-        # Stable v3.8 settings
         _rapid_ocr = RapidOCR()
     return _rapid_ocr
 
@@ -97,7 +95,7 @@ def _get_table_solver():
 
 
 # ────────────────────────────────────────────────────────────────
-# OCR ENGINE: RAPIDOCR v3.8 (Stable Big Montage)
+# OCR ENGINE: RAPIDOCR 
 # ────────────────────────────────────────────────────────────────
 def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list[str]:
     import time
@@ -106,30 +104,38 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
     try:
         engine = _get_rapidocr()
         final_results = [""] * len(crops)
-        for chunk_idx in range(0, len(crops), chunk_size):
-            chunk = crops[chunk_idx : chunk_idx + chunk_size]
-            t_start = time.perf_counter()
-            max_h = max(c.height for c in chunk); gap = 200
-            total_w = sum(c.width for c in chunk) + (len(chunk) * gap)
-            montage = Image.new("RGB", (total_w, max_h), (255, 255, 255))
-            current_x = 0; x_offsets = []
-            for c in chunk:
-                y_off = (max_h - c.height) // 2
-                montage.paste(c, (current_x, y_off)); x_offsets.append((current_x, current_x + c.width))
-                current_x += c.width + gap
-            img_np = np.array(montage); res, _ = engine(img_np)
-            grouped_texts = [[] for _ in range(len(chunk))]
+        
+        t_start = time.perf_counter()
+        
+        for i, crop in enumerate(crops):
+            # FIX 1: Add a 30-pixel white border (Quiet Zone)
+            # YOLO crops cut exactly on the letters. RapidOCR fails to recognize 
+            # edge characters (like brackets) without surrounding white space.
+            padded_crop = ImageOps.expand(crop, border=30, fill='white')
+            
+            # FIX 2: Anti-Downscale Safety Limit
+            # RapidOCR's internal DBNet has a strict size limit. If a crop is too large,
+            # it violently shrinks it, destroying text readability. We use high-quality
+            # Lanczos scaling to keep it safely within limits while preserving sharpness.
+            max_dim = max(padded_crop.width, padded_crop.height)
+            if max_dim > 1000:
+                scale = 1000 / max_dim
+                new_w = int(padded_crop.width * scale)
+                new_h = int(padded_crop.height * scale)
+                padded_crop = padded_crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            
+            img_np = np.array(padded_crop.convert("RGB"))
+            res, _ = engine(img_np)
+            
             if res:
-                for bbox, text, conf in res:
-                    xs = [p[0] for p in bbox]; cx = sum(xs) / len(xs)
-                    for i, (x_start, x_end) in enumerate(x_offsets):
-                        if x_start <= cx <= x_end: grouped_texts[i].append(text); break
-            t_end = time.perf_counter()
-            latency_ms = (t_end - t_start) * 1000
-            text_batch_latencies.append(latency_ms)
-            print(f"    [text] RapidOCR Montage Batch ({len(chunk)} regions): {latency_ms:.2f} ms")
-            for i, parts in enumerate(grouped_texts):
-                final_results[chunk_idx + i] = escape_latex_chars(" ".join(parts))
+                texts = [item[1] for item in res]
+                final_results[i] = escape_latex_chars(" ".join(texts))
+                
+        t_end = time.perf_counter()
+        latency_ms = (t_end - t_start) * 1000
+        text_batch_latencies.append(latency_ms)
+        print(f"    [text] RapidOCR Processed {len(crops)} regions (Padded): {latency_ms:.2f} ms")
+        
         return final_results
     except Exception as e:
         print(f"[RAPID ERROR] {e}"); return [""] * len(crops)
@@ -202,8 +208,8 @@ def run_table_extraction(crop: Image.Image) -> str:
         t_end = time.perf_counter()
         latency_ms = (t_end - t_start) * 1000
         table_latencies.append(latency_ms)
-        print(f"    [table] TATR latency: {latency_ms:.2f} ms")
+        print(f"    [table] Table Solver latency: {latency_ms:.2f} ms")
         return result.get("latex", "")
     except Exception as e:
-        print(f"    [table] Table Transformer solver failed: {e}")
+        print(f"    [table] Table Solver failed: {e}")
         return ""

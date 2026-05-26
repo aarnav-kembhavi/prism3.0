@@ -24,8 +24,8 @@ from .frequency_filter import (
 # Thresholds
 # ================================================================
 
-GLARE_LIGHTNESS_THRESH: int   = 230    
-GLARE_LIGHTNESS_THRESH_PHONE: int = 210 # Slightly softer but safer than 190
+GLARE_LIGHTNESS_THRESH: int   = 245    
+GLARE_LIGHTNESS_THRESH_PHONE: int = 240 # Raised from 210 to stop destroying text
 GLARE_AREA_THRESH: float      = 0.05   
 GLARE_AREA_THRESH_SCREENSHOT: float = 0.25  
 SHADOW_GRADIENT_THRESH: float = 0.25   

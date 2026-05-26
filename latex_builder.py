@@ -11,7 +11,7 @@ Fixes applied:
   E — list items: each \\item on its own line; itemize grouping preserved
   F — soft-hyphen artifact cleaner strips "word- suffix" OCR artifacts
       thousands-separator dot confusion fixed: "7.352" → "7,352"
-  G — Table caption hallucination fixes (TADLE -> TABLE, Fe-Css -> Per-Class, etc.)
+  G — IEEE Citation bracket fixes added to clean up 121 -> [12] hallucinations
 """
 
 import re
@@ -33,49 +33,45 @@ _OCR_FIXES = [
     (re.compile(r'(?<=\d)O\b'), '0'),
     (re.compile(r'(?<=\d)O(?=\d)'), '0'),
     
-    # --- Table Caption Hallucination Fixes ---
-    (re.compile(r'\bTADLE\b', re.IGNORECASE), 'TABLE'),
-    (re.compile(r'\bTABLE L\b'), 'TABLE 2'),          # Fixes L misread as 2
-    (re.compile(r'\bPeformarce\b', re.IGNORECASE), 'Performance'),
-    (re.compile(r'\bComperison\b', re.IGNORECASE), 'Comparison'),
-    (re.compile(r'\bFe-Css\b'), 'Per-Class'),         
-    (re.compile(r'\bAorom\b'), 'Across'),             
-    (re.compile(r'\bScors\b'), 'Scores'),             
-    # -----------------------------------------
+    # --- IEEE Citation & Bracket Hallucination Fixes ---
+    (re.compile(r'\b1(\d{1,2})1\b'), r'[\1]'),               # 1121 -> [12]
+    (re.compile(r'\bl(\d{1,2})l\b'), r'[\1]'),               # l13l -> [13]
+    (re.compile(r'\[i(\d{1,2})\]', re.IGNORECASE), r'[\1]'), # [i6] -> [16]
+    (re.compile(r'\[(\d{1,2})1\b'), r'[\1]'),                # [171 -> [17]
+    (re.compile(r'\b1(\d{1,2})\]'), r'[\1]'),                # 115] -> [15]
+    
+    # --- IEEE Section Header Fixes ---
+    # Fixes missing space after section letter (e.g., "DRETRIEVAL" -> "D. RETRIEVAL")
+    (re.compile(r'^([A-Z])([A-Z]{3,})'), r'\1. \2'),
     
     # I (capital-I) misread as digit 1 in numeric contexts
-    # e.g. "I6IK" → "161K", "ISSK" → "188K" (combined with S→8 fix below)
-    (re.compile(r'\bI(\d)'), r'1\1'),       # leading I before digit: I6 → 16
-    (re.compile(r'(\d)I(\d)'), r'\g<1>1\2'), # I between digits: 9I3 → 913
-    (re.compile(r'(\d)I\b'), r'\g<1>1'),    # trailing I after digit: 6I → 61
-    # S misread as 8 in numeric/suffix contexts (e.g. "ISSK" → "188K")
-    (re.compile(r'\bIS([A-Z])'), r'18\1'),   # IS prefix in numeric word: ISS → 188
-    (re.compile(r'(\d)S([KMGkm%])'), r'\g<1>8\2'),  # digit+S+unit suffix: 9SK → 98K
+    (re.compile(r'\bI(\d)'), r'1\1'),       
+    (re.compile(r'(\d)I(\d)'), r'\g<1>1\2'), 
+    (re.compile(r'(\d)I\b'), r'\g<1>1'),    
+    # S misread as 8 in numeric/suffix contexts
+    (re.compile(r'\bIS([A-Z])'), r'18\1'),   
+    (re.compile(r'(\d)S([KMGkm%])'), r'\g<1>8\2'),  
     (re.compile(r'\\\\_(?=\s|$)'), '.'),
     (re.compile(r'_(?=\s|$)'), '.'),
     (re.compile(r'(?<!\$)\b(1\.5)\s*[xX]\s*10-(\d)\b'), r'$\1\\times10^{-\2}$'),
     (re.compile(r'(?<!\$)\b(5)\s*[xX]\s*10-(\d)\b'),      r'$5\\times10^{-\2}$'),
     (re.compile(r'(?<!\$)\b10-(\d)\b'),                   r'$10^{-\1}$'),
-    # Percent sign lost: "93.085" where trailing digit should be % sign
-    # (Cannot recover % reliably from pure OCR; handle in table post-processing)
 ]
 
 
 # IEEE section header splitter — splits merged detections like:
 # "IV. RESULTS A. OVERALL COMPARISON" → two separate \subsection* entries
-# Splits before an isolated Roman numeral or single uppercase letter followed by ". "
 _IEEE_HEADER_SPLIT_RE = re.compile(
-    r'(?<!\A)'                                           # not at string start
-    r'(?='                                               # lookahead:
-    r'(?:(?<![IVXLCDMivxlcdm])[IVX]+\.[ \t])'          #   Roman numeral + dot (not preceded by another Roman digit)
-    r'|(?<![A-Z])[A-Z]\.[ \t]'                          #   single uppercase letter + dot (not preceded by uppercase)
+    r'(?<!\A)'                                           
+    r'(?='                                               
+    r'(?:(?<![IVXLCDMivxlcdm])[IVX]+\.[ \t])'          
+    r'|(?<![A-Z])[A-Z]\.[ \t]'                          
     r')',
     re.VERBOSE,
 )
 
 
 def _split_section_headers(text: str) -> List[str]:
-    """Split a merged IEEE section header string into individual headers."""
     parts = _IEEE_HEADER_SPLIT_RE.split(text)
     return [p.strip() for p in parts if p.strip()]
 
