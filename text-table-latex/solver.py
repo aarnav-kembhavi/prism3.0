@@ -60,14 +60,12 @@ def _apply_booktabs_format(grid: list) -> str:
     """Converts a 2D list grid into a clean IEEE-style booktabs LaTeX table."""
     if not grid: return ""
     col_count = max(len(row) for row in grid)
-    # Remove vertical bars for IEEE style
     col_spec  = "l" * col_count  
     
     lines = [f"\\begin{{tabular}}{{{col_spec}}}", "\\toprule"] 
     for i, row in enumerate(grid):
         padded = row + [""] * (col_count - len(row))
         lines.append(" & ".join(padded) + " \\\\")
-        # Add midrule only after the header
         if i == 0:
             lines.append("\\midrule")
             
@@ -77,61 +75,149 @@ def _apply_booktabs_format(grid: list) -> str:
 
 
 # ─────────────────────────────────────────────
-# OCR backend abstraction
+# NEW: Coordinate-Based Heuristic Solver
 # ─────────────────────────────────────────────
+class HeuristicTableSolver:
+    """
+    Replaces ML-based layout parsers (TATR/SLANet). Forces word-level OCR, 
+    then uses X-Y axis projection to mathematically guarantee column alignment.
+    """
+    def __init__(self):
+        import easyocr
+        self.reader = easyocr.Reader(['en'], gpu=CONFIG.get("gpu", False), verbose=False)
+        
+    def parse(self, img: np.ndarray) -> dict:
+        # width_ths=0.1 explicitly forces EasyOCR to STOP merging words across horizontal gaps
+        raw_results = self.reader.readtext(img, detail=1, paragraph=False, width_ths=0.1)
+        
+        tokens = []
+        img_w = img.shape[1]
+        
+        for bbox, text, conf in raw_results:
+            text = text.strip()
+            if not text: continue
+            # Ignore horizontal table rules misread as text
+            if re.match(r'^[\-\_\=\.]+$', text): continue
+            
+            xs = [p[0] for p in bbox]; ys = [p[1] for p in bbox]
+            x1, x2 = min(xs), max(xs); y1, y2 = min(ys), max(ys)
+            
+            # Ignore false-positive bounding boxes that span the entire image width
+            if (x2 - x1) > 0.8 * img_w: continue
+            
+            tokens.append({
+                'text': text, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2,
+                'cx': (x1 + x2) / 2, 'cy': (y1 + y2) / 2,
+                'h': y2 - y1, 'w': x2 - x1
+            })
+            
+        if not tokens: return {"latex": "", "text": ""}
+            
+        # 1. GROUP ROWS (Y-Axis)
+        tokens.sort(key=lambda t: t['cy'])
+        rows = []
+        current_row = []
+        current_y = None
+        for tok in tokens:
+            if current_y is None:
+                current_y = tok['cy']
+                current_row.append(tok)
+            elif abs(tok['cy'] - current_y) < max(tok['h'], 10) * 0.6: 
+                current_row.append(tok)
+                current_y = sum(t['cy'] for t in current_row) / len(current_row)
+            else:
+                rows.append(current_row)
+                current_row = [tok]
+                current_y = tok['cy']
+        if current_row:
+            rows.append(current_row)
+            
+        # 2. GROUP COLUMNS (X-Axis Projection)
+        proj = np.zeros(img_w, dtype=int)
+        for tok in tokens:
+            # Skip very wide headers from projection so they don't destroy column gaps
+            if tok['w'] > 0.4 * img_w: continue 
+            px1 = max(0, int(tok['x1']))
+            px2 = min(img_w, int(tok['x2']))
+            proj[px1:px2] += 1
+            
+        in_col = False
+        col_segments = []
+        start = 0
+        for i in range(img_w):
+            if proj[i] > 0 and not in_col:
+                in_col = True; start = i
+            elif proj[i] == 0 and in_col:
+                in_col = False; col_segments.append((start, i))
+        if in_col: col_segments.append((start, img_w))
+            
+        if not col_segments: col_segments = [(0, img_w)] # Fallback
+            
+        # 3. BUILD GRID
+        grid = []
+        for row_tokens in rows:
+            row_cells = [[] for _ in range(len(col_segments))]
+            for tok in row_tokens:
+                best_col, max_overlap, min_dist = 0, -1, float('inf')
+                for i, (cs, ce) in enumerate(col_segments):
+                    overlap = max(0, min(tok['x2'], ce) - max(tok['x1'], cs))
+                    if overlap > max_overlap:
+                        max_overlap = overlap; best_col = i
+                    dist = 0 if cs <= tok['cx'] <= ce else min(abs(tok['cx'] - cs), abs(tok['cx'] - ce))
+                    if overlap == 0 and dist < min_dist and max_overlap <= 0:
+                        min_dist = dist; best_col = i
+                row_cells[best_col].append(tok)
+                
+            final_row = []
+            for cell_tokens in row_cells:
+                cell_tokens.sort(key=lambda t: t['x1']) # Read left-to-right inside the cell
+                text = " ".join(t['text'] for t in cell_tokens)
+                final_row.append(_clean_table_cell(text))
+            
+            # Prevent pushing entirely empty rows caused by layout noise
+            if any(cell.strip() for cell in final_row):
+                grid.append(final_row)
+            
+        return {
+            "latex": _apply_booktabs_format(grid),
+            "table_grid": grid,
+            "text": " | ".join(c for row in grid for c in row)
+        }
 
+
+# ─────────────────────────────────────────────
+# OCR Backend Abstraction
+# ─────────────────────────────────────────────
 class _PaddleOCRBackend:
-    """PaddleOCR v4 text recognition."""
-
     def __init__(self):
         from paddleocr import PaddleOCR
-        self._ocr = PaddleOCR(
-            use_angle_cls=True, 
-            enable_mkldnn=False,
-            lang="en"
-        )
+        self._ocr = PaddleOCR(use_angle_cls=True, enable_mkldnn=False, lang="en")
         
     def readtext(self, img: np.ndarray) -> list:
         import cv2
         bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         result = self._ocr.ocr(bgr)
         out = []
-        if not result or result[0] is None:
-            return out
-            
+        if not result or result[0] is None: return out
         for line in result[0]:
-            if not line or len(line) < 2: 
-                continue
-            
+            if not line or len(line) < 2: continue
             try:
                 bbox = line[0]
-                if not isinstance(bbox, (list, tuple)) or len(bbox) == 0:
-                    continue
-                
+                if not isinstance(bbox, (list, tuple)) or len(bbox) == 0: continue
                 text_data = line[1]
                 if isinstance(text_data, (tuple, list)) and len(text_data) > 0:
-                    text = str(text_data[0])
-                    conf = float(text_data[1]) if len(text_data) > 1 else 1.0
+                    text, conf = str(text_data[0]), float(text_data[1]) if len(text_data) > 1 else 1.0
                 else:
-                    text = str(text_data)
-                    conf = 1.0
-                    
-                if text.strip():  
-                    out.append((bbox, text.strip(), conf))
-            except Exception:
-                continue
-                
+                    text, conf = str(text_data), 1.0
+                if text.strip(): out.append((bbox, text.strip(), conf))
+            except Exception: continue
         return out
 
 
 class _EasyOCRBackend:
-    """EasyOCR fallback backend."""
-
     def __init__(self):
         import easyocr
-        self._reader = easyocr.Reader(
-            CONFIG["lang"], gpu=CONFIG["gpu"], verbose=False
-        )
+        self._reader = easyocr.Reader(CONFIG["lang"], gpu=CONFIG["gpu"], verbose=False)
 
     def readtext(self, img: np.ndarray) -> list:
         return self._reader.readtext(img, detail=1, paragraph=False)
@@ -152,202 +238,13 @@ def _build_ocr_backend():
 
 
 # ─────────────────────────────────────────────
-# SLANet (PaddleOCR PP-Structure) Table Solver
-# ─────────────────────────────────────────────
-
-class SLANetTableSolver:
-    """
-    PaddleOCR PP-Structure table recognition using SLANet.
-    """
-
-    def __init__(self):
-        try:
-            from paddleocr import PPStructure
-            self.engine = PPStructure(show_log=False, lang="en")
-        except ImportError:
-            try:
-                from paddleocr.paddleocr import PPStructure
-                self.engine = PPStructure(show_log=False, lang="en")
-            except ImportError:
-                try:
-                    from paddleocr.ppstructure.predict_system import PPStructure
-                    self.engine = PPStructure(show_log=False, lang="en")
-                except ImportError as e:
-                    raise ImportError(f"PaddleOCR PPStructure failed to load from any known path: {e}")
-
-    def parse(self, img: np.ndarray) -> dict:
-        import cv2
-        bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        result = self.engine(bgr)
-        if not result or not result[0].get("res"): return {}
-        
-        html = result[0]["res"]["html"]
-        raw_grid = html_table_to_grid(html)
-        
-        # Apply OCR fixes and booktabs formatting directly to SLANet output
-        grid = [[_clean_table_cell(cell) for cell in row] for row in raw_grid]
-        
-        return {
-            "latex":      _apply_booktabs_format(grid),
-            "table_grid": grid,
-            "text":       " | ".join(c for row in grid for c in row),
-        }
-
-
-# ─────────────────────────────────────────────
-# TATR Table Solver (Fallback)
-# ─────────────────────────────────────────────
-
-class TATRTableSolver:
-    def __init__(self, ocr_backend):
-        device = "cuda" if CONFIG["gpu"] and torch.cuda.is_available() else "cpu"
-        self.processor = AutoImageProcessor.from_pretrained(TATR_MODEL)
-        self.model     = TableTransformerForObjectDetection.from_pretrained(
-            TATR_MODEL
-        ).to(device)
-        self.model.eval()
-        self.ocr    = ocr_backend
-        self.device = device
-
-    def parse(self, img: np.ndarray) -> dict:
-        pil_img = Image.fromarray(img)
-        inputs  = self.processor(images=pil_img, return_tensors="pt").to(self.device)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-
-        results = self.processor.post_process_object_detection(
-            outputs,
-            threshold=0.15,  
-            target_sizes=torch.tensor([pil_img.size[::-1]]),
-        )[0]
-
-        rows, cols = self._extract_rows_cols(results)
-        if not rows or not cols:
-            text = self._ocr_full(img)
-            return {"latex": f"% Table (no grid detected)\n{latex_escape(text)}", "text": text}
-
-        tokens = self._ocr_tokens(img)
-        grid = self._assign_tokens_to_grid(tokens, rows, cols, img.shape, img=img)
-        
-        grid = clean_table_grid(grid)
-
-        # Apply shared OCR fixes and booktabs formatting
-        grid = [[_clean_table_cell(cell) for cell in row] for row in grid]
-        return {
-            "latex":      _apply_booktabs_format(grid),
-            "table_grid": grid,
-            "text":       " | ".join(c for row in grid for c in row),
-        }
-
-    def _extract_rows_cols(self, results) -> tuple:
-        id2label = self.model.config.id2label
-        row_boxes = []
-        col_boxes = []
-
-        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
-            name = id2label[label.item()].lower()
-            if name in ("table row", "table column header"):
-                row_boxes.append((box.tolist(), score.item()))
-            elif name == "table column":
-                col_boxes.append((box.tolist(), score.item()))
-
-        def nms_1d(items, i1, i2, thresh=0.25):
-            if not items: return []
-            items.sort(key=lambda x: x[1], reverse=True)
-            keep = []
-            for box, score in items:
-                discard = False
-                for k_box in keep:
-                    overlap = max(0, min(box[i2], k_box[i2]) - max(box[i1], k_box[i1]))
-                    union = (box[i2] - box[i1]) + (k_box[i2] - k_box[i1]) - overlap
-                    iou = overlap / union if union > 0 else 0
-                    if iou > thresh:
-                        discard = True
-                        break
-                if not discard:
-                    keep.append(box)
-            keep.sort(key=lambda b: b[i1])
-            return keep
-
-        rows = nms_1d(row_boxes, 1, 3, thresh=0.6)
-        cols = nms_1d(col_boxes, 0, 2, thresh=0.6)
-        return rows, cols
-
-    def _ocr_tokens(self, img: np.ndarray) -> list:
-        results = self.ocr.readtext(img)
-        
-        if not results and isinstance(self.ocr, _PaddleOCRBackend):
-            fallback_ocr = _EasyOCRBackend()
-            results = fallback_ocr.readtext(img)
-            
-        tokens = []
-        for bbox, text, conf in results:
-            pts = bbox
-            xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
-            tokens.append({
-                "text": text.strip(),
-                "cx": (min(xs) + max(xs)) / 2,
-                "cy": (min(ys) + max(ys)) / 2,
-                "conf": conf,
-            })
-        return tokens
-
-    def _ocr_full(self, img: np.ndarray) -> str:
-        tokens = self._ocr_tokens(img)
-        tokens.sort(key=lambda t: t["cy"])
-        return " ".join(t["text"] for t in tokens)
-
-    def _assign_tokens_to_grid(self, tokens: list, rows: list, cols: list, shape: tuple, img: np.ndarray = None) -> list:
-        grid = [[[] for _ in cols] for _ in rows]
-        
-        for tok in tokens:
-            cx, cy = tok["cx"], tok["cy"]
-            
-            best_row = None
-            min_row_dist = float('inf')
-            for ri, rb in enumerate(rows):
-                dist = 0 if (rb[1] <= cy <= rb[3]) else min(abs(cy - rb[1]), abs(cy - rb[3]))
-                if dist < min_row_dist:
-                    min_row_dist = dist
-                    best_row = ri
-                    
-            best_col = None
-            min_col_dist = float('inf')
-            for ci, cb in enumerate(cols):
-                dist = 0 if (cb[0] <= cx <= cb[2]) else min(abs(cx - cb[0]), abs(cx - cb[2]))
-                if dist < min_col_dist:
-                    min_col_dist = dist
-                    best_col = ci
-
-            if best_row is not None and best_col is not None:
-                grid[best_row][best_col].append(tok)
-                
-        result = []
-        for ri, row in enumerate(grid):
-            cells = []
-            for ci, cell_tokens in enumerate(row):
-                cell_tokens.sort(key=lambda t: t["cx"])
-                cells.append(" ".join(t["text"] for t in cell_tokens))
-            result.append(cells)
-        return result
-
-
-# ─────────────────────────────────────────────
 # MAIN SOLVER CLASS
 # ─────────────────────────────────────────────
-
 class TextAndTableSolver:
     def __init__(self):
         print("[Stage 2] Loading OCR backend ...")
         self.ocr = _build_ocr_backend()
-        self.slanet = None
-        if CONFIG.get("use_slanet"):
-            try:
-                print("[Stage 2] Loading SLANet (PP-Structure) ...")
-                self.slanet = SLANetTableSolver()
-            except Exception as e:
-                print(f"[WARN] SLANet failed: {e}")
-        self.tatr = TATRTableSolver(self.ocr)
+        self.heuristic_solver = HeuristicTableSolver()
 
     @staticmethod
     def _correct_orientation(img: np.ndarray) -> np.ndarray:
@@ -356,45 +253,33 @@ class TextAndTableSolver:
             import subprocess, shutil
             if shutil.which("tesseract"):
                 import tempfile, os
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf:
-                    tmp = tf.name
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf: tmp = tf.name
                 bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(tmp, bgr)
-                result = subprocess.run(
-                    ["tesseract", tmp, "stdout", "--psm", "0", "-l", "eng"],
-                    capture_output=True, text=True, timeout=5,
-                )
+                result = subprocess.run(["tesseract", tmp, "stdout", "--psm", "0", "-l", "eng"], capture_output=True, text=True, timeout=5)
                 os.unlink(tmp)
                 for line in result.stdout.splitlines():
                     if "Rotate:" in line:
-                        angle = int(line.split(":")[1].strip())
-                        if angle == 180:
+                        if int(line.split(":")[1].strip()) == 180:
                             print("  [ocr] Correcting 180° rotation (Tesseract OSD)")
                             return cv2.rotate(img, cv2.ROTATE_180)
                         break
                 return img
-        except Exception:
-            pass
+        except Exception: pass
 
         try:
             import easyocr
             _reader = easyocr.Reader(["en"], gpu=CONFIG["gpu"], verbose=False)
-
             def _avg_conf(image):
                 res = _reader.readtext(image, detail=1, paragraph=False)
-                if not res:
-                    return 0.0
-                return sum(r[2] for r in res) / len(res)
+                return (sum(r[2] for r in res) / len(res)) if res else 0.0
 
             img_180 = cv2.rotate(img, cv2.ROTATE_180)
-            conf_orig = _avg_conf(img)
-            conf_flip = _avg_conf(img_180)
+            conf_orig, conf_flip = _avg_conf(img), _avg_conf(img_180)
             if conf_flip > conf_orig + 0.15:   
                 print(f"  [ocr] Correcting 180° rotation (confidence {conf_orig:.2f} → {conf_flip:.2f})")
                 return img_180
-        except Exception:
-            pass
-
+        except Exception: pass
         return img
 
     def solve(self, region: dict) -> dict:
@@ -410,16 +295,8 @@ class TextAndTableSolver:
 
     def _solve_table(self, region: dict) -> dict:
         img = region["image"]
-        
-        # RESTORED: Give priority to SLANet for superior grid extraction,
-        # but now it will use the clean booktabs formatting instead of ugly HTML grids.
-        if self.slanet:
-            parsed = self.slanet.parse(img)
-            if parsed.get("latex"):
-                region.update(parsed)
-                return region
-                
-        parsed = self.tatr.parse(img)
+        # Route directly to the Coordinate-Based Heuristic Solver
+        parsed = self.heuristic_solver.parse(img)
         region.update(parsed)
         return region
 
