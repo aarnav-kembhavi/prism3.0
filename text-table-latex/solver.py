@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 
 import numpy as np
 import torch
@@ -30,6 +31,49 @@ from utils import (
     clean_latex_table,
 )
 from preprocess import preprocess_image
+
+
+# ─────────────────────────────────────────────
+# Shared Table Formatting (Booktabs) & Cleaning
+# ─────────────────────────────────────────────
+
+_I_FIX = [
+    (re.compile(r'\bI(\d)'),          r'1\1'),
+    (re.compile(r'(\d)I(\d)'),         r'\g<1>1\2'),
+    (re.compile(r'(\d)I\b'),           r'\g<1>1'),
+    (re.compile(r'\bIS([A-Z])'),       r'18\1'),
+    (re.compile(r'(\d)S([KMGkm%\b])'), r'\g<1>8\2'),
+    (re.compile(r'\bt0\b'),            'to'),
+    (re.compile(r'(?<=\d)O\b'),        '0'),
+    (re.compile(r'(?<=\d)O(?=\d)'),    '0'),
+]
+
+def _clean_table_cell(cell: str) -> str:
+    """Applies OCR typo fixes and escapes LaTeX characters for table cells."""
+    if not cell: return ""
+    for pat, rep in _I_FIX:
+        cell = pat.sub(rep, cell)
+    return latex_escape(cell)
+
+
+def _apply_booktabs_format(grid: list) -> str:
+    """Converts a 2D list grid into a clean IEEE-style booktabs LaTeX table."""
+    if not grid: return ""
+    col_count = max(len(row) for row in grid)
+    # Remove vertical bars for IEEE style
+    col_spec  = "l" * col_count  
+    
+    lines = [f"\\begin{{tabular}}{{{col_spec}}}", "\\toprule"] 
+    for i, row in enumerate(grid):
+        padded = row + [""] * (col_count - len(row))
+        lines.append(" & ".join(padded) + " \\\\")
+        # Add midrule only after the header
+        if i == 0:
+            lines.append("\\midrule")
+            
+    lines.append("\\bottomrule")
+    lines.append("\\end{tabular}")
+    return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────
@@ -108,7 +152,50 @@ def _build_ocr_backend():
 
 
 # ─────────────────────────────────────────────
-# IMPROVEMENT 2 — TATR Table Solver
+# SLANet (PaddleOCR PP-Structure) Table Solver
+# ─────────────────────────────────────────────
+
+class SLANetTableSolver:
+    """
+    PaddleOCR PP-Structure table recognition using SLANet.
+    """
+
+    def __init__(self):
+        try:
+            from paddleocr import PPStructure
+            self.engine = PPStructure(show_log=False, lang="en")
+        except ImportError:
+            try:
+                from paddleocr.paddleocr import PPStructure
+                self.engine = PPStructure(show_log=False, lang="en")
+            except ImportError:
+                try:
+                    from paddleocr.ppstructure.predict_system import PPStructure
+                    self.engine = PPStructure(show_log=False, lang="en")
+                except ImportError as e:
+                    raise ImportError(f"PaddleOCR PPStructure failed to load from any known path: {e}")
+
+    def parse(self, img: np.ndarray) -> dict:
+        import cv2
+        bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        result = self.engine(bgr)
+        if not result or not result[0].get("res"): return {}
+        
+        html = result[0]["res"]["html"]
+        raw_grid = html_table_to_grid(html)
+        
+        # Apply OCR fixes and booktabs formatting directly to SLANet output
+        grid = [[_clean_table_cell(cell) for cell in row] for row in raw_grid]
+        
+        return {
+            "latex":      _apply_booktabs_format(grid),
+            "table_grid": grid,
+            "text":       " | ".join(c for row in grid for c in row),
+        }
+
+
+# ─────────────────────────────────────────────
+# TATR Table Solver (Fallback)
 # ─────────────────────────────────────────────
 
 class TATRTableSolver:
@@ -130,7 +217,7 @@ class TATRTableSolver:
 
         results = self.processor.post_process_object_detection(
             outputs,
-            threshold=0.15,  # Max recall. Let NMS handle duplicates.
+            threshold=0.15,  
             target_sizes=torch.tensor([pil_img.size[::-1]]),
         )[0]
 
@@ -142,12 +229,12 @@ class TATRTableSolver:
         tokens = self._ocr_tokens(img)
         grid = self._assign_tokens_to_grid(tokens, rows, cols, img.shape, img=img)
         
-        # Heuristic cleanup: Merges stray columns, deletes empty ones, attaches currency symbols
         grid = clean_table_grid(grid)
-        
-        grid = [[latex_escape(cell) for cell in row] for row in grid]
+
+        # Apply shared OCR fixes and booktabs formatting
+        grid = [[_clean_table_cell(cell) for cell in row] for row in grid]
         return {
-            "latex":      self._grid_to_tabular(grid),
+            "latex":      _apply_booktabs_format(grid),
             "table_grid": grid,
             "text":       " | ".join(c for row in grid for c in row),
         }
@@ -156,19 +243,16 @@ class TATRTableSolver:
         id2label = self.model.config.id2label
         row_boxes = []
         col_boxes = []
-        
+
         for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
             name = id2label[label.item()].lower()
-            # Strictly rely on 'table row' and 'table column'. Spanning headers confuse grids.
-            if name == "table row": 
+            if name in ("table row", "table column header"):
                 row_boxes.append((box.tolist(), score.item()))
-            elif name == "table column": 
+            elif name == "table column":
                 col_boxes.append((box.tolist(), score.item()))
-                
-        # 1D Non-Maximum Suppression (NMS) using proper IoU
+
         def nms_1d(items, i1, i2, thresh=0.25):
             if not items: return []
-            # Sort by confidence score so we keep the best boxes
             items.sort(key=lambda x: x[1], reverse=True)
             keep = []
             for box, score in items:
@@ -177,27 +261,22 @@ class TATRTableSolver:
                     overlap = max(0, min(box[i2], k_box[i2]) - max(box[i1], k_box[i1]))
                     union = (box[i2] - box[i1]) + (k_box[i2] - k_box[i1]) - overlap
                     iou = overlap / union if union > 0 else 0
-                    
                     if iou > thresh:
                         discard = True
                         break
                 if not discard:
                     keep.append(box)
-                    
-            # Sort back by spatial coordinate for top-to-bottom/left-to-right grid order
             keep.sort(key=lambda b: b[i1])
             return keep
 
-        # Apply strict IoU NMS to prevent row snowballing
-        rows = nms_1d(row_boxes, 1, 3, thresh=0.3)
-        cols = nms_1d(col_boxes, 0, 2, thresh=0.3)
+        rows = nms_1d(row_boxes, 1, 3, thresh=0.6)
+        cols = nms_1d(col_boxes, 0, 2, thresh=0.6)
         return rows, cols
 
     def _ocr_tokens(self, img: np.ndarray) -> list:
         results = self.ocr.readtext(img)
         
         if not results and isinstance(self.ocr, _PaddleOCRBackend):
-            print("  [table] PaddleOCR found no text, falling back to EasyOCR...")
             fallback_ocr = _EasyOCRBackend()
             results = fallback_ocr.readtext(img)
             
@@ -252,57 +331,6 @@ class TATRTableSolver:
             result.append(cells)
         return result
 
-    def _grid_to_tabular(self, grid: list) -> str:
-        if not grid: return ""
-        col_count = max(len(row) for row in grid)
-        col_spec  = "|" + "l|" * col_count
-        lines     = [f"\\begin{{tabular}}{{{col_spec}}}", "\\hline"]
-        for i, row in enumerate(grid):
-            padded = row + [""] * (col_count - len(row))
-            lines.append(" & ".join(padded) + " \\\\")
-            lines.append("\\hline")
-        lines.append("\\end{tabular}")
-        return "\n".join(lines)
-
-
-# ─────────────────────────────────────────────
-# SLANet (PaddleOCR PP-Structure) Table Solver
-# ─────────────────────────────────────────────
-
-class SLANetTableSolver:
-    """
-    PaddleOCR PP-Structure table recognition using SLANet.
-    """
-
-    def __init__(self):
-        try:
-            from paddleocr import PPStructure
-            self.engine = PPStructure(show_log=False, lang="en")
-        except ImportError:
-            try:
-                from paddleocr.paddleocr import PPStructure
-                self.engine = PPStructure(show_log=False, lang="en")
-            except ImportError:
-                try:
-                    from paddleocr.ppstructure.predict_system import PPStructure
-                    self.engine = PPStructure(show_log=False, lang="en")
-                except ImportError as e:
-                    raise ImportError(f"PaddleOCR PPStructure failed to load from any known path: {e}")
-
-    def parse(self, img: np.ndarray) -> dict:
-        import cv2
-        bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        result = self.engine(bgr)
-        if not result or not result[0].get("res"): return {}
-        
-        html = result[0]["res"]["html"]
-        grid = html_table_to_grid(html)
-        return {
-            "latex":      grid_to_tabular(grid),
-            "table_grid": grid,
-            "text":       " | ".join(c for row in grid for c in row),
-        }
-
 
 # ─────────────────────────────────────────────
 # MAIN SOLVER CLASS
@@ -321,10 +349,59 @@ class TextAndTableSolver:
                 print(f"[WARN] SLANet failed: {e}")
         self.tatr = TATRTableSolver(self.ocr)
 
+    @staticmethod
+    def _correct_orientation(img: np.ndarray) -> np.ndarray:
+        import cv2
+        try:
+            import subprocess, shutil
+            if shutil.which("tesseract"):
+                import tempfile, os
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf:
+                    tmp = tf.name
+                bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(tmp, bgr)
+                result = subprocess.run(
+                    ["tesseract", tmp, "stdout", "--psm", "0", "-l", "eng"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                os.unlink(tmp)
+                for line in result.stdout.splitlines():
+                    if "Rotate:" in line:
+                        angle = int(line.split(":")[1].strip())
+                        if angle == 180:
+                            print("  [ocr] Correcting 180° rotation (Tesseract OSD)")
+                            return cv2.rotate(img, cv2.ROTATE_180)
+                        break
+                return img
+        except Exception:
+            pass
+
+        try:
+            import easyocr
+            _reader = easyocr.Reader(["en"], gpu=CONFIG["gpu"], verbose=False)
+
+            def _avg_conf(image):
+                res = _reader.readtext(image, detail=1, paragraph=False)
+                if not res:
+                    return 0.0
+                return sum(r[2] for r in res) / len(res)
+
+            img_180 = cv2.rotate(img, cv2.ROTATE_180)
+            conf_orig = _avg_conf(img)
+            conf_flip = _avg_conf(img_180)
+            if conf_flip > conf_orig + 0.15:   
+                print(f"  [ocr] Correcting 180° rotation (confidence {conf_orig:.2f} → {conf_flip:.2f})")
+                return img_180
+        except Exception:
+            pass
+
+        return img
+
     def solve(self, region: dict) -> dict:
         if region.get("type") == "Table":
             return self._solve_table(region)
         img = preprocess_image(region["image"])
+        img = self._correct_orientation(img)
         lines = self._run_ocr_with_coords(img)
         text = " ".join(l["text"] for l in lines)
         region["text"] = text
@@ -332,14 +409,16 @@ class TextAndTableSolver:
         return region
 
     def _solve_table(self, region: dict) -> dict:
-        # Pass the raw image directly. Aggressive contrast destroys thin text/single characters.
         img = region["image"]
         
+        # RESTORED: Give priority to SLANet for superior grid extraction,
+        # but now it will use the clean booktabs formatting instead of ugly HTML grids.
         if self.slanet:
             parsed = self.slanet.parse(img)
             if parsed.get("latex"):
                 region.update(parsed)
                 return region
+                
         parsed = self.tatr.parse(img)
         region.update(parsed)
         return region
