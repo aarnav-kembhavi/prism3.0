@@ -132,11 +132,19 @@ def resolve_overlaps(
     Rules:
     1. If box A is mostly contained inside box B (>80% of A inside B),
        remove A (it's a duplicate sub-detection of the same region).
+       EXCEPTION: never remove a Section-header or Page-header that is
+       "contained" in a Text block — YOLO frequently detects a bold header
+       line as both a Section-header and part of a neighbouring Text region.
+       Dropping the Section-header causes it to vanish from the output
+       (observed: "B. FRONTEND LAYER" missing entirely).
     2. If two boxes partially overlap (IoU > 0.3, different classes),
        clip the lower-confidence box to remove the overlapping region.
     """
     if not detections:
         return []
+
+    # Classes that should NEVER be silently consumed by a containing box.
+    _PROTECTED_CLASSES = {"Section-header", "Page-header", "Title", "Caption"}
 
     # Sort by area descending (larger boxes first)
     dets = sorted(detections, key=lambda d: bbox_area(d['bbox']), reverse=True)
@@ -156,6 +164,9 @@ def resolve_overlaps(
             # Check if smaller box (j) is mostly contained in larger box (i)
             containment = compute_containment(bbox_j, bbox_i)
             if containment >= containment_threshold:
+                # Never drop protected classes regardless of containment
+                if dets[j]['class_name'] in _PROTECTED_CLASSES:
+                    continue
                 # j is inside i — remove the contained box
                 to_remove.add(j)
                 continue
@@ -278,19 +289,33 @@ def _merge_nearby_boxes(
     Merge vertically adjacent boxes of the same class if:
     - Vertical gap between them is < merge_gap pixels
     - They overlap horizontally by > 50%
+
+    EXCEPTION: List-item detections are NEVER merged.
+    Each YOLO List-item box corresponds to a single bullet point; merging them
+    into one crop sends all bullets to OCR as one blob, which then collapses
+    into a run-on string that _split_bullet_items() cannot reliably re-split.
+    Keeping them separate means each bullet is cropped and read individually,
+    producing clean per-item OCR output.
     """
     if not detections:
         return []
 
+    # Classes that must never be merged with their neighbours
+    _NO_MERGE_CLASSES = {"List-item", "Section-header", "Title", "Caption"}
+
     # Group by class
     by_class = {}
-    other = []
     for det in detections:
         cls = det['class_name']
         by_class.setdefault(cls, []).append(det)
 
     result = []
     for cls, dets in by_class.items():
+        # Never merge these classes — emit them as-is
+        if cls in _NO_MERGE_CLASSES:
+            result.extend(dets)
+            continue
+
         # Sort by Y center
         dets_sorted = sorted(dets, key=lambda d: (d['bbox'][1] + d['bbox'][3]) / 2)
 

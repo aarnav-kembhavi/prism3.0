@@ -97,6 +97,39 @@ def _get_table_solver():
 # ────────────────────────────────────────────────────────────────
 # OCR ENGINE: RAPIDOCR 
 # ────────────────────────────────────────────────────────────────
+def _preprocess_crop_for_ocr(crop: Image.Image) -> Image.Image:
+    """
+    Sharpen and boost contrast on the crop before feeding to RapidOCR.
+    Addresses glare-degraded crops where letter edges are blurred/washed out.
+
+    Steps:
+      1. Convert to greyscale to measure contrast.
+      2. If RMS contrast is low (< 40 on 0-255 scale), apply adaptive histogram
+         equalisation via ImageOps.autocontrast to recover faded ink.
+      3. Apply an unsharp-mask to restore crisp letter edges regardless of input
+         contrast level — this is the primary fix for "muluple", "Scripuutilling" etc.
+      4. Return as RGB (RapidOCR expects colour input).
+    """
+    from PIL import ImageFilter, ImageEnhance
+    grey = crop.convert("L")
+    arr = np.array(grey, dtype=np.float32)
+    rms_contrast = float(arr.std())
+
+    result = crop.convert("RGB")
+
+    # Step 2: auto-contrast on low-contrast (glared/washed-out) crops
+    if rms_contrast < 40:
+        grey_eq = ImageOps.autocontrast(grey, cutoff=1)
+        # Re-merge back to RGB
+        result = Image.merge("RGB", [grey_eq, grey_eq, grey_eq])
+
+    # Step 3: unsharp mask — radius 1.5, percent 180, threshold 3
+    # Equivalent to a moderate sharpening pass; safe on clean crops too.
+    result = result.filter(ImageFilter.UnsharpMask(radius=1.5, percent=180, threshold=3))
+
+    return result
+
+
 def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list[str]:
     import time
     global text_batch_latencies
@@ -108,18 +141,25 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
         t_start = time.perf_counter()
         
         for i, crop in enumerate(crops):
-            # FIX 1: Add a 30-pixel white border (Quiet Zone)
-            # YOLO crops cut exactly on the letters. RapidOCR fails to recognize 
+            # FIX 1: Sharpen and boost contrast before padding.
+            # Glare-degraded crops have blurred edges that RapidOCR's DBNet
+            # misreads as merged glyphs ("muluple", "Scripuutilling", etc.).
+            sharpened = _preprocess_crop_for_ocr(crop)
+
+            # FIX 2: Add a 30-pixel white border (Quiet Zone).
+            # YOLO crops cut exactly on the letters. RapidOCR fails to recognise
             # edge characters (like brackets) without surrounding white space.
-            padded_crop = ImageOps.expand(crop, border=30, fill='white')
+            padded_crop = ImageOps.expand(sharpened, border=30, fill='white')
             
-            # FIX 2: Anti-Downscale Safety Limit
-            # RapidOCR's internal DBNet has a strict size limit. If a crop is too large,
-            # it violently shrinks it, destroying text readability. We use high-quality
-            # Lanczos scaling to keep it safely within limits while preserving sharpness.
+            # FIX 3: Anti-Downscale Safety Limit.
+            # RapidOCR's internal DBNet has a strict size limit. If a crop is too
+            # large it violently shrinks it, destroying readability. Lanczos keeps
+            # it within limits while preserving sharpness.
+            # Raised cap from 1000 → 1500 so narrow single-column crops (which are
+            # only ~400 px wide) are never upscaled past the safe zone.
             max_dim = max(padded_crop.width, padded_crop.height)
-            if max_dim > 1000:
-                scale = 1000 / max_dim
+            if max_dim > 1500:
+                scale = 1500 / max_dim
                 new_w = int(padded_crop.width * scale)
                 new_h = int(padded_crop.height * scale)
                 padded_crop = padded_crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -128,13 +168,19 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
             res, _ = engine(img_np)
             
             if res:
+                # FIX 4: Join with newline, not space.
+                # RapidOCR returns one entry per text *line* in reading order.
+                # Joining with " " collapses bullet lines into a single run-on
+                # string that _split_bullet_items() cannot split.  Joining with
+                # "\n" preserves line boundaries so the splitters in
+                # latex_builder.py work correctly.
                 texts = [item[1] for item in res]
-                final_results[i] = escape_latex_chars(" ".join(texts))
+                final_results[i] = escape_latex_chars("\n".join(texts))
                 
         t_end = time.perf_counter()
         latency_ms = (t_end - t_start) * 1000
         text_batch_latencies.append(latency_ms)
-        print(f"    [text] RapidOCR Processed {len(crops)} regions (Padded): {latency_ms:.2f} ms")
+        print(f"    [text] RapidOCR Processed {len(crops)} regions (Padded+Sharpened): {latency_ms:.2f} ms")
         
         return final_results
     except Exception as e:

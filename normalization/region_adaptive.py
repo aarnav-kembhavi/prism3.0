@@ -25,10 +25,10 @@ from .frequency_filter import (
 # ================================================================
 
 GLARE_LIGHTNESS_THRESH: int   = 245    
-GLARE_LIGHTNESS_THRESH_PHONE: int = 240 # Raised from 210 to stop destroying text
-GLARE_AREA_THRESH: float      = 0.05   
+GLARE_LIGHTNESS_THRESH_PHONE: int = 225  # Lowered: 240→225 to catch glare halos on phone photos
+GLARE_AREA_THRESH: float      = 0.02   # Lowered: 0.05→0.02 — fire glare correction on 2% of crop pixels
 GLARE_AREA_THRESH_SCREENSHOT: float = 0.25  
-SHADOW_GRADIENT_THRESH: float = 0.25   
+SHADOW_GRADIENT_THRESH: float = 0.20   # Lowered: 0.25→0.20 — more sensitive shadow detection on glared crops
 MOIRE_SPIKE_RATIO_THRESH: float = 3.5  
 MOIRE_SPIKE_RATIO_THRESH_SCREENSHOT: float = 8.0  
 CONTRAST_RMS_THRESH: float    = 18.0   
@@ -148,6 +148,25 @@ def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool =
             profile.contrast_corrected = True
         return result, profile
 
+    # Step 0: Moiré / mesh-glare removal for phone photos — MUST run first.
+    #
+    # Phone photos taken of a screen exhibit a fine grid/crosshatch pattern
+    # from the screen mesh or reflection. This pattern:
+    #   a) confuses YOLO's column-gutter detector (fills the gutter with noise)
+    #   b) gets bicubic-interpolated into letter strokes during the 2.6× upscale
+    #   c) is then sharpened by the UnsharpMask in models_interface, making
+    #      word-boundary destruction worse.
+    #
+    # For screenshots this is a non-issue (no physical mesh) — the higher
+    # MOIRE_SPIKE_RATIO_THRESH_SCREENSHOT = 8.0 prevents false fires.
+    # For phone photos MOIRE_SPIKE_RATIO_THRESH = 3.5 catches real screen-mesh
+    # patterns (typical ratio 4–15×) while ignoring JPEG ring artefacts (2–3×).
+    moire_det, moire_sev = detect_moire(result, is_screenshot=is_screenshot)
+    profile.moire_detected, profile.moire_severity = moire_det, moire_sev
+    if moire_det:
+        result = remove_moire(result)
+        profile.moire_corrected = True
+
     # Step 1: Glare
     glare_det, glare_sev = detect_glare(result, is_screenshot=is_screenshot)
     profile.glare_detected, profile.glare_severity = glare_det, glare_sev
@@ -155,9 +174,18 @@ def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool =
         l_thresh = GLARE_LIGHTNESS_THRESH if is_screenshot else GLARE_LIGHTNESS_THRESH_PHONE
         result = remove_glare(result, lightness_threshold=l_thresh)
         profile.glare_corrected = True
+        # Heavy glare (>15% of crop) co-occurs with illumination halos.
+        # Run shadow removal on the inpainted result to even out the halo
+        # gradient left behind after inpainting, but skip for screenshots.
+        if not is_screenshot and glare_sev > 0.15 and class_name not in _SKIP_SHADOW:
+            shadow_det, shadow_sev = detect_shadow(result)
+            profile.shadow_detected, profile.shadow_severity = shadow_det, shadow_sev
+            if shadow_det:
+                result = remove_shadows(result)
+                profile.shadow_corrected = True
 
-    # Step 2: Shadow (Stage 1 handles it globally)
-    # Step 3: Moiré (Stage 1 handles it globally)
+    # Step 2: Shadow (Stage 1 handles it globally for normal photos)
+    # Step 3: Moiré — handled above as Step 0 (per-crop, before glare)
 
     # Step 4: Contrast (Safer CLAHE only)
     low_c, rms = detect_low_contrast(result)

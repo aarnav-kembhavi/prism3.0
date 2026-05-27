@@ -183,7 +183,37 @@ def main():
     
     print("[*] Stage 1: Image Normalization")
     image_norm, image_fidelity, modality_result = normalize_image_pil(args.image_path)
-    is_screenshot = (modality_result.modality.value == "screenshot")
+    from normalization.modality import CaptureModality
+    is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT)
+    print(f"[*] Modality resolved in orchestrate: {'screenshot' if is_screenshot else 'phone_photo'}")
+
+    # For phone photos: run a whole-image moiré removal pass BEFORE saving
+    # normalized.png and before YOLO detection.
+    #
+    # Why here and not only in region_adaptive per-crop:
+    # A fine screen-mesh or crosshatch glare pattern covers the ENTIRE image,
+    # including the inter-column gutter.  detect_column_count() uses the YOLO
+    # detection layout, but YOLO itself is confused by the mesh filling what
+    # should be empty gutter space — it detects fewer boxes in the right column
+    # or misses the column boundary entirely, causing detect_column_count() to
+    # return 1 and collapsing both columns into one stream.
+    # Removing the mesh from the full image before YOLO runs lets the gutter
+    # appear as the expected empty vertical stripe, restoring 2-column detection.
+    #
+    # The per-crop moiré removal in region_adaptive.py is still needed for any
+    # residual mesh that survives in individual crops.
+    if not is_screenshot:
+        from normalization.region_adaptive import detect_moire
+        from normalization.frequency_filter import remove_moire as _remove_moire_full
+        import cv2 as _cv2
+        _norm_bgr = _cv2.cvtColor(np.array(image_norm), _cv2.COLOR_RGB2BGR)
+        _moire_hit, _moire_sev = detect_moire(_norm_bgr, is_screenshot=False)
+        if _moire_hit:
+            print(f"[*] Whole-image moiré detected (severity={_moire_sev:.2f}), removing before YOLO...")
+            _clean_bgr = _remove_moire_full(_norm_bgr)
+            image_norm = Image.fromarray(_cv2.cvtColor(_clean_bgr, _cv2.COLOR_BGR2RGB))
+        del _norm_bgr
+
     image_norm.save(output_dir / "normalized.png")
 
     t_stage1_end = time.perf_counter(); mem_stage1_end = process.memory_info().rss / 1024 / 1024
@@ -220,7 +250,15 @@ def main():
         if det["class_name"] in IMAGE_CLASSES: continue
         det['crop'] = xyxy_to_pil_crop(image_norm, det['bbox'])
         crop_bgr = cv2.cvtColor(np.array(det['crop']), cv2.COLOR_RGB2BGR)
-        corrected_bgr, _ = preprocess_crop(crop_bgr, det['class_name'], is_screenshot=is_screenshot)
+        corrected_bgr, prof = preprocess_crop(crop_bgr, det['class_name'], is_screenshot=is_screenshot)
+        # For phone photos: if glare OR moiré was severe, run a final CLAHE
+        # pass to restore local contrast in corrected regions before OCR.
+        if not is_screenshot and (
+            (prof.glare_detected and prof.glare_severity > 0.10) or
+            (prof.moire_detected and prof.moire_severity > 0.30)
+        ):
+            from normalization.frequency_filter import normalize_contrast
+            corrected_bgr = normalize_contrast(corrected_bgr)
         det['crop'] = Image.fromarray(cv2.cvtColor(corrected_bgr, cv2.COLOR_BGR2RGB))
 
     t_stage15_end = time.perf_counter(); mem_stage15_end = process.memory_info().rss / 1024 / 1024

@@ -2,7 +2,8 @@
 layout_utils.py
 ---------------
 Bounding box utilities: sorting and reading order.
-Supports single-column, multi-column, and full-width elements using line-clustering and gutter detection.
+Supports single-column, multi-column, and full-width elements using
+line-clustering and gutter detection.
 """
 
 from typing import List, Dict, Any
@@ -15,7 +16,7 @@ def apply_semantic_reading_order(
 ) -> List[Dict[str, Any]]:
     """
     Build a semantic DAG to determine reading order.
-    
+
     Rules:
     1. Baseline: Geometric order (Top-to-Bottom, Left-to-Right) is used as tie-breaker.
     2. Caption Pairing: Captions are tied to the nearest Picture or Table.
@@ -24,11 +25,8 @@ def apply_semantic_reading_order(
     if not detections:
         return []
 
-    # 1. Initial Geometric Sort (Baseline tie-breaker)
     sorted_dets = sort_detections_geometric(detections)
-    
-    # 2. Build Adjacency List (DAG)
-    # Nodes are indices in sorted_dets.
+
     adj = {i: set() for i in range(len(sorted_dets))}
     in_degree = {i: 0 for i in range(len(sorted_dets))}
 
@@ -37,59 +35,49 @@ def apply_semantic_reading_order(
             adj[u].add(v)
             in_degree[v] += 1
 
-    # 3. Apply Semantic Rules (No hard geometric edges here to avoid cycles)
-    
     # Rule B: Caption Pairing
     for i, det in enumerate(sorted_dets):
         if det['class_name'] == 'Caption':
             cx1, cy1, cx2, cy2 = det['bbox']
             best_parent = None
             min_dist = float('inf')
-            
+
             for j, potential in enumerate(sorted_dets):
                 if potential['class_name'] in {'Picture', 'Table'}:
                     px1, py1, px2, py2 = potential['bbox']
-                    # Vertical distance
                     dist = min(abs(cy1 - py2), abs(cy2 - py1))
-                    # Horizontal overlap
                     h_overlap = max(0, min(cx2, px2) - max(cx1, px1))
-                    
+
                     if dist < 150 and (h_overlap > 0 or dist < 50):
                         if dist < min_dist:
                             min_dist = dist
                             best_parent = j
-            
+
             if best_parent is not None:
-                # Force Parent -> Caption
                 add_edge(best_parent, i)
 
     # Rule C: Footnote Sinking
-    # Every non-footnote node must point to every footnote node.
     footnotes = [i for i, d in enumerate(sorted_dets) if d['class_name'] == 'Footnote']
     non_footnotes = [i for i, d in enumerate(sorted_dets) if d['class_name'] != 'Footnote']
-    
+
     for fn in footnotes:
         for nfn in non_footnotes:
             add_edge(nfn, fn)
 
-    # 4. Topological Sort (Kahn's Algorithm)
-    # The queue stores indices that have no remaining dependencies.
+    # Topological Sort (Kahn's Algorithm)
     queue = [i for i in range(len(sorted_dets)) if in_degree[i] == 0]
     result_indices = []
-    
+
     while queue:
-        # Sort queue to maintain GEOMETRIC preference when multiple nodes are available.
-        queue.sort() 
+        queue.sort()
         u = queue.pop(0)
         result_indices.append(u)
-        
+
         for v in list(adj[u]):
             in_degree[v] -= 1
             if in_degree[v] == 0:
                 queue.append(v)
 
-    # Fallback: if there's still a cycle (should be impossible now),
-    # append any missing indices in their original geometric order.
     if len(result_indices) < len(sorted_dets):
         missing = [i for i in range(len(sorted_dets)) if i not in result_indices]
         result_indices.extend(missing)
@@ -100,12 +88,22 @@ def apply_semantic_reading_order(
 def sort_detections_geometric(detections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Robust geometric reading order (T-B, L-R) with line clustering.
-    Use this for noisy phone photos where semantic rules might fail.
+
+    Fix: changed line membership test from center-Y-in-range to
+    bbox-overlap-fraction. The original test:
+        current_line_y_min <= cy <= current_line_y_max
+    failed when a tall element (e.g. a figure) sat next to a short element
+    (e.g. a section header) at the same vertical position — the tall element's
+    center Y fell below the short element's y_max, incorrectly starting a new
+    line and breaking the row grouping.
+
+    New test: an element joins the current line if its bbox overlaps the
+    line's accumulated y-range by more than 30% of the element's own height.
+    This is robust to mixed-height elements in the same visual row.
     """
     if not detections:
         return []
 
-    # Sort primarily by the top Y coordinate
     sorted_dets = sorted(detections, key=lambda d: d['bbox'][1])
 
     lines = []
@@ -115,14 +113,21 @@ def sort_detections_geometric(detections: List[Dict[str, Any]]) -> List[Dict[str
 
     for det in sorted_dets:
         x1, y1, x2, y2 = det['bbox']
-        
+        det_height = max(y2 - y1, 1)
+
         if not current_line:
             current_line.append(det)
             current_line_y_max = y2
             current_line_y_min = y1
         else:
-            cy = (y1 + y2) / 2
-            if current_line_y_min <= cy <= current_line_y_max:
+            # Overlap between this element and the current line's y-range
+            overlap_top = max(y1, current_line_y_min)
+            overlap_bot = min(y2, current_line_y_max)
+            overlap = max(0, overlap_bot - overlap_top)
+            overlap_fraction = overlap / det_height
+
+            if overlap_fraction >= 0.30:
+                # Enough vertical overlap → same line
                 current_line.append(det)
                 current_line_y_max = max(current_line_y_max, y2)
                 current_line_y_min = min(current_line_y_min, y1)
@@ -159,11 +164,24 @@ def xyxy_to_pil_crop(image, bbox):
 def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> int:
     """
     Heuristic: detect if page is single or double column using Gutter Detection.
+
+    Changes vs original:
+    - full_width_threshold raised 0.60 → 0.70: items that span 60–70% of
+      the page are typically wide single-column elements, not full-width spans.
+      Using 0.60 caused left-column figures (~45% wide) that YOLO over-expanded
+      to be counted as full-width, reducing non_full_spans and masking the
+      two-column signal.
+    - Gutter zone widened from ±5% to ±8% of image width (16% total):
+      phone photos with slight perspective warp produce YOLO bboxes that
+      don't align perfectly to the optical center. The narrow ±5% zone caused
+      gutter-adjacent items to be counted as "crosses_gutter" instead of
+      left_items / right_items, suppressing the two-column detection.
     """
     if image_width == 0 or not detections:
         return 1
 
-    full_width_threshold = image_width * 0.60
+    full_width_threshold = image_width * 0.70   # raised from 0.60
+
     non_full_spans = []
     for d in detections:
         x1, _, x2, _ = d['bbox']
@@ -174,8 +192,8 @@ def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> i
         return 1
 
     gutter_center = image_width / 2
-    gutter_min = gutter_center - (image_width * 0.05)
-    gutter_max = gutter_center + (image_width * 0.05)
+    gutter_min = gutter_center - (image_width * 0.08)  # widened from 0.05
+    gutter_max = gutter_center + (image_width * 0.08)  # widened from 0.05
 
     crosses_gutter_count = 0
     left_items = 0
@@ -204,6 +222,17 @@ def split_detections_by_column(
     """
     Split detections into full_width, left_col, right_col lists.
     Returns (full_width, left_col, right_col) sorted by specified strategy.
+
+    Changes vs original:
+    - full_width_threshold raised 0.60 → 0.70 (matches detect_column_count).
+    - Cross-gutter margin widened from 10% to 20% per side:
+      The original second condition routed an item to full_width if its bbox
+      crossed ±10% of the midpoint. On phone photos, YOLO over-expands bboxes
+      by 5–15% on glared/blurry text, so right-column items whose left edge
+      barely crossed the 10% margin were pulled into full_width and rendered
+      BEFORE the column block — this is what caused right-column text to appear
+      above left-column text in the output. With ±20%, only items that genuinely
+      span both columns (like page-width tables or titles) are routed full_width.
     """
     if image_width == 0:
         if use_dag:
@@ -212,7 +241,7 @@ def split_detections_by_column(
             sorted_all = sort_detections_geometric(detections)
         return [], sorted_all, []
 
-    full_width_threshold = image_width * 0.60
+    full_width_threshold = image_width * 0.70   # raised from 0.60
     midpoint = image_width / 2
 
     full_width, left_col, right_col = [], [], []
@@ -220,22 +249,24 @@ def split_detections_by_column(
     for det in detections:
         x1, y1, x2, y2 = det['bbox']
         w = x2 - x1
-        
-        if w >= full_width_threshold or (x1 < midpoint - image_width*0.1 and x2 > midpoint + image_width*0.1):
+
+        if w >= full_width_threshold or (
+            x1 < midpoint - image_width * 0.20 and   # widened from 0.10
+            x2 > midpoint + image_width * 0.20        # widened from 0.10
+        ):
             full_width.append(det)
         elif (x1 + x2) / 2 < midpoint:
             left_col.append(det)
         else:
             right_col.append(det)
 
-    # Sort each zone
     if use_dag:
         full_width = apply_semantic_reading_order(full_width, image_width, image_height)
-        left_col = apply_semantic_reading_order(left_col, image_width, image_height)
-        right_col = apply_semantic_reading_order(right_col, image_width, image_height)
+        left_col   = apply_semantic_reading_order(left_col,   image_width, image_height)
+        right_col  = apply_semantic_reading_order(right_col,  image_width, image_height)
     else:
         full_width = sort_detections_geometric(full_width)
-        left_col = sort_detections_geometric(left_col)
-        right_col = sort_detections_geometric(right_col)
+        left_col   = sort_detections_geometric(left_col)
+        right_col  = sort_detections_geometric(right_col)
 
     return full_width, left_col, right_col

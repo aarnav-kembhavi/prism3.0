@@ -40,10 +40,11 @@ _OCR_FIXES = [
     (re.compile(r'\[(\d{1,2})1\b'), r'[\1]'),                # [171 -> [17]
     (re.compile(r'\b1(\d{1,2})\]'), r'[\1]'),                # 115] -> [15]
     
-    # --- IEEE Section Header Fixes ---
-    # Fixes missing space after section letter (e.g., "DRETRIEVAL" -> "D. RETRIEVAL")
-    (re.compile(r'^([A-Z])([A-Z]{3,})'), r'\1. \2'),
-    
+    # NOTE: The "missing space after section letter" fix (e.g. "DRETRIEVAL" →
+    # "D. RETRIEVAL") has been moved into _clean_section_header_text() below.
+    # Applying it globally via _OCR_FIXES corrupts normal sentences that begin
+    # with two capital letters (e.g. "RAG combines..." → "R.A.G combines...").
+
     # I (capital-I) misread as digit 1 in numeric contexts
     (re.compile(r'\bI(\d)'), r'1\1'),       
     (re.compile(r'(\d)I(\d)'), r'\g<1>1\2'), 
@@ -59,6 +60,11 @@ _OCR_FIXES = [
 ]
 
 
+# Applied only to Section-header text (not body text) to fix OCR artefacts
+# like "DRETRIEVAL-AUGMENTED" → "D. RETRIEVAL-AUGMENTED"
+_SECTION_LABEL_RE = re.compile(r'^([A-Z])([A-Z]{3,})')
+
+
 # IEEE section header splitter — splits merged detections like:
 # "IV. RESULTS A. OVERALL COMPARISON" → two separate \subsection* entries
 _IEEE_HEADER_SPLIT_RE = re.compile(
@@ -71,9 +77,26 @@ _IEEE_HEADER_SPLIT_RE = re.compile(
 )
 
 
+def _clean_section_header_text(text: str) -> str:
+    """
+    Apply section-header-specific OCR fixes that would corrupt body text
+    if applied globally.  Called only from the Section-header wrapper.
+
+    Fixes:
+      "DRETRIEVAL-AUGMENTED" → "D. RETRIEVAL-AUGMENTED"
+      "BHIGH-LEVEL OVERVIEW"  → "B. HIGH-LEVEL OVERVIEW"
+    """
+    return _SECTION_LABEL_RE.sub(r'\1. \2', text)
+
+
 def _split_section_headers(text: str) -> List[str]:
     parts = _IEEE_HEADER_SPLIT_RE.split(text)
-    return [p.strip() for p in parts if p.strip()]
+    cleaned = []
+    for p in parts:
+        p = p.strip()
+        if p:
+            cleaned.append(_clean_section_header_text(p))
+    return cleaned
 
 
 def _clean_ocr(text: str) -> str:
@@ -87,16 +110,43 @@ def _clean_ocr(text: str) -> str:
 
 
 _BULLET_SPLIT_RE = re.compile(
-    r'(?<!\A)'                        
-    r'(?=\bModel\s+[A-D][\s:\-\.])',  
+    r'(?<!\A)'
+    # Split before a bold/label pattern: a capitalised word followed by : or –
+    # Covers: "Authentication: ...", "Chat Interface: ...", "Level 0 (...):",
+    #         "Model A:", "• word", lines starting after a newline.
+    r'(?='
+        r'\n'                              # explicit newline from OCR join fix
+        r'|(?<=\s)\*\*'                    # bold marker
+        r'|\bModel\s+[A-D][\s:\-\.]'      # Model A/B/C/D (original case)
+    r')',
 )
 
 
 def _split_bullet_items(text: str) -> List[str]:
-    parts = _BULLET_SPLIT_RE.split(text)
-    if len(parts) == 1 and '\n' in text:
+    """
+    Split a multi-bullet OCR blob into individual bullet strings.
+
+    Priority 1 — newline-delimited (the normal path after the OCR join fix
+    that uses '\\n' instead of ' ').  Each non-empty line becomes one item.
+
+    Priority 2 — regex split on Model A/B/C/D or bold markers (legacy path
+    for crops that still arrive as a single-space-joined string).
+
+    Priority 3 — fall back to the whole string as one item.
+    """
+    # Priority 1: newline split (works when models_interface joins with \n)
+    if '\n' in text:
         parts = [p.strip() for p in text.split('\n') if p.strip()]
-    return [p.strip() for p in parts if p.strip()]
+        if len(parts) > 1:
+            return parts
+
+    # Priority 2: regex split
+    parts = _BULLET_SPLIT_RE.split(text)
+    if len(parts) > 1:
+        return [p.strip() for p in parts if p.strip()]
+
+    # Priority 3: single item
+    return [text.strip()] if text.strip() else []
 
 
 LATEX_WRAPPERS = {
@@ -114,7 +164,7 @@ LATEX_WRAPPERS = {
     "Page-header":    lambda c: f"% [header: {c}]",
     "Text":           lambda c: f"\n{_clean_ocr(c)}\n",
     "List-item": lambda c: "\n".join(
-        f"\\item {_clean_ocr(part)}"
+        f"\\item {_clean_ocr(part)}\n"
         for part in _split_bullet_items(c)
     ),
     "Formula": lambda c: (

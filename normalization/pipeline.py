@@ -117,10 +117,28 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
     # Analyze grayscale histogram to classify input as screenshot
     # (sparse bins, discrete pixel values) or phone photo (dense bins,
     # continuous sensor noise across all 256 intensity levels).
+    #
+    # GLARE OVERRIDE: Heavy glare creates large blown-out regions with
+    # constant pixel values that mimic the sparse histogram of a screenshot.
+    # If initial classification is "screenshot" but we detect significant
+    # glare (>8% of pixels with LAB L > 230), override to phone photo so
+    # the full correction pipeline fires.
     # ================================================================
     modality_result = detect_capture_modality(img)
     is_screenshot = modality_result.modality == CaptureModality.SCREENSHOT
     print(f"  [norm] Capture modality: {modality_result}")
+
+    if is_screenshot:
+        # Check for glare signature that may have caused misclassification
+        img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l_channel = img_lab[:, :, 0]
+        # LAB L channel: OpenCV maps 0-255, so L>230 ≈ very overexposed
+        glare_pixel_fraction = float(np.mean(l_channel > 230))
+        print(f"  [norm] Glare pixel fraction (pre-check): {glare_pixel_fraction:.3f}")
+        if glare_pixel_fraction > 0.08:
+            print("  [norm] WARNING: High glare fraction detected on 'screenshot' — "
+                  "likely a misclassified phone photo. Overriding to PHONE_PHOTO path.")
+            is_screenshot = False
 
     if is_screenshot:
         # =============================================================
@@ -173,9 +191,20 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         img = remove_shadows(img)
 
         # Step 4: Glare inpainting
-        # Detect bright spots → fill with surrounding data
-        print("  [norm] Step 4: Glare removal (inpainting)")
-        img = remove_glare(img)
+        # Detect bright spots → fill with surrounding data.
+        # For heavy glare, use a lower lightness threshold and run two passes:
+        #   Pass 1 (threshold=220): catches the most severe overexposed cores
+        #   Pass 2 (threshold=235): mops up moderate halo regions left behind
+        # A second pass rarely hurts clean areas because the mask is tight.
+        img_lab_check = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        glare_fraction = float(np.mean(img_lab_check[:, :, 0] > 225))
+        print(f"  [norm] Step 4: Glare removal (inpainting) — glare fraction: {glare_fraction:.3f}")
+        if glare_fraction > 0.05:
+            print("  [norm]   Heavy glare detected — using aggressive two-pass inpainting")
+            img = remove_glare(img, lightness_threshold=210)   # pass 1: aggressive
+            img = remove_glare(img, lightness_threshold=228)   # pass 2: halos
+        else:
+            img = remove_glare(img)   # standard single pass
 
         # Step 5: Moiré removal via FFT
         print("  [norm] Step 5: Moiré removal (FFT)")
@@ -217,4 +246,3 @@ def normalize_image_pil(input_path, target_dpi=250, source_dpi=96):
     rgb_color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
     rgb_fidelity = cv2.cvtColor(fidelity, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb_color), Image.fromarray(rgb_fidelity), modality_result
-
