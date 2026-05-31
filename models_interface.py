@@ -97,35 +97,77 @@ def _get_table_solver():
 # ────────────────────────────────────────────────────────────────
 # OCR ENGINE: RAPIDOCR 
 # ────────────────────────────────────────────────────────────────
-def _preprocess_crop_for_ocr(crop: Image.Image) -> Image.Image:
+def _preprocess_crop_for_ocr(crop: Image.Image, is_screenshot: bool = False) -> Image.Image:
     """
-    Sharpen and boost contrast on the crop before feeding to RapidOCR.
-    Addresses glare-degraded crops where letter edges are blurred/washed out.
+    Sharpen, contrast-boost, and optionally binarize a crop before RapidOCR.
 
     Steps:
-      1. Convert to greyscale to measure contrast.
-      2. If RMS contrast is low (< 40 on 0-255 scale), apply adaptive histogram
-         equalisation via ImageOps.autocontrast to recover faded ink.
-      3. Apply an unsharp-mask to restore crisp letter edges regardless of input
-         contrast level — this is the primary fix for "muluple", "Scripuutilling" etc.
-      4. Return as RGB (RapidOCR expects colour input).
+      1. Convert to greyscale, measure RMS contrast.
+      2. If contrast is low (< 40), apply autocontrast to recover faded ink.
+      3. Apply unsharp-mask to restore crisp letter edges.
+      4. Phone photos only — adaptive binarization when contrast is still low
+         after step 2/3 (RMS < 55).
+
+         Why binarization fixes word fusion:
+         DBNet (RapidOCR's text detector) was designed for near-binary document
+         images. On glare-damaged phone-photo crops, residual mesh artefacts and
+         illumination gradients make inter-word white space appear grey (~180-220)
+         rather than white (255). DBNet treats grey gaps as part of the ink region
+         and returns the whole paragraph as one detection bbox — _reconstruct_lines
+         then has nothing to split because there is only one box.
+
+         OpenCV adaptiveThreshold (Gaussian, block=31, C=10) computes a local
+         threshold for each pixel from its 31×31 neighbourhood. This is robust to
+         illumination gradients: even if the left edge of the crop is darker than
+         the right edge, each local neighbourhood is thresholded independently.
+         The result is a clean black-ink-on-white image where inter-word gaps are
+         genuinely white (255), which DBNet can segment into individual word boxes.
+
+         Block size 31 and C=10 are calibrated for body-text at 15-30px cap height
+         (typical after the 2000px floor resize). Smaller blocks cause salt-and-
+         pepper noise in large ink strokes; larger blocks miss narrow inter-word gaps.
+
+         Binarization is skipped for screenshots (already clean binary-like pixels)
+         and for high-contrast phone crops (RMS >= 55 after sharpening) to avoid
+         destroying anti-aliasing information the recognition model uses.
+      5. Return as RGB (RapidOCR expects colour input).
     """
-    from PIL import ImageFilter, ImageEnhance
+    import cv2
+    from PIL import ImageFilter
     grey = crop.convert("L")
     arr = np.array(grey, dtype=np.float32)
     rms_contrast = float(arr.std())
 
     result = crop.convert("RGB")
 
-    # Step 2: auto-contrast on low-contrast (glared/washed-out) crops
+    # Step 2: auto-contrast on low-contrast crops
     if rms_contrast < 40:
         grey_eq = ImageOps.autocontrast(grey, cutoff=1)
-        # Re-merge back to RGB
         result = Image.merge("RGB", [grey_eq, grey_eq, grey_eq])
+        # Recompute grey for step 4
+        grey = grey_eq
 
-    # Step 3: unsharp mask — radius 1.5, percent 180, threshold 3
-    # Equivalent to a moderate sharpening pass; safe on clean crops too.
+    # Step 3: unsharp mask
     result = result.filter(ImageFilter.UnsharpMask(radius=1.5, percent=180, threshold=3))
+
+    # Step 4: adaptive binarization for phone photos with residual contrast issues
+    if not is_screenshot:
+        # Re-measure contrast after sharpening
+        grey_sharp = result.convert("L")
+        arr_sharp = np.array(grey_sharp, dtype=np.float32)
+        rms_after = float(arr_sharp.std())
+
+        if rms_after < 35:  # only fire on genuinely flat/grey crops; raised from 55
+            # Adaptive threshold: local Gaussian neighbourhood, block=31, C=10
+            grey_np = np.array(grey_sharp, dtype=np.uint8)
+            binary_np = cv2.adaptiveThreshold(
+                grey_np, 255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                blockSize=31,
+                C=10,
+            )
+            result = Image.fromarray(binary_np).convert("RGB")
 
     return result
 
@@ -236,7 +278,7 @@ def _reconstruct_lines(res: list) -> str:
     return '\n'.join(output_lines)
 
 
-def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list[str]:
+def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10, is_screenshot: bool = False) -> list[str]:
     import time
     global text_batch_latencies
     if not crops: return []
@@ -250,7 +292,7 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
             # FIX 1: Sharpen and boost contrast before padding.
             # Glare-degraded crops have blurred edges that RapidOCR's DBNet
             # misreads as merged glyphs ("muluple", "Scripuutilling", etc.).
-            sharpened = _preprocess_crop_for_ocr(crop)
+            sharpened = _preprocess_crop_for_ocr(crop, is_screenshot=is_screenshot)
 
             # FIX 2: Add a 30-pixel white border (Quiet Zone).
             # YOLO crops cut exactly on the letters. RapidOCR fails to recognise
@@ -301,8 +343,8 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
     except Exception as e:
         print(f"[RAPID ERROR] {e}"); return [""] * len(crops)
 
-def run_text_ocr(crop: Image.Image) -> str:
-    return run_text_ocr_batched([crop])[0]
+def run_text_ocr(crop: Image.Image, is_screenshot: bool = False) -> str:
+    return run_text_ocr_batched([crop], is_screenshot=is_screenshot)[0]
 
 
 # ────────────────────────────────────────────────────────────────

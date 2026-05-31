@@ -102,7 +102,7 @@ def run_detection(model: YOLO, image_norm: Image.Image, image_fidelity: Image.Im
     return detections
 
 
-def route_and_extract(detections, figures_dir: str, figure_start: int = 0):
+def route_and_extract(detections, figures_dir: str, figure_start: int = 0, is_screenshot: bool = False):
     """
     Route detections to specialist models.
     Sequential execution restored to prevent threading-related table failures.
@@ -118,7 +118,7 @@ def route_and_extract(detections, figures_dir: str, figure_start: int = 0):
     
     if text_indices:
         text_crops = [detections[i]["crop"] for i in text_indices]
-        raw_texts = run_text_ocr_batched(text_crops)
+        raw_texts = run_text_ocr_batched(text_crops, is_screenshot=is_screenshot)
         for idx, raw in zip(text_indices, raw_texts):
             detections[idx]["raw_content"] = raw
             
@@ -306,13 +306,13 @@ def main():
 
     if col_count == 2:
         full_dets, left_dets, right_dets = split_detections_by_column(body_detections, img_width, img_height, use_dag=True)
-        full_parts, full_idx, f_cnt = route_and_extract(full_dets, str(output_dir), 0)
-        left_parts, left_idx, f_cnt = route_and_extract(left_dets, str(output_dir), f_cnt)
-        right_parts, right_idx, f_cnt = route_and_extract(right_dets, str(output_dir), f_cnt)
+        full_parts, full_idx, f_cnt = route_and_extract(full_dets, str(output_dir), 0, is_screenshot=is_screenshot)
+        left_parts, left_idx, f_cnt = route_and_extract(left_dets, str(output_dir), f_cnt, is_screenshot=is_screenshot)
+        right_parts, right_idx, f_cnt = route_and_extract(right_dets, str(output_dir), f_cnt, is_screenshot=is_screenshot)
         document = assemble_document(full_parts, full_idx, True, left_parts, left_idx, right_parts, right_idx, header_logo_fname)
     else:
         body_sorted = apply_semantic_reading_order(body_detections, img_width, img_height)
-        body_parts, list_idx, _ = route_and_extract(body_sorted, str(output_dir))
+        body_parts, list_idx, _ = route_and_extract(body_sorted, str(output_dir), is_screenshot=is_screenshot)
         document = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
 
     t_stage3_end = time.perf_counter(); mem_stage3_end = process.memory_info().rss / 1024 / 1024

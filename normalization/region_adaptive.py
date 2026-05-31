@@ -173,22 +173,28 @@ def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool =
             result = remove_moire(result)
             profile.moire_corrected = True
 
-    # Step 1: Glare
-    glare_det, glare_sev = detect_glare(result, is_screenshot=is_screenshot)
-    profile.glare_detected, profile.glare_severity = glare_det, glare_sev
-    if glare_det:
-        l_thresh = GLARE_LIGHTNESS_THRESH if is_screenshot else GLARE_LIGHTNESS_THRESH_PHONE
-        result = remove_glare(result, lightness_threshold=l_thresh)
-        profile.glare_corrected = True
-        # Heavy glare (>15% of crop) co-occurs with illumination halos.
-        # Run shadow removal on the inpainted result to even out the halo
-        # gradient left behind after inpainting, but skip for screenshots.
-        if not is_screenshot and glare_sev > 0.15 and class_name not in _SKIP_SHADOW:
-            shadow_det, shadow_sev = detect_shadow(result)
-            profile.shadow_detected, profile.shadow_severity = shadow_det, shadow_sev
-            if shadow_det:
-                result = remove_shadows(result)
-                profile.shadow_corrected = True
+    # Step 1: Glare — skipped entirely for screenshots.
+    #
+    # Screenshots have no physical glare. After the pipeline applies CLAHE
+    # and a 2.6× upscale, white paper pixels in a screenshot sit at L≈245-255.
+    # GLARE_LIGHTNESS_THRESH=245 would flag every white pixel as glare and
+    # Telea-inpaint 100% of the crop, destroying all text.
+    # Phone photos: use the lower GLARE_LIGHTNESS_THRESH_PHONE=225 threshold
+    # and GLARE_AREA_THRESH=0.02 to catch genuine specular highlights.
+    if not is_screenshot:
+        glare_det, glare_sev = detect_glare(result, is_screenshot=False)
+        profile.glare_detected, profile.glare_severity = glare_det, glare_sev
+        if glare_det:
+            result = remove_glare(result, lightness_threshold=GLARE_LIGHTNESS_THRESH_PHONE)
+            profile.glare_corrected = True
+            # Heavy glare (>15%) co-occurs with illumination halos — run shadow
+            # removal on the inpainted result to even out the halo gradient.
+            if glare_sev > 0.15 and class_name not in _SKIP_SHADOW:
+                shadow_det, shadow_sev = detect_shadow(result)
+                profile.shadow_detected, profile.shadow_severity = shadow_det, shadow_sev
+                if shadow_det:
+                    result = remove_shadows(result)
+                    profile.shadow_corrected = True
 
     # Step 2: Shadow (Stage 1 handles it globally for normal photos)
     # Step 3: Moiré — handled above as Step 0 (per-crop, before glare)

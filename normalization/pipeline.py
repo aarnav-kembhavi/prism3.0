@@ -7,9 +7,9 @@ Pipeline order (phone photo — full path):
   0. Capture modality detection (histogram bin analysis)
   2. White balance correction (gray world)
   3. Geometric rectification (multi-strategy)
-  4. Shadow removal (difference-of-Gaussians)
+  4. Moiré removal (FFT notch filter)    ← must be first: mesh fakes glare+shadow signals
   5. Glare inpainting (LAB threshold + Telea inpaint)
-  6. Moiré removal (FFT notch filter)
+  6. Shadow removal (difference-of-Gaussians)
   7. Contrast normalization (CLAHE)
   8. Smart DPI resize
 
@@ -48,19 +48,23 @@ def _smart_dpi_resize(img, target_dpi, source_dpi):
     Phone cameras typically shoot at 3000-4000px wide, which is
     already ~300+ effective DPI for a document page. Upscaling
     those further just wastes memory and hurts YOLO performance.
+
+    Floor raised from 1500 → 2000 (shorter side):
+    At 1500px the inter-column gutter on a two-column IEEE page is
+    only ~75px wide. YOLO bbox over-expansion (5–15% on glared crops)
+    causes boxes to bleed across a 75px gutter, triggering the
+    crosses_gutter branch in detect_column_count and collapsing both
+    columns into one. At 2000px the gutter is ~100px, which gives
+    enough margin for the gutter detection to remain stable.
     """
     h, w = img.shape[:2]
     scale_factor = target_dpi / source_dpi
 
-    # If the image is already large enough (likely a high-res phone photo),
-    # don't upscale — only downscale if needed to keep compute bounded.
-    LARGE_THRESHOLD = 1000  # lowered from 2000
+    LARGE_THRESHOLD = 1000
     shorter_side = min(h, w)
 
     if shorter_side >= LARGE_THRESHOLD and scale_factor > 1.0:
-        # Image is already at workable resolution, cap the scale to avoid bloating
-        # and magnifying physical artifacts/sensor noise.
-        desired_shorter = 1500 # lowered from 2500
+        desired_shorter = 2000  # raised from 1500 — keeps gutter wide enough for column detection
         if shorter_side > desired_shorter:
             scale_factor = desired_shorter / shorter_side
             print(f"  [norm] High-res input detected ({w}x{h}), "
@@ -69,7 +73,6 @@ def _smart_dpi_resize(img, target_dpi, source_dpi):
             print(f"  [norm] Image already at good resolution ({w}x{h}), skipping resize")
             return img
     elif scale_factor < 0.5:
-        # Don't downscale too aggressively
         scale_factor = 0.5
         print(f"  [norm] Capping downscale at 0.5x")
 
@@ -77,7 +80,6 @@ def _smart_dpi_resize(img, target_dpi, source_dpi):
     new_h = int(h * scale_factor)
 
     if abs(scale_factor - 1.0) < 0.05:
-        # Scale factor ~1.0, skip resize
         return img
 
     interpolation = cv2.INTER_LANCZOS4 if scale_factor > 1.0 else cv2.INTER_AREA
@@ -129,14 +131,24 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
     print(f"  [norm] Capture modality: {modality_result}")
 
     if is_screenshot:
-        # Check for glare signature that may have caused misclassification
+        # Check for glare signature that may have caused misclassification.
+        #
+        # White-background documents (IEEE pages, papers) are ~85-90% white,
+        # which means L > 230 in LAB for almost all pixels. The original
+        # threshold of 0.08 (8%) fired on every clean white-background screenshot,
+        # overriding it to phone_photo and applying destructive binarization.
+        #
+        # Fix: use L > 248 (genuinely blown-out / specular) and require > 25%
+        # of pixels at that extreme level. Normal white paper sits at L ≈ 230-242;
+        # specular glare from a phone flash sits at L ≈ 248-255.
+        # This only fires when a large fraction of the image is completely saturated
+        # (true phone-photo glare), not on normal white document backgrounds.
         img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         l_channel = img_lab[:, :, 0]
-        # LAB L channel: OpenCV maps 0-255, so L>230 ≈ very overexposed
-        glare_pixel_fraction = float(np.mean(l_channel > 230))
-        print(f"  [norm] Glare pixel fraction (pre-check): {glare_pixel_fraction:.3f}")
-        if glare_pixel_fraction > 0.08:
-            print("  [norm] WARNING: High glare fraction detected on 'screenshot' — "
+        glare_pixel_fraction = float(np.mean(l_channel > 248))
+        print(f"  [norm] Glare pixel fraction (pre-check, L>248): {glare_pixel_fraction:.3f}")
+        if glare_pixel_fraction > 0.25:
+            print("  [norm] WARNING: Heavy specular glare on classified screenshot — "
                   "likely a misclassified phone photo. Overriding to PHONE_PHOTO path.")
             is_screenshot = False
 
@@ -156,10 +168,24 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         print("  [norm] Step 6: Contrast normalization (CLAHE)")
         img = normalize_contrast(img)
 
-        # Step 7: Smart DPI resize
-        print("  [norm] Step 7: DPI resize")
-        img = _smart_dpi_resize(img, target_dpi, source_dpi)
-        fidelity_img = _smart_dpi_resize(fidelity_img, target_dpi, source_dpi)
+        # Step 7: DPI resize — capped for screenshots.
+        # Screenshots are pixel-perfect digital renders; source_dpi=96 and
+        # target_dpi=250 would apply a 2.6× upscale to a 729px-wide image,
+        # producing a 1898px image with bicubic interpolation artefacts.
+        # For screenshots we only upscale if the image is genuinely small
+        # (shorter side < 800px), and cap the scale at 1.5× to avoid
+        # introducing interpolation blur on clean crisp pixels.
+        h_sc, w_sc = img.shape[:2]
+        shorter_sc = min(h_sc, w_sc)
+        if shorter_sc < 800:
+            sc_scale = min(1.5, 800 / shorter_sc)
+            new_w_sc = int(w_sc * sc_scale)
+            new_h_sc = int(h_sc * sc_scale)
+            img = cv2.resize(img, (new_w_sc, new_h_sc), interpolation=cv2.INTER_LANCZOS4)
+            fidelity_img = cv2.resize(fidelity_img, (new_w_sc, new_h_sc), interpolation=cv2.INTER_LANCZOS4)
+            print(f"  [norm] Step 7: Screenshot small-upscale {w_sc}x{h_sc} → {new_w_sc}x{new_h_sc}")
+        else:
+            print(f"  [norm] Step 7: Screenshot already adequate resolution ({w_sc}x{h_sc}), skipping resize")
 
     else:
         # =============================================================
@@ -180,22 +206,24 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         print("  [norm] Step 2: Geometric rectification")
         img = detect_and_rectify(input_path, img_override=img)
 
-        # Save fidelity copy before destructive steps (DoG, Glare Inpainting, FFT, CLAHE)
-        # This preserves natural colors and textures while maintaining the exact
-        # geometric coordinates (perspective warp) of the normalized image.
+        # Save fidelity copy after geometric rectification but before
+        # any destructive corrections (moiré/glare/shadow/CLAHE).
         fidelity_img = img.copy()
 
-        # Step 3: Shadow removal
-        # Even out illumination (desk lamp shadows, window gradients)
-        print("  [norm] Step 3: Shadow removal (DoG)")
-        img = remove_shadows(img)
+        # Step 3: Moiré removal via FFT  ← FIRST destructive step
+        #
+        # Correct pipeline order: moiré → glare → shadow → contrast.
+        # Reason: the mesh/grid pattern creates bright intersection spots
+        # that look like glare to detect_glare_mask (LAB L > threshold),
+        # and look like illumination gradients to DoG shadow detection.
+        # If glare or shadow run first they bake the mesh into inpainted
+        # regions where FFT can no longer remove it, fusing word boundaries.
+        # Running FFT first gives both subsequent stages a clean image.
+        print("  [norm] Step 3: Moiré removal (FFT) — first destructive step")
+        img = remove_moire(img)
 
         # Step 4: Glare inpainting
-        # Detect bright spots → fill with surrounding data.
-        # For heavy glare, use a lower lightness threshold and run two passes:
-        #   Pass 1 (threshold=220): catches the most severe overexposed cores
-        #   Pass 2 (threshold=235): mops up moderate halo regions left behind
-        # A second pass rarely hurts clean areas because the mask is tight.
+        # Operates on a mesh-free image — glare mask is now clean.
         img_lab_check = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         glare_fraction = float(np.mean(img_lab_check[:, :, 0] > 225))
         print(f"  [norm] Step 4: Glare removal (inpainting) — glare fraction: {glare_fraction:.3f}")
@@ -206,9 +234,12 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         else:
             img = remove_glare(img)   # standard single pass
 
-        # Step 5: Moiré removal via FFT
-        print("  [norm] Step 5: Moiré removal (FFT)")
-        img = remove_moire(img)
+        # Step 5: Shadow removal
+        # Even out illumination (desk lamp shadows, window gradients).
+        # Runs after moiré+glare so DoG doesn't mistake mesh intersection
+        # gradients or inpainted halo edges for illumination shadows.
+        print("  [norm] Step 5: Shadow removal (DoG)")
+        img = remove_shadows(img)
 
         # Step 6: Contrast normalization (CLAHE)
         print("  [norm] Step 6: Contrast normalization (CLAHE)")
