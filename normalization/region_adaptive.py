@@ -135,7 +135,7 @@ def detect_low_contrast(crop_bgr: np.ndarray) -> tuple[bool, float]:
 # Public API
 # ================================================================
 
-def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool = False) -> tuple[np.ndarray, RegionArtifactProfile]:
+def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool = False, skip_moire: bool = False) -> tuple[np.ndarray, RegionArtifactProfile]:
     profile = RegionArtifactProfile(class_name=class_name)
     result = crop_bgr.copy()
     if class_name in _SKIP_ALL: return result, profile
@@ -157,15 +157,21 @@ def preprocess_crop(crop_bgr: np.ndarray, class_name: str, is_screenshot: bool =
     #   c) is then sharpened by the UnsharpMask in models_interface, making
     #      word-boundary destruction worse.
     #
+    # skip_moire=True is passed by orchestrate.py when a whole-image FFT pass
+    # already ran before YOLO. Running FFT a second time on the same crop fires
+    # on ringing artefacts from the first pass, degrading rather than cleaning.
+    # In that case we record moire_detected=False and skip correction entirely.
+    #
     # For screenshots this is a non-issue (no physical mesh) — the higher
     # MOIRE_SPIKE_RATIO_THRESH_SCREENSHOT = 8.0 prevents false fires.
     # For phone photos MOIRE_SPIKE_RATIO_THRESH = 3.5 catches real screen-mesh
-    # patterns (typical ratio 4–15×) while ignoring JPEG ring artefacts (2–3×).
-    moire_det, moire_sev = detect_moire(result, is_screenshot=is_screenshot)
-    profile.moire_detected, profile.moire_severity = moire_det, moire_sev
-    if moire_det:
-        result = remove_moire(result)
-        profile.moire_corrected = True
+    # patterns (typical ratio 4–15x) while ignoring JPEG ring artefacts (2–3x).
+    if not skip_moire:
+        moire_det, moire_sev = detect_moire(result, is_screenshot=is_screenshot)
+        profile.moire_detected, profile.moire_severity = moire_det, moire_sev
+        if moire_det:
+            result = remove_moire(result)
+            profile.moire_corrected = True
 
     # Step 1: Glare
     glare_det, glare_sev = detect_glare(result, is_screenshot=is_screenshot)

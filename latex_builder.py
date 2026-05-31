@@ -109,16 +109,18 @@ def _clean_ocr(text: str) -> str:
     return text.strip()
 
 
-_BULLET_SPLIT_RE = re.compile(
-    r'(?<!\A)'
-    # Split before a bold/label pattern: a capitalised word followed by : or –
-    # Covers: "Authentication: ...", "Chat Interface: ...", "Level 0 (...):",
-    #         "Model A:", "• word", lines starting after a newline.
-    r'(?='
-        r'\n'                              # explicit newline from OCR join fix
-        r'|(?<=\s)\*\*'                    # bold marker
-        r'|\bModel\s+[A-D][\s:\-\.]'      # Model A/B/C/D (original case)
+_BULLET_START_RE = re.compile(
+    r'^(?:'
+    r'[\u2022\u2013]\s+'           # bullet • or en-dash –
+    r'|\d+[.)]\s+'
+    r'|\bModel\s+[A-D][\s:\-\.]'
+    r'|Level\s+\d'
+    r'|(?:[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}):(?:\s|$)'
     r')',
+)
+
+_BULLET_SPLIT_RE = re.compile(
+    r'(?<!\A)(?=\bModel\s+[A-D][\s:\-\.])'
 )
 
 
@@ -126,26 +128,47 @@ def _split_bullet_items(text: str) -> List[str]:
     """
     Split a multi-bullet OCR blob into individual bullet strings.
 
-    Priority 1 — newline-delimited (the normal path after the OCR join fix
-    that uses '\\n' instead of ' ').  Each non-empty line becomes one item.
+    When RapidOCR joins lines with newlines (normal path after the join fix),
+    each line is examined:
+      - If it matches _BULLET_START_RE it begins a new bullet item.
+      - Otherwise it is a CONTINUATION of the previous bullet and is
+        appended to it with a space.
 
-    Priority 2 — regex split on Model A/B/C/D or bold markers (legacy path
-    for crops that still arrive as a single-space-joined string).
+    This prevents single-word wrap lines like 'JWT-based', 'login', 'and'
+    from each becoming their own \\item (the over-splitting bug).
 
-    Priority 3 — fall back to the whole string as one item.
+    Legacy fallback: if no newlines, try the Model A/B/C/D regex split.
     """
-    # Priority 1: newline split (works when models_interface joins with \n)
     if '\n' in text:
-        parts = [p.strip() for p in text.split('\n') if p.strip()]
-        if len(parts) > 1:
-            return parts
+        raw_lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+        if not raw_lines:
+            return []
 
-    # Priority 2: regex split
+        groups: List[str] = []
+        current_parts: List[str] = []
+
+        for line in raw_lines:
+            if _BULLET_START_RE.match(line):
+                if current_parts:
+                    groups.append(' '.join(current_parts))
+                current_parts = [line]
+            else:
+                if current_parts:
+                    current_parts.append(line)
+                else:
+                    current_parts = [line]
+
+        if current_parts:
+            groups.append(' '.join(current_parts))
+
+        if len(groups) > 1:
+            return groups
+
+    # Legacy: regex split on Model A/B/C/D
     parts = _BULLET_SPLIT_RE.split(text)
     if len(parts) > 1:
         return [p.strip() for p in parts if p.strip()]
 
-    # Priority 3: single item
     return [text.strip()] if text.strip() else []
 
 

@@ -130,6 +130,112 @@ def _preprocess_crop_for_ocr(crop: Image.Image) -> Image.Image:
     return result
 
 
+def _reconstruct_lines(res: list) -> str:
+    """
+    Reconstruct word-spaced, newline-delimited text from RapidOCR results.
+
+    RapidOCR returns: list of [bbox_polygon, text, confidence]
+    where bbox_polygon = [[x1,y1],[x2,y1],[x2,y2],[x1,y2]] (4 corners, pixels).
+
+    Problem: on glare-damaged crops DBNet merges adjacent words into one
+    detection region. The recognition model then returns the merged region
+    as a single string with no internal spaces ("WeusetheUCI", "from30vol").
+
+    Algorithm:
+      1. Extract left-x, right-x, vertical-centre for each detection.
+      2. Group detections into visual lines: detections whose vertical centres
+         are within LINE_MERGE_FRAC of the crop height of each other belong
+         to the same line. Sort lines top-to-bottom, detections left-to-right.
+      3. Within each line, compute the median character width as:
+             median_char_w = median(region_width / max(len(text), 1))
+         Insert a space between consecutive regions when the horizontal gap
+         (left edge of next − right edge of prev) exceeds SPACE_GAP_FACTOR
+         times the median character width. A gap that large means a genuine
+         inter-word space was present in the original but DBNet merged over it.
+      4. Join lines with newline so _split_bullet_items() can work on them.
+
+    SPACE_GAP_FACTOR = 0.45:  a space in typical fonts is ~0.25–0.5 em.
+    Using 0.45× median char width catches real word gaps without inserting
+    spurious spaces inside ligatures or tight letter pairs.
+
+    LINE_MERGE_FRAC = 0.6:  two detections belong to the same line if their
+    y-centres differ by less than 60% of the shorter detection's height.
+    Robust to mixed-cap/body-text rows without merging adjacent text lines.
+    """
+    if not res:
+        return ""
+
+    SPACE_GAP_FACTOR = 0.45
+    LINE_MERGE_FRAC  = 0.6
+
+    # --- Step 1: parse bbox info ---
+    items = []
+    for entry in res:
+        bbox, text, conf = entry[0], entry[1], entry[2]
+        # bbox is [[x1,y1],[x2,y1],[x2,y2],[x1,y2]] (may be list or np.array)
+        try:
+            xs = [pt[0] for pt in bbox]
+            ys = [pt[1] for pt in bbox]
+        except (TypeError, IndexError):
+            # Fallback: treat as flat [x1,y1,x2,y2]
+            xs = [bbox[0], bbox[2]]
+            ys = [bbox[1], bbox[3]]
+        x_left  = min(xs)
+        x_right = max(xs)
+        y_top   = min(ys)
+        y_bot   = max(ys)
+        y_ctr   = (y_top + y_bot) / 2.0
+        height  = max(y_bot - y_top, 1)
+        items.append({
+            'text': text, 'x_left': x_left, 'x_right': x_right,
+            'y_ctr': y_ctr, 'height': height,
+        })
+
+    if not items:
+        return ""
+
+    # --- Step 2: group into lines ---
+    items.sort(key=lambda d: d['y_ctr'])
+    lines = []
+    current_line = [items[0]]
+
+    for item in items[1:]:
+        prev_h = current_line[-1]['height']
+        this_h = item['height']
+        threshold = min(prev_h, this_h) * LINE_MERGE_FRAC
+        if abs(item['y_ctr'] - current_line[-1]['y_ctr']) <= threshold:
+            current_line.append(item)
+        else:
+            lines.append(current_line)
+            current_line = [item]
+    lines.append(current_line)
+
+    # --- Step 3: reconstruct spacing within each line ---
+    output_lines = []
+    for line in lines:
+        line.sort(key=lambda d: d['x_left'])
+
+        # Median character width for this line
+        char_widths = []
+        for d in line:
+            n_chars = max(len(d['text']), 1)
+            char_widths.append((d['x_right'] - d['x_left']) / n_chars)
+        import statistics
+        median_cw = statistics.median(char_widths) if char_widths else 8.0
+        space_thresh = SPACE_GAP_FACTOR * median_cw
+
+        parts = [line[0]['text']]
+        for j in range(1, len(line)):
+            gap = line[j]['x_left'] - line[j-1]['x_right']
+            if gap >= space_thresh:
+                parts.append(' ')
+            parts.append(line[j]['text'])
+
+        output_lines.append(''.join(parts))
+
+    return '\n'.join(output_lines)
+
+
 def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list[str]:
     import time
     global text_batch_latencies
@@ -168,14 +274,23 @@ def run_text_ocr_batched(crops: list[Image.Image], chunk_size: int = 10) -> list
             res, _ = engine(img_np)
             
             if res:
-                # FIX 4: Join with newline, not space.
-                # RapidOCR returns one entry per text *line* in reading order.
-                # Joining with " " collapses bullet lines into a single run-on
-                # string that _split_bullet_items() cannot split.  Joining with
-                # "\n" preserves line boundaries so the splitters in
-                # latex_builder.py work correctly.
-                texts = [item[1] for item in res]
-                final_results[i] = escape_latex_chars("\n".join(texts))
+                # FIX 4: Reconstruct word spacing from bbox coordinates, then
+                # join lines with newline.
+                #
+                # RapidOCR returns one entry per detected text region as
+                # [bbox_polygon, text, confidence]. On glare-damaged crops,
+                # DBNet merges adjacent words into one detection region and
+                # the recognition model returns them without internal spaces
+                # ("WeusetheUCI" instead of "We use the UCI").
+                #
+                # Fix: group detections into visual lines by their vertical
+                # centre, then within each line sort by x and insert a space
+                # between consecutive regions whose horizontal gap exceeds a
+                # threshold derived from the median character width of that
+                # line. This reconstructs word boundaries that DBNet lost.
+                final_results[i] = escape_latex_chars(
+                    _reconstruct_lines(res)
+                )
                 
         t_end = time.perf_counter()
         latency_ms = (t_end - t_start) * 1000
