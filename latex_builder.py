@@ -23,7 +23,7 @@ import os
 # Post-processing: clean OCR output before wrapping in LaTeX
 # ----------------------------------------------------------------
 
-_SOFT_HYPHEN_RE = re.compile(r'(\w) ?- +([a-z])')
+_SOFT_HYPHEN_RE = re.compile(r'(\w) ?-[\s]+([a-z])', re.MULTILINE)
 _THOUSANDS_DOT_RE = re.compile(r'\b(\d{1,3})\.(\d{3})\b')
 
 _OCR_FIXES = [
@@ -57,6 +57,9 @@ _OCR_FIXES = [
     (re.compile(r'(?<!\$)\b(1\.5)\s*[xX]\s*10-(\d)\b'), r'$\1\\times10^{-\2}$'),
     (re.compile(r'(?<!\$)\b(5)\s*[xX]\s*10-(\d)\b'),      r'$5\\times10^{-\2}$'),
     (re.compile(r'(?<!\$)\b10-(\d)\b'),                   r'$10^{-\1}$'),
+    # Section label missing space: "A.OVERALL" → "A. OVERALL"
+    # Safe here: pattern requires single cap + dot + caps — never a sentence start
+    (re.compile(r'\b([A-Z])\.((?:[IVX]+|[A-Z]{2})[A-Z]*)'), r'\1. \2'),
 ]
 
 

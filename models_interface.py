@@ -157,15 +157,19 @@ def _preprocess_crop_for_ocr(crop: Image.Image, is_screenshot: bool = False) -> 
         arr_sharp = np.array(grey_sharp, dtype=np.float32)
         rms_after = float(arr_sharp.std())
 
-        if rms_after < 35:  # only fire on genuinely flat/grey crops; raised from 55
-            # Adaptive threshold: local Gaussian neighbourhood, block=31, C=10
+        if rms_after < 60:
+            # Adaptive threshold: local Gaussian neighbourhood.
+            # blockSize=25 works better than 31 for narrow column crops
+            # (31 can be wider than a character at small font sizes).
+            # C=12 gives a slightly more aggressive local threshold that
+            # pushes inter-word grey gaps to white more reliably.
             grey_np = np.array(grey_sharp, dtype=np.uint8)
             binary_np = cv2.adaptiveThreshold(
                 grey_np, 255,
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY,
-                blockSize=31,
-                C=10,
+                blockSize=25,
+                C=12,
             )
             result = Image.fromarray(binary_np).convert("RGB")
 

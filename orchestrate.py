@@ -16,14 +16,12 @@ import time
 import argparse
 import gc
 import torch
+import numpy as np
 from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
 
-import cv2
-import numpy as np
 from normalization import normalize_image_pil
-from normalization.region_adaptive import preprocess_crop, RegionArtifactProfile
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
     run_table_extraction, get_math_latencies, get_math_batch_latencies,
@@ -193,30 +191,6 @@ def main():
     # Why here and not only in region_adaptive per-crop:
     # A fine screen-mesh or crosshatch glare pattern covers the ENTIRE image,
     # including the inter-column gutter.  detect_column_count() uses the YOLO
-    # detection layout, but YOLO itself is confused by the mesh filling what
-    # should be empty gutter space — it detects fewer boxes in the right column
-    # or misses the column boundary entirely, causing detect_column_count() to
-    # return 1 and collapsing both columns into one stream.
-    # Removing the mesh from the full image before YOLO runs lets the gutter
-    # appear as the expected empty vertical stripe, restoring 2-column detection.
-    #
-    # Track whether whole-image moiré removal ran so that per-crop preprocess_crop
-    # can skip a redundant second FFT pass — FFT notch filtering introduces subtle
-    # ringing artefacts; running it twice fires on those artefacts and degrades crops.
-    whole_image_moire_removed = False
-    if not is_screenshot:
-        from normalization.region_adaptive import detect_moire
-        from normalization.frequency_filter import remove_moire as _remove_moire_full
-        import cv2 as _cv2
-        _norm_bgr = _cv2.cvtColor(np.array(image_norm), _cv2.COLOR_RGB2BGR)
-        _moire_hit, _moire_sev = detect_moire(_norm_bgr, is_screenshot=False)
-        if _moire_hit:
-            print(f"[*] Whole-image moire detected (severity={_moire_sev:.2f}), removing before YOLO...")
-            _clean_bgr = _remove_moire_full(_norm_bgr)
-            image_norm = Image.fromarray(_cv2.cvtColor(_clean_bgr, _cv2.COLOR_BGR2RGB))
-            whole_image_moire_removed = True
-        del _norm_bgr
-
     image_norm.save(output_dir / "normalized.png")
 
     t_stage1_end = time.perf_counter(); mem_stage1_end = process.memory_info().rss / 1024 / 1024
@@ -235,63 +209,40 @@ def main():
     
     t_stage2_end = time.perf_counter(); mem_stage2_end = process.memory_info().rss / 1024 / 1024
 
-    # Stage 1.5: Adaptive Prep
+    # Stage 1.5: Header suppression + re-crop after bbox refinement
     t_stage15_start = time.perf_counter()
+
+    # Suppress running-title headers in top 12% of page
     HEADER_SUPPRESS_H_FRAC = 0.12
     header_suppress_y = img_height * HEADER_SUPPRESS_H_FRAC
-    detections = [d for d in detections if not (d["class_name"] in {"Section-header", "Page-header"} and d["bbox"][3] <= header_suppress_y)]
-    
+    detections = [d for d in detections if not (
+        d["class_name"] in {"Section-header", "Page-header"}
+        and d["bbox"][3] <= header_suppress_y
+    )]
+
+    # Inject header logo if not already detected
     HEADER_H_FRAC, HEADER_W_FRAC = 0.065, 0.25
     header_right_box = [img_width * (1 - HEADER_W_FRAC), 0, img_width, img_height * HEADER_H_FRAC]
-    if not any(d["class_name"] == "Picture" and d["bbox"][0] >= header_right_box[0] and d["bbox"][3] <= header_right_box[3] for d in detections):
+    if not any(d["class_name"] == "Picture"
+               and d["bbox"][0] >= header_right_box[0]
+               and d["bbox"][3] <= header_right_box[3]
+               for d in detections):
         hx1, hy1, hx2, hy2 = [int(v) for v in header_right_box]
         header_crop = xyxy_to_pil_crop(image_fidelity, [hx1, hy1, hx2, hy2])
         if header_crop.width > 20:
-            detections.insert(0, {"bbox": [hx1, hy1, hx2, hy2], "class_id": -1, "class_name": "Picture", "crop": header_crop, "is_header_logo": True})
+            detections.insert(0, {
+                "bbox": [hx1, hy1, hx2, hy2], "class_id": -1,
+                "class_name": "Picture", "crop": header_crop,
+                "is_header_logo": True,
+            })
 
+    # Re-crop after bbox refinement. Text from image_norm (pipeline-cleaned),
+    # figures from image_fidelity (natural colours).
     for det in detections:
-        if det["class_name"] in IMAGE_CLASSES: continue
-
-        # Choose crop source based on whether mesh-glare moiré was present.
-        #
-        # Case A — whole_image_moire_removed=True (mesh-glare phone photo):
-        #   The mesh/grid is a PHYSICAL pattern on the sensor — it is equally
-        #   present in image_fidelity (which is pre-correction). image_norm had
-        #   FFT moiré removal applied, so it is the cleaner source for OCR crops.
-        #   Using image_fidelity here would give DBNet a mesh-contaminated crop
-        #   that is WORSE than the FFT-cleaned image_norm crop.
-        #
-        # Case B — whole_image_moire_removed=False (clean photo or screenshot):
-        #   image_norm has had CLAHE, shadow removal, and glare inpainting applied
-        #   globally — these flatten local contrast in ways that hurt per-crop OCR.
-        #   image_fidelity is post-rectification but pre-correction, so it has the
-        #   strongest natural ink-to-paper contrast for DBNet to work with.
-        #
-        # Both images are identical dimensions after _smart_dpi_resize (pipeline.py),
-        # so YOLO's bbox coordinates are directly usable on either source.
-        crop_source = image_norm if whole_image_moire_removed else image_fidelity
-        det['crop'] = xyxy_to_pil_crop(crop_source, det['bbox'])
-
-        crop_bgr = cv2.cvtColor(np.array(det['crop']), cv2.COLOR_RGB2BGR)
-
-        # Pass skip_moire=True when the whole-image FFT pass already ran.
-        # A second FFT notch filter on an already-filtered crop fires on the
-        # ringing artefacts introduced by the first pass, degrading the crop.
-        corrected_bgr, prof = preprocess_crop(
-            crop_bgr, det['class_name'],
-            is_screenshot=is_screenshot,
-            skip_moire=whole_image_moire_removed,
-        )
-
-        # For phone photos: run a final CLAHE pass if glare was severe.
-        # (Moiré condition removed — moiré is either already handled by the
-        # whole-image pass or by preprocess_crop's Step 0; a third CLAHE
-        # pass on top adds noise without recovering contrast.)
-        if not is_screenshot and prof.glare_detected and prof.glare_severity > 0.10:
-            from normalization.frequency_filter import normalize_contrast
-            corrected_bgr = normalize_contrast(corrected_bgr)
-
-        det['crop'] = Image.fromarray(cv2.cvtColor(corrected_bgr, cv2.COLOR_BGR2RGB))
+        if det["class_name"] in IMAGE_CLASSES:
+            det['crop'] = xyxy_to_pil_crop(image_fidelity, det['bbox'])
+        else:
+            det['crop'] = xyxy_to_pil_crop(image_norm, det['bbox'])
 
     t_stage15_end = time.perf_counter(); mem_stage15_end = process.memory_info().rss / 1024 / 1024
 
