@@ -1,0 +1,129 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+TABLE1.1Test Set Performance Comparison
+
+
+from 1-indexed to O-indexed integers to ensure
+ compatibility with the cross-entropylossfunction.
+
+
+\subsection*{C. REPRODUCIBILITY}
+
+
+To guarantee reproducibility, random seeds are
+fixed at initialization for PyTorch, NumPy, and
+CUDA backends. Model weights are initialized
+using Py Torch default schemes, including Kaiming
+initialization for convolutional and linear layers.
+During training, checkpoints store model state dictionaries at epochs that achieve the highest validation accuracy.
+
+
+\subsection*{D. EVALUATION PROTOCOL}
+
+
+After training concludes, the checkpoint with the
+best validation performance is reloaded for final
+evaluation on the held-out test set. We report overall accuracy (the percentage of correctly classified
+samples) and the macro-averaged F1-score (the
+harmonic mean of precision and recall, averaged
+over all activity classes). Confusion matrices are
+generated to illustrate per-class error distributions.
+
+
+\subsection*{V. RESULTS}
+
+
+\subsection*{A. OVERALLPERFORMANCE COMPARISON}
+
+
+Table 1 ssummarizes test set performance across
+all four architectures. The transformer achieves the
+highest accuracy at 93.48\%, followed closely by
+the bidirectional mode1 at 93.38\%. The baseline
+without attention ranks third at 93.08\%, while
+its attention-augmented counterpart finishes last at
+92.64\%.
+
+
+The narrow spread in accuracies--less than one
+percentage point between the highest and lowest results-suggests that this dataset may impose
+an inherent performance ceiling around 93\%. All
+evaluated architectures successfullyycaptureethe
+main discriminative patterns, with most differences
+arising in how they handle ambiguous or transitional samples.
+
+% [footer: 6]
+\switchcolumn
+\RaggedRight
+
+\textit{TABLE2.Per-Class F1-Scores Across Models}
+
+
+\subsection*{B. THE ATTENTION PARADOX}
+
+
+A noteworthy finding is that introducing temporal
+attention to the convolutional-LSTM baseline reduces accuracy by 0.44 percentage points—-a result
+opposite to trends observed in natural language
+processing, where attention often yields 2-5\% improvements. This outcome challenges the common
+expectation that attention mechanisms should always enhance model performance by emphasizing
+the most informative time segments. Several factors may contribute to this phenomenon:
+
+\begin{itemize}
+\item 1) The baseline LSTM may already capture
+enough temporal context through its 1hidden statedynamics, leavinglittle benefit for
+added attention.
+
+\item 2) The additional attention parameters could
+ promote overfitting given the limited training
+data of 7.352samples.
+
+\item 3)Key activitycuesmaybe spreadacross entire
+sequences rather than concentrated at specific
+timesteps.
+
+\item 4)The scoring function used in the attention
+module may  not align well vwith the statistical
+nature of inertialsensorssignals.
+
+\end{itemize}
+
+Interestingly, aattention does improve results
+when  combined  with bidirectional recurrence
+(Model1 C:  93.38\%6 vs. unidirectional baseline:
+93.08\%). This aligns with prior ensemble-based
+research [24], suggesting that richer per-timestep
+representations from bidirectional processing provide stronger inputs for selective attention mechanisms.
+
+
+C. PER-CLASS PERFORMANCE ANALYSIS
+
+
+Table.2 presents the F1-scores for each activity
+category. Several consistent patterns emerge across
+allmodelarchitectures:
+
+
+Lyingdownachieves near-perfect classification
+F1 0.99) due to its distinctive gravitational
+signature. Walking-related activities achieve Ihigh
+
+% [footer: VOLUME4.2016]
+\end{paracol}
+
+\end{document}

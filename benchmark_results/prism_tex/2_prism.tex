@@ -1,0 +1,135 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+components in I. Let 0*(wo)6Ettheinitial parameter.
+Let    0,0(w) =0o+ VJM(0*(wo))|1 and 0*(w) =
+0o +  VeJM (o*(wo)). Then, under Assumption, we have:
+
+
+\begin{equation}
+\begin{array} { r } { \ell ( \theta _ { I } ^ { * } ( \omega ) ) - \ell ( \theta ^ { * } ( \omega ) ) \geqslant \frac { \lambda _ { \operatorname* { m i n } } \alpha ^ { 2 } } { 2 } \left \| \nabla _ { \theta } J _ { \mathcal { M } _ { \omega } } ( \theta ^ { * } ( \omega _ { 0 } ) ) \right | _ { \overline { I } } \right \| _ { 2 } ^ { 2 }. } \\ { \dots \qquad \qquad \qquad \qquad \cdots \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad
+\end{equation}
+
+
+Thus, we maximize the L2-norm of the gradient componentsthat correspond to theparameterswe want to test.
+Sincewe have at our disposal only samplesD collected with
+we have to perform an off-distribution optimization over w.
+To this end, we employ an approach analogous to that of
+where we optimize the empirical version of the objective
+with apenalization that accountsfor thedistancebetween
+thedistribution overtrajectories:
+
+
+\begin{equation}
+\begin{array} { r l } & { \mathcal { C } _ { I } ( \omega / \omega _ { 0 } ) = \left \| \widehat \nabla _ { \theta } J _ { \mathcal { M } _ { \omega / \omega _ { 0 } } } ( \theta ^ { * } ( \omega _ { 0 } ) ) | _ { \overline { T } } \right \| _ { 2 } ^ { 2 } - \zeta \sqrt { \frac { \widehat d _ { 2 } ( \omega \| \omega _ { 0 } ) } { n } }, ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+\end{equation}
+
+
+whereVeJMwjwo(0*(wo))is anoff-distributionestimator of
+the gradient VoJM(0*(wo))using samples collected with
+wo, d2 is the estimated 2-Renyi divergence that works as
+is a regularization parameter. Theexpression of theestimated gradient, 2-Renyi divergence and the pseudocode are
+reportedin Appendix.
+
+
+\subsection*{Experimental Evaluation}
+
+
+In this section, we present the experimental evaluation of the
+identification rules in three RL domains.To set the values of
+c(l)we resort to theWilk's asymptotic approximation (Theorem) to enforce (asymptotic) guarantees on the type I error.ForIdentification Rule we perform 2  statistical tests by
+using the same dataset D. Thus,we partition  using Bonis the-quintileof a chi squaredistribution withdegrees
+of freedom.Instead,forIdentification Rule,we perform d
+
+
+\subsection*{Discrete Grid World}
+
+
+The grid world environment is a simple representation of a
+two-dimensional world (5x5 cells) in which an agent has to
+reach a targetpositionby moving in the four directions.The
+goal of this set of experiments is to show the advantages
+of configuring the environment when performing the policy space identification using rule. The initial position of the
+agent and the targetposition are drawn at thebeginningof
+each episode from a Boltzmann distribution  w. The agent
+plays aBoltzmann linear policy Towith binary features   indicating its current row and column and the row and column
+of the goal. For each run, the agent can control a subset I*
+of the parameters 01* associated with those features, which
+is randomly selected.Furthermore,the supervisor can configure the environment by changing the parameters w of the
+initial state distribution  w. Thus, the supervisor can induce
+the agent to explore certain regions of thegridworld and,
+consequently, change the relevance of the corresponding parametersin theoptimalpolicy.
+
+\switchcolumn
+\RaggedRight
+
+Figure shows the empirical \& and ,i.e.the fraction of
+parameters that the agent does not control that are wrongly
+selected and the fraction of those the agent controls that are
+not selected respectively,as afunction of thenumber n of
+episodes used to perform the identification. We compare two
+cases: conf where the identification is carried out by also
+configuring the environment, i.e. optimizing Equation (1),
+and no-conf in which the identification is performed in the
+original environment only. In both cases, we can see that
+@is almost independent of the number of samples,as it is
+directly controlled by the critical value c(1).Differently, 
+decreases as the number of samples increases,i.e.the power
+of the test 1increases with n.Remarkably,we observe
+that configuring the environment gives a significant advantage in understanding the parameters controlled by the agent
+w.r.t using a fixed environment, as   decreases faster in the
+conf case. This phenomenon also justifies empirically our
+choice of objective(Equation (1)) for selecting the new environment. Hyperparameters, further experimental results, together with experiments on a continuous version of thegrid
+world,arereported inAppendix-.
+
+
+\subsection*{Minigolf}
+
+
+In theMinigolf environment,an agent hits aball using aput
+terwiththegoalofreachingtheholeintheminimumnumber of attempts.Surpassing the hole causes the termination
+of the episode and alarge penalization.The agent selects the
+force applied totheputter byplaying a Gaussianpolicylinearinsomepolynomialfeatures(complyingtoLemma)of
+the distance from thehole(c)and thefriction of the green
+(f).We consider two agents: has access to both the c and
+fwhereas 2 knows only c.Thus, we expect that  learns
+apolicy thatallowsreaching theholein a smallernumber of
+hits,compared to2,as it can calibrate force according to
+friction;whereas2has tobe more conservative,beingunaware of f.There is also a supervisorin charge of selecting,
+for the two agents, the best putter length w, i.e. the configurableparameter of the environment.In this experiment,we
+want to highlight that knowing the policy space might be of
+crucial importancewhenlearningina Conf-MDP.
+
+
+Figure-left shows the performance of the optimal policy
+as afunctionof theputterlengthw.Wecanseethatforagent
+W the optimal putter length is w* =5whilefor agent
+=11.5. Figure-right compares the performance
+of the optimal policy of agent 2when the putter length 
+is chosen by the supervisor using four different strategies.
+In (i) the configuration is sampled uniformly in the interval
+[1, [5]. In (ii) the supervisor employs the optimal configuration for agent (w =5),i.e.assuming the agent is aware
+of the friction.(i) is obtained by selecting the optimal configuration of the policy space produced by using our identification rule. Finally, (iv) is derived by employing an oracle
+that knows the true agent's policy space (w = 11.5). We can
+see that the performance of the identification procedure (ii)
+iscomparablewith thatof theoracle(iv)andnotablyhigher
+than theperformancewhenemploying anincorrectpolicy
+space (i). Hyperparameters and additional experiments are
+
+\end{paracol}
+
+\end{document}

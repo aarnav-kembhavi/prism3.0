@@ -1,0 +1,126 @@
+You are evaluating the PRISM Screen/Image-to-LaTeX system against the PDF2LaTeX benchmark from Wang & Liu (DocEng 2020).
+
+Dataset:
+
+* Use the official PDF2LaTeX dataset (102 pages).
+* Use the official evaluation methodology and normalization rules from the paper.
+* Ground truth LaTeX is provided.
+
+Goal:
+Perform a complete benchmark comparison between PDF2LaTeX and PRISM.
+
+First, extract from the PDF2LaTeX paper the exact reported metrics:
+
+Dataset Statistics:
+
+* Number of pages
+* Number of math expressions
+* Number of text characters
+* Number of math characters
+
+Model Statistics:
+
+* Parameter counts
+* CPU runtime
+* GPU runtime
+* Hardware used
+
+Evaluation Metrics:
+
+* Overall Edit Distance Rate (EDR)
+* Text EDR
+* Math EDR
+* Raw Edit Distance
+* BLEU (if applicable)
+* Any other reported metrics
+
+Then evaluate PRISM on the same dataset.
+
+For every page:
+
+1. Run complete PRISM pipeline.
+2. Generate final LaTeX.
+3. Apply the same normalization procedure used by PDF2LaTeX:
+
+   * Remove preamble
+   * Normalize math environments
+   * Remove spaces
+   * Ignore case
+   * Apply any additional normalization described in the paper
+4. Compare against ground truth.
+
+Compute:
+
+* Overall EDR
+* Text EDR
+* Math EDR
+* Raw Edit Distance
+* Character Error Rate (CER)
+* Word Error Rate (WER)
+* BLEU-4
+* ROUGE-L
+* Compilation Success Rate (%)
+* Average Latency per page
+* Peak RAM usage
+* Average RAM usage
+* CPU utilization
+* OCR stage latency
+* Layout stage latency
+* Math OCR latency
+* LaTeX assembly latency
+
+Generate:
+A comparison table:
+
+| Metric | PDF2LaTeX | PRISM |
+| ------ | --------- | ----- |
+
+Also compute:
+
+* Relative improvement/degradation (%)
+* Speedup factor
+* Memory reduction factor
+
+After benchmarking the official dataset, run an additional robustness evaluation using PRISM-specific test images:
+
+Categories:
+
+1. Clean screenshots
+2. Phone photos
+3. Perspective distortion
+4. Glare
+5. Shadow
+6. Moiré patterns
+7. Low contrast
+8. Rotated pages (5°, 10°, 15°, 30°, 45°, 90°, 180°)
+9. Mixed text + equations
+10. Multi-column academic papers
+
+For robustness testing:
+
+* Measure latency
+* Measure RAM
+* Measure OCR accuracy
+* Measure compilation success
+* Record failures
+* Save generated LaTeX
+
+Finally generate:
+
+1. Executive summary
+2. Benchmark table
+3. Per-stage latency breakdown
+4. Memory breakdown
+5. Failure analysis
+6. Examples where PRISM beats PDF2LaTeX
+7. Examples where PRISM fails
+8. Recommendations for publication-quality evaluation
+
+Store all results in:
+
+* benchmark_results.csv
+* latency_breakdown.csv
+* memory_breakdown.csv
+* final_report.md
+
+Be rigorous. If a metric cannot be computed, explicitly explain why and propose the closest reproducible alternative.

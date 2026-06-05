@@ -1,0 +1,303 @@
+Tell Gemini to compute and report these metrics exactly.
+
+### 1. Edit Distance (ED)
+
+Raw Levenshtein distance.
+
+```text
+GT:   abcdef
+Pred: abxdef
+```
+
+1 substitution = ED = 1
+
+PDF2LaTeX's primary metric. 
+
+---
+
+### 2. Edit Distance Rate (EDR)
+
+This is the paper's main accuracy metric.
+
+Formula:
+
+```text
+EDR = 1 - (EditDistance / GT_Characters)
+```
+
+Example:
+
+```text
+GT length = 100
+ED = 20
+
+EDR = 1 - 20/100
+    = 0.80
+    = 80%
+```
+
+Higher is better.
+
+Perfect:
+
+```text
+EDR = 100%
+```
+
+Paper results:
+
+```text
+Text EDR    = 94.8%
+Math EDR    = 65.9%
+Overall EDR = 81.1%
+```
+
+
+
+---
+
+### 3. Text EDR
+
+Run same formula only on text regions.
+
+```text
+EDR_text =
+1 - (text_edit_distance / text_gt_chars)
+```
+
+Paper:
+
+```text
+94.8%
+```
+
+
+
+---
+
+### 4. Math EDR
+
+Run same formula only on math.
+
+```text
+EDR_math =
+1 - (math_edit_distance / math_gt_chars)
+```
+
+Paper:
+
+```text
+65.9%
+```
+
+
+
+---
+
+### 5. CER (Character Error Rate)
+
+Modern OCR metric.
+
+Formula:
+
+```text
+CER =
+(EditDistance / GT_Characters)
+```
+
+Notice:
+
+```text
+CER = 1 - EDR
+```
+
+Example:
+
+```text
+EDR = 81%
+
+CER = 19%
+```
+
+Lower is better.
+
+---
+
+### 6. WER (Word Error Rate)
+
+Formula:
+
+```text
+WER =
+WordEditDistance / GT_Words
+```
+
+Must be computed BEFORE space removal.
+
+Example:
+
+```text
+GT:
+The cat sat
+
+Pred:
+The dog sat
+
+WER = 1/3
+```
+
+Lower is better.
+
+---
+
+### 7. BLEU-4
+
+N-gram overlap.
+
+Measures:
+
+```text
+how similar generated LaTeX is
+to ground truth LaTeX
+```
+
+Uses:
+
+* 1-gram
+* 2-gram
+* 3-gram
+* 4-gram
+
+Higher better.
+
+Compute before whitespace stripping.
+
+---
+
+### 8. ROUGE-L
+
+Longest Common Subsequence based.
+
+Measures:
+
+```text
+how much structure is preserved
+```
+
+Higher better.
+
+---
+
+### 9. Compilation Success Rate
+
+Extremely important for your paper.
+
+Formula:
+
+```text
+successful_compiles
+-------------------
+total_documents
+```
+
+Example:
+
+```text
+95 / 102
+=
+93.1%
+```
+
+This is a very strong systems metric.
+
+---
+
+### 10. Latency
+
+Measure with `perf_counter()`:
+
+```text
+Layout latency
+OCR latency
+Math latency
+Table latency
+LaTeX assembly latency
+Total latency
+```
+
+Report:
+
+```text
+Average
+Median
+P95
+Max
+```
+
+---
+
+### 11. Memory
+
+Measure:
+
+```text
+Peak RAM
+Average RAM
+```
+
+Paper reviewers love this.
+
+---
+
+### 12. Robustness Metrics (for your paper)
+
+Run separately on:
+
+```text
+Clean
+Glare
+Skew
+Moiré
+Rotation
+```
+
+Report:
+
+```text
+EDR
+Compile %
+Latency
+```
+
+---
+
+### PDF2LaTeX normalization rules (must match exactly)
+
+Before EDR computation:
+
+1. Remove preamble
+2. Convert all math environments to `$`
+3. Remove section commands
+4. Remove spaces
+5. Ignore case
+6. Normalize math polymorphism
+
+These are the exact rules used in the paper. 
+
+For Gemini I'd ask it to report:
+
+```text
+Overall EDR
+Text EDR
+Math EDR
+CER
+WER
+BLEU-4
+ROUGE-L
+Compile %
+Avg Latency
+P95 Latency
+Peak RAM
+```
+
+Those 10 metrics together are enough for a solid IEEE Access evaluation section.

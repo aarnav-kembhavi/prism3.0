@@ -1,0 +1,109 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+pared to natural language processing.
+
+
+\subsection*{11l.NMETHODOLOGY}
+
+
+\subsection*{A. LDATASETDESCRIPTION}
+
+
+We use the UCI Human Activity RecognitionUsing Smartphones dataset in its original form1].
+This benchmark contains recordings from 30 volunteers aged119-48years who performed1 six
+commoncdailyactivities while carryingg a waistmounted Samsung Galaxy S II :smartphone. The
+recorded activities include three dynamic motions
+(walking, climbing stairs, and descending stairs)
+and three static postures (sitting, standing, and
+lying).
+
+
+Each data sample includes 128 consecutive readings collected at 50 Hz, corresponding to a 2.56second window. Nine sensorchannelsare provided: triaxial body aacceleration withgravity removed, triaxial angular velocity fromnthegyroscope, and triaxial total acceleration including
+gravity. Together, these channels offer complementary information describing both linear and rotational motion.
+
+
+The dataset is officially cdivided into 7,352 sampless (70\%) for trainingg and 2,947 samples(30\%)
+fortesting. A ssubject-independent split ensures
+thatno individual appears mboth sets, which
+evaluates modelgeneralization across users rather
+than memorization off person-specific：movement
+patterns.
+
+
+\subsection*{B. FPREPROCESSINGPIPELINE}
+
+
+Raw sensor cdata are loaded directlywithoutt any
+additional filtering or external normalization. We
+intentionally avoid extra preprocessing to guarantee that observed performancedifferences arise
+purely from the modelarchitectures rather: than
+preprocessing effects. Batch normalizationn layers
+within each network automatically standardize feature distributions during training.
+
+
+Input tensors are structured as(N,T,C), where
+V is the batchsize, T = 128 is the sequence
+length, and C = 9 represents the numberof
+channels. For convolutional architectures thatTrequire a channel-first layout, inputs are transposed
+to (N, C, T) before computation.
+
+% [footer: 4]
+\switchcolumn
+\RaggedRight
+
+\begin{center}
+\includegraphics[width=0.8\linewidth]{figure_001.png}
+\end{center}
+
+
+\textit{FIGURE 1. Ouenview ol four neural architeclures evalualed: (A) CNN·LSTM
+baseline.(B) CNN-LSTM with temporal allention,(C) Bidirectional LSTM with
+altention.and(D)Translormerencoder.Arrows indicatedalallow direction.}
+
+
+\subsection*{C. ARCHITECTURE SPECIFICATIONS}
+
+
+Figure 1 presentsthe four architecturesevaluated
+in this study. Lach model embodies a distinct
+designphilosophyfor handlingsequential sensor
+data.
+
+
+\subsection*{1)Model A: Convolutional LSTM Baseline}
+
+
+The first architecture combines convolutional feature extraction with LSTM-based temporal modeling, following the successful DeepConvLSTM
+paradigm established by Ord6nez [6]. We deliberately chose two one-dimensional convolutional
+blocks to progressively abstract local patterns: the
+first block applies 64 filters of size 6 (corresponding to 120ms at 50Hz sampling) followed by ReLU
+activation and max pooling with factor 2. This kernel size was selected to capture approximately one
+gait cycle during walking activities. The second
+block expands to 128 filters of size 3 with similar
+activation and pooling.
+
+
+After convolution, a dropoutt layer with probability (0.1 provides regularization-a conservative
+choice given the moderate dataset size. We specifically iutilized a single-layer: ILSTMwith a hidden c dimension of 128, a design derived from the
+baseline established by prior work [[24], to process
+the compressed features. This hidden size balances
+
+% [footer: VOLUME4.2016]
+\end{paracol}
+
+\end{document}

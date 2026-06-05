@@ -1,0 +1,88 @@
+{
+  "page_id": "1",
+  "image_size": "1224x1584",
+  "formula_regions": 4,
+  "gt_math_chars": 2957,
+  "crops": [
+    {
+      "crop_idx": 1,
+      "bbox_orig": [
+        633,
+        304,
+        1119,
+        429
+      ],
+      "bbox_expand": [
+        621,
+        292,
+        1131,
+        441
+      ],
+      "size_px": "510x149",
+      "aspect_ratio": 3.42,
+      "yolo_conf": 0.653,
+      "texo_output": "\\begin{array} { r l } & { \\mathrm { ~ \" ~ a'~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~",
+      "texo_chars": 613
+    },
+    {
+      "crop_idx": 2,
+      "bbox_orig": [
+        155,
+        495,
+        585,
+        559
+      ],
+      "bbox_expand": [
+        143,
+        483,
+        597,
+        571
+      ],
+      "size_px": "454x89",
+      "aspect_ratio": 5.1,
+      "yolo_conf": 0.757,
+      "texo_output": "\\begin{array} { r l } { \\widehat { \\mathcal { F } } ( \\boldsymbol { \\theta } ) = \\frac { 1 } { n } \\sum _ { i = 1 } ^ { n } \\mathbb { E } _ { a \\sim \\pi _ { \\boldsymbol { \\theta } } ( \\cdot \\mid s ) } \\left [ \\overline { \\mathbf { t } } ( s, a, \\boldsymbol { \\theta } ) \\overline { \\mathbf { t } } ( s, a, \\boldsymbol { \\theta } ) ^ { T } \\right ] \\quad } & { ( 1 ) } \\\\ { \\quad } & { \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad \\quad",
+      "texo_chars": 1482
+    },
+    {
+      "crop_idx": 3,
+      "bbox_orig": [
+        213,
+        628,
+        472,
+        689
+      ],
+      "bbox_expand": [
+        201,
+        616,
+        484,
+        701
+      ],
+      "size_px": "282x86",
+      "aspect_ratio": 3.28,
+      "yolo_conf": 0.63,
+      "texo_output": "\\begin{array} { r } { \\left \\| \\hat { \\boldsymbol { \\theta } } - { \\boldsymbol { \\theta } } ^ { * } \\right \\| _ { 2 } \\leqslant \\frac { \\sigma } { \\hat { \\lambda } _ { \\operatorname* { m i n } } } \\sqrt { \\frac { 2 d } { n } \\log \\frac { 2 d } { \\delta } }. } \\\\ { \\dots \\qquad \\dots \\qquad \\dots \\qquad \\qquad. } \\end{array}",
+      "texo_chars": 325
+    },
+    {
+      "crop_idx": 4,
+      "bbox_orig": [
+        211,
+        725,
+        470,
+        851
+      ],
+      "bbox_expand": [
+        199,
+        713,
+        482,
+        863
+      ],
+      "size_px": "284x149",
+      "aspect_ratio": 1.91,
+      "yolo_conf": 0.461,
+      "texo_output": "\\begin{array} { r l } & { \\stackrel { * } { \\ell ( \\widehat { \\theta } ) - \\ell ( \\theta ^ { * * } ) } \\leqslant \\frac { d ^ { 2 } \\sigma ^ { 4 } } { \\widehat { \\lambda } _ { \\operatorname* { m i n } } ^ { 2 } n } \\log \\frac { 2 d } { \\delta } } \\\\ & { \\stackrel { * } { \\ell ( \\theta ^ { * } ) } - \\hat { \\ell } ( \\widehat { \\theta } ) \\leqslant \\frac { d ^ { 2 } \\sigma ^ { 4 } } { \\widehat { \\lambda } _ { \\operatorname* { m i n } } ^ { 2 } n } \\log \\frac { 2 d } { \\delta }. } \\end{array}",
+      "texo_chars": 492
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import os
 import torch
 from transformers import VisionEncoderDecoderConfig, VisionEncoderDecoderModel
 
@@ -6,8 +7,11 @@ from ..utils.config import hydra, OmegaConf
 
 class FormulaNet(VisionEncoderDecoderModel):
     def __init__(self, config):
-        super().__init__(VisionEncoderDecoderConfig(**config))
-        if ckpt_path := config.get("pretrained"):
+        if isinstance(config, dict):
+            config = VisionEncoderDecoderConfig(**config)
+        super().__init__(config)
+        ckpt_path = getattr(config, "pretrained", None)
+        if ckpt_path and os.path.exists(ckpt_path):
             state_dict = torch.load(ckpt_path, map_location=self.device)
             self.load_state_dict(state_dict, strict=True)
             # transformers.VisionEncoderDecoderModel is not smart enough to

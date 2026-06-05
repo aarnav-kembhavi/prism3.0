@@ -1,0 +1,135 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+PropositionofAppendixshowsthatasufficientcondition
+for theidentifiabilityin the case of Gaussian andBoltzmann
+linearpoliciesis that thesecondmomentmatrixof thefeaturevectorE  \textasciitilde{}S  (s)(s)T]isnon-singular alongwith
+the fact that the policy To plays each action with positive
+probabilityfor theBoltzmann policy.
+
+
+ConcentrationResultWe arenowready topresent a concentrationresult,ofindependentinterest,for theparameters
+andthenegativelog-likelihood thatrepresents the central
+tool of our analysis (details and derivation in Appendix).
+Under Assumptionand Assumption, letD
+\{(s,a)\}=1 be a dataset of n > 0 independent samples,where S andai  g*  s .Let
+argminoeel(0)and0* argminoeel(o).If
+the empirical FIM:
+
+
+\begin{equation}
+\begin{array} { r l } { \widehat { \mathcal { F } } ( \boldsymbol { \theta } ) = \frac { 1 } { n } \sum _ { i = 1 } ^ { n } \mathbb { E } _ { a \sim \pi _ { \boldsymbol { \theta } } ( \cdot \mid s ) } \left [ \overline { \mathbf { t } } ( s, a, \boldsymbol { \theta } ) \overline { \mathbf { t } } ( s, a, \boldsymbol { \theta } ) ^ { T } \right ] \quad } & { ( 1 ) } \\ { \quad } & { \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad
+\end{equation}
+
+
+then, for any   [0, 1], with probability at least 1 - 8:
+
+
+\begin{equation}
+\begin{array} { r } { \left \| \hat { \boldsymbol { \theta } } - { \boldsymbol { \theta } } ^ { * } \right \| _ { 2 } \leqslant \frac { \sigma } { \hat { \lambda } _ { \operatorname* { m i n } } } \sqrt { \frac { 2 d } { n } \log \frac { 2 d } { \delta } }. } \\ { \dots \qquad \dots \qquad \dots \qquad \qquad. } \end{array}
+\end{equation}
+
+
+Furthermore, with probability at least 1 - 8, individually:
+
+
+\begin{equation}
+\begin{array} { r l } & { \stackrel { * } { \ell ( \widehat { \theta } ) - \ell ( \theta ^ { * * } ) } \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \widehat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta } } \\ & { \stackrel { * } { \ell ( \theta ^ { * } ) } - \hat { \ell } ( \widehat { \theta } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \widehat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta }. } \end{array}
+\end{equation}
+
+
+The theorem shows that theL2-norm ofthe differencebetweenthemaximumlikelihoodparameter 0and thetrueparameter 0* concentrates with rate O(n-1/2) while the likelihood and its expectation  concentrate with faster rate
+O(n-). Note that the result assumes that the empirical FIM
+dition can be enforced aslong as the trueFisher matrixF(0)
+has a positive minimum eigenvalue Xmin,i.e.under identifiability assumption (Lemma) and given a sufficiently large
+number of samples.Proposition of Appendix provides the
+minimumnumber of samples such that with probability at
+least 1it holds that  min > 0.
+
+
+IdentificationRuleAnalysis Thegoaloftheanalysisof
+the identification rule is to find the critical value c(1) Sothat
+the following probabilistic requirement is enforced.
+
+
+Let   [O,1]. An identification rule producing I is 8correct if:Pr(I I*  8.
+We denotewitha=d-axE[\{ I*:   \}]1 theexpectedfraction ofparameters that the agentdoesnot control
+selected by the identification rule and with   =E[\{ E
+I*:i\#1\}]the expected fraction of parameters that the
+agent doescontrolnot selectedby theidentificationrule.We
+
+\switchcolumn
+\RaggedRight
+
+nowprovide a result that bounds   and  and eemploysthem
+toderive\&-correctness.
+
+
+Let I. be the set of parameter indexes selected by the
+IdentificationRuleobtainedusing n> 0i.i.d.samples
+collected with Tg*,with 0* E.Then,under Assumption and Assumption, let0 argminoeo;l(o)forall
+ \{1,..,d\}and v = min\{\{1,in\}. If  min >min2 2 and
+(0*)- l(0*)   c(1), it holds that:
+
+
+\begin{equation}
+\begin{array} { r l } & { \mathrm { ~ " ~ a'~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+\end{equation}
+
+
+Furthermore, the Identification Rule is ((d -d*) + d* )-
+correct.
+Since   and   are functions of c(1), we could, in principle,employ Theorem to enforce a value ,as in Definition, and derive c(1). However, Theorem is not very attractive in practice as it holds under an assumptionregarding the
+minimum eigenvalue of the FIM and the corresponding estimate, i.e.Xmin   Amin2 2 that cannot beverified inpractice
+since  min is unknown. Similarly, the constants d*, I(0*)
+(*0 1pu)are typically unknown.Wewill provide inSection
+a heuristic for setting c(1).
+
+
+\subsection*{Policy SpaceIdentification in a (Configurable
+Environment}
+
+
+The identification rules presented so far are unable to distinguishbetween a parametersettozerobecause the agent
+cannot control it, or because zero is its optimal value.To
+overcome thisissue,weemploythe Conf-MDPproperties
+toselectaconfigurationinwhich theparameterswewant to
+examinehave an optimal value other than zero.Intuitively,if
+we want to test whether the agent can control parameter 0,
+we should place the agent in an environment w E   where
+O; is maximally important for the optimal policy. This intuitionisjustifiedbyTheorem,sincetomaximizethepower
+of the test (1 -  ), all other things being equal, we should
+maximize the log-likelihood gap I(0*)-l(o*),i.e.parameter O;shouldbe essential tojustify the agent'sbehavior.Let
+I   \{1,..,d\} be a set of parameter indexes we want to test,
+our ideal goal is to find the environment w1 such that:
+
+
+w1 E arg marwes \{l(0(w)) - l(0*(w)\}   (2)
+where0*(w) E argmaxoeoJMw(o)and 0*(w) E
+argmacoeo,JM\_(0)are theparameters of theoptimal
+policies in the environment Mwin Ie and He,respectively.Clearly,given the samples D collected with a single optimal policy  *(wo) in a single environment Mwo,
+solvingproblem (2) is hard asit requires performing an offdistribution optimizationbothon thespaceofpolicyparameters and configurations. For these reasons, we consider a
+surrogateobjectivethatassumesthattheoptimalparameter
+in the new configuration can be reached by performing a single gradient step
+
+
+Let I   \{1,..,d\} aand I =\{1,..,d\}\I.For a vector v, wt
+denotewithv1thevector obtainedby settingtozero tthe
+
+\end{paracol}
+
+\end{document}

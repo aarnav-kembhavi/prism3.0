@@ -1,0 +1,138 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+representational capacity against overfitting risk
+forr our 7.352trainingsamples. Totaltrainableparameters number approximately 209,000.
+
+
+2)Model B: Convolutional-LSTM with Attention
+
+
+The second architecture augmentsModel A by
+inserting a temporal attention module between the
+LSTM and classifier. Given LSTM hidden states
+= H [hi,...,hr],attention scores are computed
+as:
+
+
+wheree W, v, and b are learnable parameters.
+Normalized attention weights at 三 softmax (et)
+produce a context vector c =Zt otht that replaces
+the flattened ssequence as classifier input. This
+mechanism allows the model to focus on discriminative timesteps. Parameters total aapproximately
+[6],000.
+
+
+3）Model C: Bidirectional LSTM with Attention
+
+
+The third architecture replaces convolutional feature extraction with bidirectional recurrent processing. Two stacked BiLSTM layers, eachcontainingg 64 hidden units per direction, are used to
+mode1 temporal dependencies. Highway connections between layers support gradient fow, and a
+dropout rate of 0.5 is applied after the recurrent
+blocks to reduce overfitting.
+
+
+A temporal attention layer aggregates the bidirectional hidden states into a fixed-length1 vector
+for classification. This bidirectional setup allows
+each timestep to integrate information from both
+past and future contexts, improving the ability to
+capture transitions between activities. The total
+number of trainable parameters is approximately
+188,000.
+
+
+\subsection*{4)Model D: Transtormer EEncoder}
+
+
+The fourth model follows the transformer framework,aadaptingg the encoder-only  configuration
+from Vaswani et al. [0] for continuous inertial
+signals instead of discrete token inputs. Four convolutional projection layers first map the 9 input
+channels to a 256-dimensional embedding space,
+with GELU activation applied after each convolution, following c design principles from recent
+sensor transformer studies [25]. A learnable class
+
+\switchcolumn
+\RaggedRight
+
+tokenis prepended to the sequence,andpositional
+embeddings are added tI to maintain temporalorder.
+
+
+The augmented sequence is processed by six
+transformer encoder layers, each consisting of
+multi-head self-attention with eight heads and a
+position-wise feedforward network with a hidden
+size of 512. Standard residual connections and
+layer normalization are included in each block.
+The output of the class token is passed through a
+two-layer classifier. The total parameter count is
+approximately 2,359,000.
+
+
+D. TRAINING PROTOCOL
+
+
+\subsection*{D. TRAINING PROTOCOL}
+
+
+All models are trained to minimize cross-entropy
+loss using the Adam optimizer with defaultt momentum parameters [[5]. A batch size of 64
+is maintained throughout training. Model-specific
+learning rates and epoch counts are selected based
+on preliminary tuning experiments:
+
+\begin{itemize}
+\item 50 epochs
+
+\item 50epochs
+
+\item 120 epochs
+
+\item Model D: Learning rate $5\times10^{-5}$, , 150 epochs
+with step decay(factor 0.5 eevery 10 eepochs),
+weight decayy $10^{-2}$, and a learning rate warmup
+over the first 10 epochs
+
+\end{itemize}
+
+Dropout regularization [[6] and batch normalization [[7]are applied according to each model's
+configuration. Early sstoppingg based on validation
+accuracyc determines the final model weights used
+for testing.
+
+
+\subsection*{IV. IMPLEMENTATION DETAILS
+A. SOFTWAREFRAMEWORK}
+
+
+A1l models are iimplemented in PyTorch version
+2.0 with CUDA acceleration enabled. TrainingiS
+performed on an NVIDIA GeForce RTX 3070 Ti
+GPU eequipped with 8 GB of memory. NMixedprecision training is disabled to maintain numerical
+consistency across different architectures.
+
+
+\subsection*{B. DATA LOADING}
+
+
+A custom dataset class is used to load sensor readingsSfrom the UCIHAR dataset directorystructure. The nine available signal types are concatenated along the channel dimension: body acceleration(x, y, z), body gyroscope (x, y, z), and total
+acceleration (x, y, z). Activity labels are converted
+
+% [footer: 5]
+\end{paracol}
+
+\end{document}

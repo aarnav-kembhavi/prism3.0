@@ -1,0 +1,83 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+
+
+\begin{paracol}{2}
+\RaggedRight
+
+ingSmartphonesdatasetin itsoriginaluforml
+Thisbenchmarkcontainsrecordingsifrom 30volnunteers aged19-48 yearswhoperformed six
+common daiy acuvities while carrying a waistmounted Samsung Galaxy SIEsmartohone.The
+recordedacuviuesincudethreedynamicimouons
+(walking.Climbing stairs,and descending stairs)
+andthree staticpostures(situing,standingand
+Lying)
+Eachdatasampleincludes128consecuuivereadings collected at50Hz,corespondingto a 2.56second window.Nine sensor channeIs areuprovided:uiaxial body accelerauion with gravityreumovedrtriaxaalangularvelocity fromuthegyroscoperandtriaxaaltotalaccelerauonincluding
+graVity,Together these channeIs offer complementary informauondescribingbothlinear andurotaiuonalpmouonu
+
+
+Theldatasetisofficiauydividedinto7.352samples(70\%)fortrainingand 2.947samples(30\%)
+forresung.Asubjec-independenuspliuensures
+thaunouindividualuappearswinubothusetsuwhich
+evaluatesmodeugeneralizationiacrossnusersrather
+thanmemorizauonrofuperson-specificmovement
+patterns
+
+
+Rawsensordata areloadeddirecuywithoutany
+addiuionalfilteringorexternal-normalizationWe
+intenuonaulyavoiduextra.preprocessing.:o.guar
+anteerthauobserveduperformancedifferencesrarise
+purely fromuthemodeluarchitecruresratherthan
+preprocessing effects, Batch normalizauion layers
+withineachnetworkautomaticauystandardizefea
+turedistribuuionsduringtraining.
+
+
+Inpuutensorsrare suucturedas.ON.FCyuwhere
+Nuis the batch size, T= 128 is he sequence
+uengthanduC=9urepresents thennumberof
+channels.Forconvo.utional-architecturesithatorequirearchannel-frselayoutpinputsaretransposed
+to.eN.C.before.computarion.
+
+\switchcolumn
+\RaggedRight
+
+C. ARCHITECTURESPECIFICATIONS
+Figure lpresents the four architecrures evaluated
+innthisstudy.Eachwmodeiembodiesadisnnct
+designphilosophyfor handimgsequentuialsensor
+datas
+
+
+Thefirstarchitecturecombines convoluuionalufeatureexuracuionwith-LSTM-based temporalmodelingnnfoloyWing:ithesuccessfulnDeepconvLSTM
+paradigmestablished by Ord6nezI6lWe deliberatelyChosetwoone-cimensionalconvoutional
+blockstoprogressivelyabstaculocalupatterns.rthe
+frstblockaapplies64fltersofsize 6(correspondingto-120msau50:zsamphng)followedbyReLU
+acuvauionandmaapoolingwithifactorz.Thiskernelsize was selectedtocapmreapproximately one
+gaitucycleduringwaikingacuvities.uThe second
+blockexpandsto128fltersofsize 3wthsimilar
+Faclivauonandipoofing
+
+
+AftcrconvolutionadropouuayerwthprobabilityO.juprovidesregularization--arconservauve
+choice givenrthemoderatedatasetsize.We specif
+icallyuutilizeduasingle-layerLSTMuwihauhidden dimension ofnl28,adesign derivedfromthe
+baselineestablishedbypriorwork[24ltoprocess
+thecompressedfearures.This-hiddensizebalances
+
+\end{paracol}
+
+\end{document}

@@ -10,3 +10,7 @@ Texo/model/
 # Local Outputs
 *_output/
 profiling_report.csv
+
+# Local tooling
+.claude/
+.vscode/
