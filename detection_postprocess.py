@@ -66,7 +66,7 @@ def bbox_area(bbox: list) -> float:
 
 def filter_by_confidence(
     detections: List[Dict[str, Any]],
-    threshold: float = 0.25
+    threshold: float = 0.3
 ) -> List[Dict[str, Any]]:
     """Remove detections below confidence threshold."""
     return [d for d in detections if d['confidence'] >= threshold]
@@ -366,7 +366,7 @@ def postprocess_detections(
     detections: List[Dict[str, Any]],
     image_width: int,
     image_height: int,
-    conf_threshold: float = 0.25,
+    conf_threshold: float = 0.3,
     nms_iou_threshold: float = 0.4
 ) -> List[Dict[str, Any]]:
     """

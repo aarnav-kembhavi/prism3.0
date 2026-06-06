@@ -1,0 +1,74 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+the expected values of FDR and FOR are the error rates e1 and eo in case the
+truthful answer being yes and no, respectively. Fig. displays the error rates eo
+and e1 as functions of 0. For   = 31,we compute eo   0,052 and e1   0,007,
+i.e.we have an error rate of 0,052 for rejecting and an error rate of 0,007 for
+confirming a base pair.
+
+
+\subsection*{0.1.Entropy}
+
+
+To quantify the uncertainty of an ensemble, we define the structural entropy
+of an ensemble,  , of an RNA sequence,x, as the Shannon entropy
+
+
+\begin{equation}
+H ( \Omega ) = - \sum _ { s \in \Omega } p ( s ) \log _ { 2 } p ( s ),
+\end{equation}
+
+
+Proposition implies that a sample with small structural entropy contains a distinguished structure and a proof is given in . We refer to a sample having a
+distinguished structure of probability at least \ as being  -distinguished.
+Next we quantify the reduction of a bit query on an ensemble. Recall that the
+associated r.v. Xi,j of a base pair (i,5) partitions the sample   into two disjoint
+sub-samples  o and  1, where  k = \{s E   : Xi,j(s) = k\} (k = 0,1). The
+conditional entropy, H( |Xi,j), represents the expected value of the entropies
+of the conditional distributions on  , averaged over the conditioning r.v. Xi,j
+and canbe computed by
+
+
+\begin{equation}
+H ( \Omega [ X _ { i, j } ) = ( 1 - p _ { i, j } ) H ( \Omega _ { 0 } ) + p _ { i, j } H ( \Omega _ { 1 } ).
+\end{equation}
+
+
+Then the entropy reduction R( , X,i  of Xi, on   is the difference between
+the a priori Shannon entropy H( ) and the conditional entropy H( |Xi,),i.e.
+
+
+IP(s E *)=(1-eo)(1-e1)1,where lo and l1 denote the number of No-/Yesanswers to queried base pairs along the path, respectively. Fig. displays the
+distribution of l1. We observe that l1 has a mean around 5, i.e., the probabilities
+of queriedbase pairsbeing confirmedandbeing rejectedareroughly equal.
+For lo = l1 = 5,we have a theoretical estimate P(s E  *)  0,736. In Fig.
+we present that P(s E  *  decreases as the error rate eo increases, for fixed
+e1=0.01.
+
+
+\subsection*{1.Information theory}
+
+
+As the Boltzmann ensemble is a particular type of discrete probability spaces,
+the information-theoretic results on the ensemble trees will be stated in the more
+general setup. Let   = (S,P(S),p) be a discrete probability space consisting
+of the sample space S, its power set P(S) as the o-algebra and the probability
+measure p.The Shannon entropy of   is given by
+
+
+\begin{equation}
+H ( \Omega ) = - \sum _ { s \in \mathfrak { S } } p ( s ) \log _ { 2 } p ( s ),
+\end{equation}
+
+\end{document}

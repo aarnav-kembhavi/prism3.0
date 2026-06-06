@@ -1,0 +1,66 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\subsection*{1  Gervini-Yohai d-variate filter}
+
+
+In this Section we are going to show that the filters introduced in are a special
+case of our approach, using the following Gervini- Yohai depth
+
+
+dgy(t, F,G) = 1 - G( (t,  (F), (F))),
+
+
+where G is a continuous distribution function,  (F) and  (F) are the lo-
+(t -  (F))T (F)-1(t - (F)) is the squared Mahalanobis distance. Apa sequence of discrete distribution functions that might depends on Fn and
+such that supt |Gn(t) - G(t)I   O, we might define the finite sample version
+of the Gervini-Yohai depth as
+
+
+dGy(t,Fn,Gn) = 1 - Gn( (t, (Fn), (Fn))) ,
+
+
+however for filtering purpose we will use two alternative definitions later on.
+The use of Gn, that might depend on the data, instead of G makes this
+sample depth semiparametric. We notice that the Mahalanobis depth, which
+is completely parametric, cannot be used for the purpose of defining a filter
+in a similar fashion. Let 1   d   p, j1,...,Ja be an d-tuple of the integer
+numbers 1, ...,p and, for easy of presentation, let Y; = (Xij,..., Xija) be a
+subvector of dimension d of X;.Consider a pair ofinitial location and scatter
+estimators
+
+
+\begin{equation}
+\mathbf { T _ { 0 n } ^ { ( d ) } } = \left ( \begin{array} { c } { T _ { 0 n, j _ { 1 } } } \\ { \cdots } \\ { T _ { 0 n, j _ { d } } } \end{array} \right ) ~ ~ ~ ~ \mathrm { a n d } ~ ~ ~ ~ \mathbf { C _ { 0 n } ^ { ( d ) } } = \left ( \begin{array} { c } { C _ { 0 n, j _ { 1 } j _ { 1 } } \dots C _ { 0 n, j _ { 1 } j _ { d } } } \\ { \cdots \cdots \cdots } \\ { C _ { 0 n, j _ { d}}}\end{array}\right.
+\end{equation}
+
+
+Now, define the squared Mahalanobis distance for a data point Y; by  ; =
+X2, H the distribution function of   =  (., F) and let Hn be the empirical
+distribution function of   (1   i   n). We consider two finite sample
+version of the Gervini- Yohai depth, i.e.,
+
+
+\begin{equation}
+d _ { G Y } ( \mathbf { t }, \mathbf { \hat { F } _ { n } }, \mathbf { G } ) = \mathbf { 1 } - \mathbf { G } ( \mathbf { \Delta } ( \mathbf { t }, \mathbf { \hat { F } _ { n } } ) ),
+\end{equation}
+
+
+The proportion of flagged d-variate outliers is defined by
+
+
+\begin{equation}
+d _ { n } = \operatorname* { s u p } _ { \mathbf { t } \in \mathbf { A } } \{ d _ { G Y } ( \mathbf { t }, \mathbf { \hat { F } _ { n } }, \mathbf { \hat { H } _ { n } } ) - \mathbf { d _ { G Y } } ( \mathbf { t }, \mathbf { \hat { F } _ { n } }, \mathbf { G } ) \} ^ { + }.
+\end{equation}
+
+\end{document}

@@ -1,0 +1,80 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+where the units of H are in bits.A feature X is a discrete random variable
+defined on  . Assume that X has a finite number of values 1,2,...,Ck. Set
+  (o (=)=
+
+
+\begin{equation}
+H ( X ) = - \sum _ { i } q _ { i } \log _ { 2 } q _ { i }.
+\end{equation}
+
+
+In particular, the values of X define a partition of S into disjoint subsets S =
+\{s  S:X(s=ci\},for 1 i  k.This further induces k spaces  =
+(S, P(S),pi),where the induced distribution is given by
+
+
+\begin{equation}
+p _ { i } ( s ) = { \frac { p ( s ) } { q _ { i } } } \quad { \mathrm { ~ f o r ~ } } s \in \mathfrak { S } _ { i },
+\end{equation}
+
+
+and qi denotes the probability of X having value c and is given by
+
+
+\begin{equation}
+q _ { i } = \mathbb { P } ( X = x _ { i } ) = \sum _ { s \in \mathbb { S } _ { i } } p ( s ).
+\end{equation}
+
+
+Let H(Q|X) denote the conditional entropy of   given the value of feature X.
+The entropy H( |X) gives the expected value of the entropies of the conditional distributions on  , averaged over the conditioning feature X and can be
+computedby
+
+
+\begin{equation}
+\begin{array} { l } { H ( \Omega | X ) = \sum _ { i } q _ { i } H ( \Omega _ { i } ). } \\ { \qquad \cdots \qquad \cdots \qquad } \end{array}
+\end{equation}
+
+
+Then the entropy reduction R( ,X) of   for feature X is the difference between
+the a priori Shannon entropyH(2)and the conditional entropyH(2|X),i.e.
+
+
+\begin{equation}
+R ( \Omega, X ) = H ( \Omega ) - H ( \Omega | X ).
+\end{equation}
+
+
+The entropy reduction indicates the change on average in information entropy
+from a prior state to a state that takes some information as given.Now we
+prove Propositions and. Given two features X1 and X2,we can partition  
+either first by X1 and subsequently by X2, or first by X2 and then by X1, or
+just by a pair of features (X1, X2). In the following, we will show that all three
+approaches provide the same entropy reduction of  . Before the proof, we define
+some notations. The joint probability distribution of a pair of features (X1,X2)
+(2)
+(X1, X2)is defined as
+
+
+\begin{equation}
+H ( X _ { 1 }, X _ { 2 } ) = - \sum _ { i _ { 1 } } \sum _ { i _ { 2 } } q _ { i _ { 1 }, i _ { 2 } } \log _ { 2 } q _ { i _ { 1 }, i _ { 2 } }.
+\end{equation}
+
+
+The conditional entropy H(X2|X1) of a feature X2 given X1 is defined as the
+expected value of the entropies of the conditional distributions X2,averaged
+
+\end{document}

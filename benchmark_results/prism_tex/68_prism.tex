@@ -1,0 +1,149 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+solar thermalon-sitedonothaveCO2associated.Embeddedemissions werenot included.For additional details on the
+model and thereferences of the input data used in the model,
+referto.
+
+
+\subsection*{I. GRID TARIFFS DESCRIPTION}
+
+
+TheNorwegian electricity consumption's recent trend is a
+consumptionwherepeakdemandincreasesrelativelymore
+than annual demand.This trend must bemet by newincentives
+toshavepeakloadin order toavoidcostlydistributiongrid
+investments.Grid tariffs are one effective way to solve this
+issue. In this paper we suggest three new grid tariffs and
+compare the results with the current grid tariff. The first
+analyzed grid tariff is energy based and is the current tariff
+in Norway.It consists of an annual fixed price and a grid
+energy cost per kWh consumed. As this rate is flat, it does
+not incentivize flexible resources nor consumption patterns
+which results in lower peak demand. The annual cost can be
+calculated using (??).
+
+
+\begin{equation}
+C ^ { t o t } = 1 3 7 + 0, 0 2 2 5 \cdot \sum _ { i } y _ { t } ^ { i m p \_ t o t } \qquad \qquad ( 1 )
+\end{equation}
+
+
+Thesecondgridtariff isatime-of-usebasedtariffwhich
+The tariff has a basic cost, which is double during peak load
+hours(7-10am and 6-9pm)and reduced tohalf duringlowload
+hours (11pm-5am). The effect of increasing electric vehicle
+and demand response penetration on the peak hours is ignored.
+The total costs are given by (??).
+
+
+\begin{equation}
+\begin{array} { r } { C ^ { t o t } = \sum _ { t } \left ( 0, 0 1 2 3 \cdot y _ { t } ^ { i m p \_ l o w } + 0, 0 2 4 6 \cdot y _ { t } ^ { i m p \_ m e a k } \right. } \\ { \qquad }\end{array}
+\end{equation}
+
+
+The third tariff was originally described in  and is called
+capacity subscription. It contains a fixed annual cost (E/year),
+demand charge (E/kWh). The energy cost is significantly
+higher when the imports are above the subscription. The main
+advantage of this tariff is that it incentivizes peak shaving
+and creates a market for capacity where consumers pay for
+the resource which in fact is scarce in the distribution grid:
+capacity.Disadvantages are complexity and the uncertainty
+in consumer behaviour.In addition,the optimal subscribed
+capacityis unknown in advance.Finding its value is further
+discussed in .In this paper, the subscribed capacity is a
+variable in the optimization. In reality, the consumer would
+have to choose it and it would most likely not be the optimal
+value. The costs are calculated with (??).
+
+
+\begin{equation}
+C ^ { t o t } = 1 0 8 \cdot c ^ { s u b } + \sum _ { t } \left ( 0, 0 0 5 \cdot y _ { t } ^ { i m p \_ b e l o w } + 0, 1 \cdot y _ { t } ^ { i m p \_ a b o v e } \right )
+\end{equation}
+
+
+The fourth tariff is a dynamic tariff where grid scarcity is
+takenintoaccount.As anextra incentive toreduce impacts
+on the grid, a penalization Csc is given for consumption in
+hours with grid scarcity. Scarcity 8sc in the system is defined
+
+\switchcolumn
+\RaggedRight
+
+as the5\%of hours in the region(NO1)when the load is the
+highest.The percentage chosen is arbitrary and could be tuned
+or changed into a threshold by the regulator.The total costs
+are given by (??). In addition, as an added incentive to help the
+grid, a bonus for exporting in those hours is added, at the same
+cost as the scarcity tariff.In (??),osc is a binary parameter
+defining for each hour if there is scarcity in the grid.
+
+
+\begin{equation}
+\begin{array} { r } { C ^ { t o t } = \sum _ { t } \Big ( \big ( 0, 0 2 5 \cdot ( 1 - \delta _ { t } ^ { s c } ) + \delta _ { t } ^ { s c } \cdot 0, 1 \big ) \cdot y _ { t } ^ { i m p \_ t o t } } \\ { \qquad }\end{array}
+\end{equation}
+
+
+\subsection*{II.RESULTS}
+
+
+In Norway, the legislation regarding prosumers is changing,
+moving from a situation where exports are limited to 100kW
+to a situation of unrestrained export.For this reason,both
+casesareinvestigatedtoexploretheconsequencesonthe
+design of ZENs of the different grid tariffs in these cases.
+The investment in the energy system can be seen in Table
+and in Table  respectively for the case without and with
+limitation on exports. The results are presented in the format
+ProdPlant/Student Housing/Normal Offices/Passive Offices.
+The investments stay similar, no new technology is introduced
+or replaced. However, small variations in the amount of each
+between the energy system with and without export limit
+is greater,namely due to storages.A large battery pack is
+necessary in order to store thePVproductionwhile it waits to
+be exported,i.e.to accommodate the bottleneck. In addition,
+large investments in heat storages and electric boilers are done.
+The subscribed capacity resulting of the optimization is of
+134,5kW for the case with no export limit, and of 124kW
+in the case with export limits. Fig. presents the total cost of
+the neighborhood's energy system (investment and operation)
+and the totalrevenuefor theDSO,both over thelifetime and
+discounted to the start of the study.There are smallvariations
+in the cost in all cases.Subscribed capacity and dynamic
+pricing cause an increase in the total cost for the ZEN between
+3 and 5\% compared with the energy case. On the other hand,
+the time of use scheme allows for a cost reduction of around
+12\%in the case without export limit and5\%with export
+limit.The DSO revenue from the ZEN are higher when using
+the other pricing schemes than with the energy scheme when
+there is no export limit.When there is export limits,theDSO
+revenue stays the same because the battery allows to selfconsume more and "anticipates the higher price periods and
+buys electricity when the price islower.The revenue in the
+case of export limits are about half of the revenue of the case of
+no export limit exceptin the case of subscribed capacitywhere
+the subscription tariff allows to maintain the revenue.The cost
+increase in the ZEN is of the same order of magnitude as the
+increaseinrevenue for the DSOexcept for ToUwhere the cost
+of the ZEN decreases while therevenue for the DSO increases.
+ToUhas a beneficialeffect from both points of viewin this
+aspect. The duration curves Fig., in the case of no export
+limit, are not affected much by the tariff scheme in place.
+
+\end{paracol}
+
+\end{document}

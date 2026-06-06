@@ -1,0 +1,71 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+and considering the empirical distribution function Fn(), the halfspace
+depthwillbe
+
+
+\begin{equation}
+d _ { H S } ( x, \hat { F } _ { n } ) = \operatorname* { m i n } \biggl ( \frac { 1 } { n } \sum _ { i = 1 } ^ { n } I ( X _ { i } \leq x ), \frac { 1 } { n } \sum _ { i = 1 } ^ { n } I ( X _ { i } \geq x ) \biggr ).
+\end{equation}
+
+
+Consider Ton = (Ton,1,..., Ton,p) and Son = (Son,1,...,Son,p), a pair of
+initial location and dispersion estimators. Here we choose for Ton and Son
+respectively the coordinate-wise median and the median absolute deviation
+(MAD). For each variable (Xi,, X2j,..., Xnj) (j = 1,...,P), we denote the
+standardized version of Xiy by Zij = Son,j
+distribution for Zj; here we use the standard normal distribution, i.e., F =
+ . Let Fn, be the empirical distribution for the standardized values, that is
+
+
+\begin{equation}
+\hat { F } _ { n, j } ( t ) = \frac { 1 } { n } \sum _ { i = 1 } ^ { n } I ( Z _ { i j } \leq t ) \qquad j = 1, \dots, p.
+\end{equation}
+
+
+We define the proportion of fagged outliers by
+
+
+dn,j = max(sup \{dHs(t,Fn,i)-dHs(t,F)\}+; sup \{dHs(t,Fn,j)-dHs(t,F )\}+
+t -n3,j t n3.i
+
+
+where n3,j = F-1( ) is a large quantile of F,. Note that, according to (),
+) > () :   \} = ()g s    
+which results in the simpler form written above considering the definition of
+the half-space depth in the univariate case. Here, if we consider the order
+statistics Z(i),j, define i- = min\{i : Z(),j > -np,j\} and i+ = max\{i : Z(i),j <
+n3,\}. Using the definition of half-space depth function in the univariate case,
+presented above, the previous expression can be written as
+
+
+\begin{equation}
+d _ { n, j } = \operatorname* { m a x } \biggl ( \operatorname* { s u p } _ { i < i _ { - } } \{ \frac { i } { n } - F _ { j } ( Z _ { ( i ), j } ) \} ^ { + }, \operatorname* { s u p } _ { i > i _ { + } } \{ F _ { j } ( Z _ { ( i ), j } ) - \frac { i - 1 } { n } \} ^ { + } \biggr ). \qquad ( 1 )
+\end{equation}
+
+
+Then, we fag [ndn,   observations with the smallest depth value as cell-wise
+outliers and replacethembyNA's.
+
+
+\subsection*{0.1  A consistent univariate, bivariate and p-variate fil
+ter}
+
+
+Given a sample X1,...,Xn where X; E RP,i = 1, ...,n, we first apply the
+univariate filter described in the previous example to eachvariable separately.
+Filtered data are indicated through an auxiliary matrix U of zeros and ones,
+
+% [footer: 1]
+\end{document}

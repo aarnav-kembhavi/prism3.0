@@ -1,0 +1,46 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+To shape the intuition for our identification results, this section presents a brief
+simulation based on the following data generating process (DGP):
+
+
+T \textasciitilde{} Binom(0.5), D \textasciitilde{} Binom(0.5), U \textasciitilde{} Unif(-1,1), V \textasciitilde{} N(0,1
+
+
+independent of each other, and
+
+
+M =I\{D+U+V >0\}  Y = A((1 + D+ M + D  M) T+ U).
+
+
+Treatment D as well as the observed time period T are randomized, while the
+mediator-outcome association is confounded due tothe unobserved time constant
+heterogeneity U. The potential outcome in period 1 is given by Yi(d, M(d)) =
+A((1 + d + M(d ) + d   M(d')) + U), where A denotes a link function. If the latter
+corresponds to the identity function, our model is linear and implies a homogeneous
+time trend T equal to 1. If A is nonlinear, the time trend is heterogeneous, which
+invalidates the common trend assumption of difference-in-differences models. M is
+not only a function of D and U, but also of the unobserved random term V, which
+guarantees common support w.r.t. U, see Assumptions 4 and 6. Compliers, alwaystakers, and never-takers satisfy, respectively: c = I\{U + V   0,1 + U + V > 0\},
+a = I\{U + V > 0\}, and n = I\{1 + U + V   0\}. In the simulations with 1,000
+replications, we consider two sample sizes (N = 1, 000,4, 000) and investigate the
+behaviour of our change-in-changes methods as well as the difference-in-differences
+approach of in both a linear (A equal to identity function) and nonlinear outcome
+model where A equals the exponential function. To implement the change-in-changes
+estimators in the simulations as well as the application in Section , we make use of
+the \textasciicircum{}cic  command in the qte R-package by with its default values. Table reports the
+bias, standard deviation ('sd'), root mean squared error ('rmse'), true effect ('true'),
+and the relative root mean squared error in percent of the true effect ('relr")
+
+\end{document}

@@ -1,0 +1,127 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+\begin{paracol}{2}
+\RaggedRight
+
+ZENIT (Zero Emission Neighborhood Investment Tool) is
+a toolforminimizing the cost of investing and operating the
+energy system of a Zero Emission Neighborhood (ZEN). It
+usesaMILPmodeltofindthe optimaltype andsize of
+technology needed to provide heat and electricity to a ZEN.
+The concept contains much more than only the energy system
+(materials and architecture to name two examples) but this
+tool's focus is energy systems. The idea behind ZEN is to limit
+emissions and that it is possible to compensate for the various
+emissions of CO2in the neighborhood by exporting electricity
+on-site renewable to the grid,we assume that the production
+in the system is reduced by the corresponding amount and
+thus reduces the emissionof the totalsystem.Themodel
+used in this paper is based on the model presented in . In
+this section,the main elements of the model will be repeated
+and the differences with the model from presented. For the
+details on the model not repeated,one can refer to that paper.
+Then the implementation and case chosen will be presented.
+The optimization is written in Python anduses Gurobi as a
+solver. In this paper, we interpret the definition of a ZEN as
+a neighborhood that has O emissions over its lifetime,which
+is set to 60 years. However due to practical reasons and to
+reduce the computational time,differentperiods of thelifetime
+can be defined using one representative year for each. In this
+study we use a single period. The different decision variables
+are the amount of investment in each technology for heat,
+variables defined for each hour (e.g. amount of electricity
+produced, amount of fuel consumed). Multiple constraints are
+used, to enforce the CO2 limitations necessary in the ZEN
+context and torepresent the operation of the neighborhood
+and in particular of each technology. It is important to note
+that part load limitations and start up/shutdown constraints are
+not implemented. The objective function of the optimization
+is thefollowing:Minimize:
+
+
+Cdisc . ci + bhg   Chg +
+Er,Di
+ (f,t   Pfuel + (Pspot + pgrid
+r,D
++ Pret) (ytmp +>mp)-Pspot .yexp)9t,est (1)
+est
+
+
+Where Cdisc is the discounted investment cost in technology
+ including re-investments and salvage value, c the capacity
+of technology i,bhg the binary variable for investment in
+discount factor for the whole lifetime of the neighborhood
+with discount rate r, Crnaint the annual maintenance cost,
+the neighborhood and yt,est
+storage.The subscript trepresent timesteps,thetechnologies
+
+\switchcolumn
+\RaggedRight
+
+with in particular f for the technologies using other fuel than
+electricity and est for energy storages. It minimizes the cost
+of investing in the different technologies and the operating
+costs,fuels,electricity and O\&M costs and contains the costs
+of the heating grid and a binary associated with it that also
+gives access to technologies at a neighborhood level.The
+most important constraint in the case of ZENs is the CO2
+balance (??), whose principle was explained earlier. In (??),
+Jt,est 9t,estgb\_impgb-exp and yt,estpb\_etparerespectivelytheimport and
+export on the grid side battery and the export from the on-
+CO2the
+CO2 factors for electricity and other fuels,Mest the efficiency
+technologies.
+
+
+\begin{equation}
+\begin{array} { c } { \sum _ { t } ( ( y _ { i } ^ { i m p } + \sum _ { e s t } y _ { t, e s t } ^ { g b \_ i, i m p } ) \cdot \varphi _ { \epsilon } ^ { C O _ { 2 } } ) } \\ { \qquad \qquad + \sum _ { t } \sum _ { f } ( \psi _ { f } ^ { e O _ { 2 } } \cdot f _ { f, t } ) \leq \sum _ { t } ( \sum _ { e s t } ( y _ { t, e s t } ^ { g b \_ e x p } } \\ & { \quad \quad \quad \quad}\end{array}
+\end{equation}
+
+
+Fig. presents graphically the electricity balance and the differentequationsassociated.Differenttechnologies areincluded
+in the study; some of them are only available at the building
+level and others at the neighborhood level in a centralized production plant. The different technologies are: at the building
+level : Solar Panels (PV), Solar Thermal (ST),Heat Pumps
+(HP),Biomass Boiler (BB),Electric Boiler (EB),Gas Boiler
+(GB);and at the neighborhood levels:CHP (nCHP),Gas
+Boiler (nGB),Electric Boiler (nEB),Heat Pumps (nHP). In
+addition,Batteries(Bat)and HeatStorage (HS)are available
+at both levels.Different subcategories can be available to
+choose from within each category, for instance air-water or
+water-water heat pumps.In parenthesis is the notation used
+for the rest of the study for each technology. Unlike the
+model in , the model used for this paper uses a disaggregrated
+of buildings are identified and the loads are aggregated per
+building type. It is possible to use a completely disaggregated
+heat load but thelack of available data motivated not doing
+it. The input data necessary to run ZENIT are the electric and
+heating loads (ideally separated between domestic hot water
+and space heating),the outside andground temperatures,the
+solar insolation and the electricity prices. Hourly timeseries
+for each representative years are necessary. A description of
+the neighborhood and its buildings with the foor and the roof
+area,and the layout of the neighborhoods is also needed.In
+this study we assume the heating grid is there (and set the
+corresponding binary to 1) because there is one in the location
+that inspired this case. Its characteristics (layout, losses and
+cost)are then necessarybut a module canbe used toprovide
+anestimate of thelosses and cost based on thelayoutof the
+neighborhood.TheCO2factorsusedwere17gCO2/kWhfor
+electricity, 277 gCO2/kWh for gas and 7 gCO2/kWh for wood
+chips.Theelectricityproducedviasolar panels or
+
+\end{paracol}
+
+\end{document}

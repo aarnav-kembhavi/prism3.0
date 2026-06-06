@@ -1,0 +1,70 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+X \textasciitilde{} Ep(h,  , E), if it has a density function given by
+
+
+where h is a non-negative scalar function,   is the location parameter and
+  is a p   p positive definite matrix. Denote by Fo the corresponding distribution function and by  x = (x -  )  -1(x -  ) the squared Mahalanobis
+distance of a p-dimensional point x. By Theorem 3.3 of ? if a depth is affine
+equivariant O and has maximum at   O (see Appendix  then a depth is such
+that d(x; Fo) = g( x) for some non increasing function g and we can restrict
+ourselves without loss of generality, to the case p = O and   =I where Iis the
+identity matrix of dimension p.Under this setting,it is easy to see that the
+half-space depth of a given point x is given by dHs(x; Fo) = 1 - Fo,1(/ x),
+where Fo,1 is a marginal distribution of X. If the function h is such that
+
+
+\begin{equation}
+\frac { \exp ( - \frac 1 2 \Delta ) } { h ( \Delta ) } \rightarrow 0, \qquad \Delta \rightarrow \infin,
+\end{equation}
+
+
+then, there exists a  * such that for all x so that  x >  *, dHs(x;Fo)  
+dHs(x;  ), where   is the distribution function of the standard normal.
+Hence,
+
+
+\begin{equation}
+\operatorname* { s u p } _ { \{ \mathbf { x : \Delta _ { x } > \Delta ^ { * } } \} } [ d _ { H S } ( \mathbf { x ; \Phi } ) - \mathbf { d _ { H S } } ( \mathbf { x ; F _ { 0 } } ) ] < 0
+\end{equation}
+
+
+and therefore, for all   > 1 - 2Fo.1(-V( *)),
+
+
+\begin{equation}
+\operatorname* { s u p } _ { C ^ { \beta } ( F _ { 0 } ) } \left [ d _ { H S } ( \mathbf { x } ; \mathbf { \Phi } ) - \mathbf { d } _ { H S } ( \mathbf { x } ; \mathbf { F } _ { 0 } ) \right ] < \mathbf { 0 } ~.
+\end{equation}
+
+
+Given an independent and identically distributed sample X1,...,Xn, we
+define the filter in general dimension p introduced previously, where here we
+use the half-space depth
+
+
+\begin{equation}
+d _ { n } = \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { \beta } ( \mathbf { F } ) } \{ d _ { H S } ( \mathbf { x } ; \hat { \mathbf { F } } _ { n } ) - d _ { H S } ( \mathbf { x } ; \mathbf { F } ( \mathbf { T } _ { 0 n }, \mathbf { C } _ { 0 n } ) ) \} ^ { + },
+\end{equation}
+
+
+where   is a high order quantile, Fn() is the empirical distribution function
+and F(Ton, Con) is a chosen reference distribution which depends on a pair
+of initial location and dispersion estimators, Ton and Con. IHereafter,we
+are going to use the normal distribution F = N(Ton,Con). For Ton and
+Con one might use, e.g., the coordinate-wise median and the coordinate-wise
+MAD for a univariate filter as in ?. In order to compute the value dn, we
+have to identify the set C(F) = \{x   RP|dHs(x,F)   dHs(n,F)\} where
+Ng is a large quantile of F. By Corollary 4.3 in and denoting with
+
+\end{document}

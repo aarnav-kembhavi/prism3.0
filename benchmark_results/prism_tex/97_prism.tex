@@ -1,0 +1,70 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+questioning the presence of(i,j)in each structure.By construction,the
+distribution of X,  is given by the base pairing probability P(Xi, (s) = 1) = pi,j-
+Any base pair, (i,j), has an entropy, defined by the information entropy of Xi,j*
+i.e.
+
+
+where the units of H are in bits. The entropy H(X,   measures the uncertainty
+of the base pair (i,j) in   .When a base pair (i,j) is certain to either exist
+or not, its entropy H(Xi,i) is 0. However, in case Pi,j is closer to 1/2, H(Xi,j)
+becomes larger. The r.v. Xi,j partitions the space   into two disjoint subspaces  o and  1, where  k = \{s     : Xi,j(s)= k\} (k = 0,1), and the
+induced distributions aregivenby
+
+
+\begin{equation}
+p _ { 0 } ( s ) = \frac { p ( s ) } { 1 - p _ { i, j } } \quad \mathrm { ~ f o r ~ } s \in \Omega _ { 0 }, \qquad p _ { 1 } ( s ) = \frac { p ( s ) } { p _ { i, j } } \quad \mathrm { ~ f o r ~ } s \in \Omega _ { 1 }.
+\end{equation}
+
+
+Intuitively, H(Xi,i) quantifies the average bits of information we would expect
+to gain about the ensemble when querying a base pair (i,j  This motivates
+us to consider the macimum entropy base pairs,the base pair (io,jo having
+maximum entropy among all base pairs in  , i.e.
+
+
+\begin{equation}
+( i _ { 0 }, j _ { 0 } ) = \operatorname * { a r g m a x } _ { ( i, j ) } H ( X _ { i, j } ).
+\end{equation}
+
+
+As we shall prove in Section, Xio.jo produces maximally balanced sf
+
+
+0.1.Theensembletree
+
+
+Equipped with the notion of ensemble and bit query (i.e. the respective maximum entropy base pairs), we proceed by describing our strategy to identify the
+target structure as specified in Problem. The first step consists in having a
+closer look at the space of ensemble reductions. Each split obtained by partitioning the ensemble   using r.v. Xi, , can in turn be bipartitioned itself via
+any of its maximum entropy base pairs. This recursive splitting induces the
+ensemble tree,T( ),whose vertices are sub-samples and in which its k-thlayer
+represents a partition of the original ensemble into 2* blocks. T( ), is a rooted
+binary tree, in which
+
+
+\begin{equation}
+\begin{array} { c } { \epsilon _ { i, j } ( ( x _ { 1 }, \dots, x _ { j } ), ( y _ { 1 }, \dots, y _ { m } ) ) = ( y _ { 1 }, \dots, y _ { i - 1 }, x _ { 1 }, \dots, x _ { j }, y _ { i + 1 }, \dots y _ { m } ) } \\ { \xi _ { i, j } ( x _ { 1 }, \dots, x _ { n } ) = ( ( x _ { i }, \dots, x _ { j } ), ( x _ { 1 }, \dots, x _ { i -}}\end{array}
+\end{equation}
+
+
+To quantify to what extent modularity can discriminate base pairs,we perform
+quence, we consider its MFE structure s computed via ViennaRNA (?). Given
+two positions  and j, we cut the entire sequence x into two fragments, Xi,j and
+the remainder Xi,j, i.e., i, (x) = (Xi,j,Xi,j). Subsequently, the two fragments
+Xi,j and xi,j refold into their MFE structures Si,j and Si,j, respectively, which
+are combined into a structure Ei, (si,j, Si,5i). If bases i and j are paired in s
+
+\end{document}

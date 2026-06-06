@@ -1,0 +1,72 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+o   ( - x1( - ) = 
+using the initial location and dispersion estimates, the set can be rewritten
+n   s ()-(x)  ()-x) < x  x\} = ()g s
+tile of a chi-squared distribution with p degrees of freedom.Now we want
+to show that the result given by Proposition holds for this particular case.
+Consider a random vector (X1,... ,Xn)   Fo( o,Eo) and suppose that Fo
+is an elliptically symmetric distribution. Also consider a pair of location and
+dispersion estimators Ton and Con such that Ton    o and Con   Eo a.s..
+Let F be a chosen reference distribution and Fn the empirical distribution
+function.If the reference distribution satisfies
+
+
+sup [dHs(x; F) - dHs(x; Fo)] < 0
+xEC (F0)
+
+
+where   is some large quantile of Fo, then
+
+
+ndn   0 as n   0
+
+
+Proof. In ?, it is proved that for i.i.d. X1,X2, ...,Xn with distribution Fo
+asn oo
+
+
+sup dHs(t, Fo) - dHs(t, Fn)I  > O a.s.
+tERd
+
+
+Note that, by the continuity of F, F(Ton, Con)   F( o, Eo) a.s.. Hence, fol
+
+
+sup \{dHs(x;Fn) - dHs(x;F(Ton,Con))\}  
+xEC (F0)
+
+
+sup \{dHs(x;Fn) - dHs(x; Fo( o,  o))\}+
+xEC(F0)
+
+
+sup \{dHs(x; Fo( o,  o)) - dHs(x; F( o,  o))\}+
+xEC(F0)
+
+
+sup \{dHs(x; F( o,  o)) - dHs(x; F(Ton, Con))\}
+XEC (Fo)
+
+
+In the next example, we illustrate a univariate filter based on half-space
+depth that controls independently the left and the right tail of the distribution. In the univariate case, given a point c there exist only two halfspaces
+including it, hence the half-space depth assumes the explicit form
+
+
+\begin{equation}
+\begin{array} { r } { d _ { H S } ( x ; F ) = \operatorname* { m i n } ( P _ { F } ( ( - \infin, x ] ), P _ { F } ( [ x, \infin ) ) ) } \\ { = \operatorname* { m i n } ( F ( x ), 1 - F ( x ) + P _ { F } ( X = x ) ), } \end{array}
+\end{equation}
+
+\end{document}

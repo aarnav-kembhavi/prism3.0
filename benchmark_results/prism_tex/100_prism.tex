@@ -1,0 +1,76 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+over the conditioningfeatureX1,i.e.
+
+
+\begin{equation}
+H ( X _ { 2 } | X _ { 1 } ) = \sum _ { i _ { 1 } } \mathbb { P } ( X _ { 1 } = x _ { i _ { 1 } } ^ { ( 1 ) } ) H ( X _ { 2 } | X _ { 1 } = x _ { i _ { 1 } } ^ { ( 1 ) } ).
+\end{equation}
+
+
+\subsection*{Proposition 1 (Chain rule,).}
+
+
+Proposition 1 (Chain rule,).
+
+
+\begin{equation}
+H ( X _ { 1 }, X _ { 2 } ) = H ( X _ { 1 } ) + H ( X _ { 2 } | X _ { 1 } ). \qquad \qquad ( 1 )
+\end{equation}
+
+
+Proposition 2.Let R( ,X1,X2 denote the entropy reduction of  first by the
+feature X1 and then by the feature X2,and R(S,(X1,X2)  denote the entropy
+reductionof2byapair of features(X1,X2).Then
+
+
+\begin{equation}
+R ( \Omega, X _ { 1 }, X _ { 2 } ) = R ( \Omega, ( X _ { 1 }, X _ { 2 } ) ). \qquad ( 2 )
+\end{equation}
+
+
+The maximum entropy of an arbitrary feature is achieved when all its outcomes
+occur with equalprobability,and this maximum value is proportionalto the
+logarithm of the number of possible outcomes to the base 2. Thus Proposition
+implies that the more possible outcomes a feature has, the higher entropy reductionit could possiblylead to.Meanwhile,a feature with an arbitrary number of
+outcomes can be viewed as a combination of binary features, the ones with two
+possible outcomes. Even though the entropy of the combination of two features
+is greater than each of them,Proposition shows thatpartitioning the space subsequently by two features has the same entropy reduction as partitioning by
+their combination. Therefore,instead of considering features with outcomes as
+many as possible, we focus on binary features.
+
+
+\subsection*{1.Query repeats}
+
+
+Here we assess the improvement of the error rates by repeating the same
+query twice.Let Y (or N) denote the event of the queried base pair existing
+(or not)in the target structure.Let y (or n) denote the event of the experiment confirming (or rejecting) the base pair.Let nn denote the event of two
+independent experiments both rejecting the base pair. Similarly, we have yy
+and yn. Utilizing the same sequences and structures as described in Fig., we
+estimate the conditional probabilities P(n|N) 0,993 and P(nY)\textasciitilde{} 0,055.The
+prior probability P(Y) can be computed via the expected number l1 of confirmed
+queried base pairs on the path, divided by the number of queries in each sample. Fig. displays the distribution of l1 having mean around 5. Thus we adopt
+P(Y) = P(N) = 0.5. By Bayes  theorem, we calculate the posterior
+
+
+\begin{equation}
+\mathbb { P } ( N | n n ) = \frac { \mathbb { P } ( n n | N ) \mathbb { P } ( N ) } { \mathbb { P } ( n n ) } = \frac { \mathbb { P } ( n | N ) ^ { 2 } \mathbb { P } ( N ) } { \mathbb { P } ( n | N ) ^ { 2 } \mathbb { P } ( N ) + \mathbb { P } ( n | Y ) ^ { 2 } \mathbb { P } ( Y ) },
+\end{equation}
+
+
+where P(nn) = P(nn|N)P(N) + P(nn|Y)P(Y). we have P(nn|N) = P(n|N)2
+(X)e(()ndo m()=(u)
+
+\end{document}

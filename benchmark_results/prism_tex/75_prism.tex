@@ -1,0 +1,74 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+Here A = \{t   Rd : dgy(t,F,G)   dgy(S,F,G)\}, where ( is any point
+in Rd such that  (S,F) = n and  = G-1( ) is a large quantile of G. Then,
+we flag [ndn]observations. It is easy to see that,
+
+
+\begin{equation}
+\begin{array} { r } { d _ { n } = \operatorname* { s u p } _ { \mathbf { t } \in \mathbf { A } } \{ [ 1 - \hat { H } _ { n } ( \Delta ( \mathbf { t }, \hat { \mathbf { F } } _ { \mathbf { n } } ) ) ] - [ \mathbf { 1 } - \mathbf { G } ( \mathbf { \Delta ( t }, \hat { \mathbf { F } } _ { \mathbf { n } } ) ) ] ^ { + } } \\ { = \operatorname* { s u p } _ { \mathbf { t } \in \mathbf { A } } \{ G ( \Delta ( \mathbf { t }, \hat { \mathbf { F } } _ { \mathbf {}}}}}\end{array}
+\end{equation}
+
+
+since dgyis anon increasingfunction of the squared Mahalanobis distance
+of the point t. We can rephrase Proposition 2.in ?,that states the consistency property of the filter as follows. Consider a random vector Y =
+(X1,...,Xa) \textasciitilde{} Fo and a pair of location and scatter estimators Ton and
+Con such that Ton    o =  (Fo) E Rd and Con   Zo =  (Fo) a.s..
+Consider any continuous distribution function G and let H, be the empirical
+distribution function of  ; and Ho(t) = Pr((Yo)t -1(Yo)   t). If
+the distributionG satisfies:
+
+
+\begin{equation}
+\operatorname* { m a x } _ \mathbf { t \in A } \{ d _ { G Y } ( \mathbf { t }, \mathbf { F _ { 0 } }, \mathbf { H _ { 0 } } ) - \mathbf { d _ { G Y } } ( \mathbf { t }, \mathbf { F _ { 0 } }, \mathbf { G } ) \} \leq \mathbf { 0 }, ~
+\end{equation}
+
+
+where A = \{t   Rd : dgy(t,Fo, G)   dgy(C,Fo, G)\}, where ( is any point
+in Rd such that  (C,Fo) = n and n = G-1( ) is a large quantile of G, then
+
+
+no0  a.s
+n
+
+
+where
+
+
+no = [ndn]
+
+
+Proof. Note that
+
+
+dgy(t,Fn, Hn) -dgy(t,Fn, G) = G( (t, Ton, Con)) -Hn( (t, Ton, Con))
+and condition in equation O is equivalent to
+
+
+\begin{equation}
+\operatorname* { m a x } _ { \Delta \geq \eta } \{ G ( \Delta ) - H _ { 0 } ( \Delta ) \} \leq 0,
+\end{equation}
+
+
+The rest of the proof is the same as in Proposition 2. of ?
+
+
+Figure shows the bivariate scatter plot of WTS versus HTLD, HTLD
+versusWSBCandWSBCversusSURwheretheGY-UBFandHS-UBF
+filters are applied, respectively. The bivariate observations with at least
+one component flagged as outlier are in blue, and outliers detected by the
+bivariate filter are in orange. We see that the HS-UBF identifies less outliers
+withrespecttotheGY-UBF.
+
+\end{document}

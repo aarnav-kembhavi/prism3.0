@@ -30,8 +30,9 @@ from ultralytics import YOLO
 from normalization import normalize_image_pil
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
-    run_table_extraction, get_math_latencies, get_math_batch_latencies,
-    get_text_latencies, get_table_latencies, get_text_batch_latencies
+    run_table_extraction,
+    get_math_latencies, get_math_batch_latencies,
+    get_text_latencies, get_table_latencies, get_text_batch_latencies,
 )
 from layout_utils import (
     apply_semantic_reading_order, sort_detections_geometric,
@@ -126,10 +127,7 @@ def route_and_extract(
 ):
     """
     Route detections to specialist models and return wrapped LaTeX parts.
-
-    Returns (body_parts, list_indices, figure_counter, math_counter) so that
-    callers in two-column mode can chain both counters and avoid filename
-    collisions across column calls.
+    Returns (body_parts, list_indices, figure_counter, math_counter).
     """
     os.makedirs(figures_dir, exist_ok=True)
     body_parts     = []
@@ -137,14 +135,13 @@ def route_and_extract(
     figure_counter = figure_start
     math_counter   = [math_start]
 
-    # Batch text and math for efficiency
     text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
     math_indices = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
 
     if text_indices:
         text_crops = [detections[i]["crop"] for i in text_indices]
-        raw_texts  = run_text_ocr_batched(text_crops, is_screenshot=is_screenshot)
-        for idx, raw in zip(text_indices, raw_texts):
+        text_texts = run_text_ocr_batched(text_crops, is_screenshot=is_screenshot)
+        for idx, raw in zip(text_indices, text_texts):
             detections[idx]["raw_content"] = raw
 
     if math_indices:
@@ -153,7 +150,6 @@ def route_and_extract(
         for idx, raw in zip(math_indices, raw_maths):
             detections[idx]["raw_content"] = raw
 
-    # Sequential wrap + table/picture processing
     for i, det in enumerate(detections):
         class_name = det["class_name"]
         crop       = det["crop"]

@@ -1,0 +1,66 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+At each simulation step t and for each t,the path length reflected by
+the t-th scatter l)) = [(c,y) - (0,0)| + [( ,y)- (x,yt)| and its derivative with respect to time )2P are computed.The corresponding transmis-
+()
+fDcaused by the t-th scatterer following the rules o()=/co, )
+alt fcarrier / co, respectively, as welld(c)
+(c)
+as the received signal amplitude a? computed using the free-space propagation
+model at()= co/(4  fcarrerl) (cf.) are recorded for each scatterer t. (Here,
+Corefers to the speed of light in vacuum. In a setting without line of sight,
+using linearisation of the phase offset with respect to the Doppler frequency,
+the time-variantchannel impulseresponse evaluated at time t+for each simulationsteptandsmallresultingfromthemultipathtransmissionsimulated
+using the aboveparameterscanbe approximatedby
+
+
+\begin{equation}
+h ( \cdot, t + \tau ) = \frac { 1 } { \sqrt { \sum _ { \iota = 0 } ^ { 2 5 5 } ( a _ { t } ^ { ( \iota ) } ) ^ { 2 } } } \sum _ { \iota = 0 } ^ { 2 5 5 } a _ { t } ^ { ( \iota ) } \exp ( i \theta _ { t } ^ { ( \iota ) } + i 2 \pi f _ { D _ { t } } ^ { ( \iota ) } \tau ) \delta _ { \sigma _ { t } ^ { ( \iota ) } } ( \cdot ).
+\end{equation}
+
+
+For any signal \{S o<r<r being transmitted in the block beginning at time
+stept throughthe simulatedchannel,this considerationleadstoareceived
+signal \{R\}o<<T in the form of
+
+
+\begin{equation}
+\begin{array} { r l } { \mathsf { R } _ { \tau } = ( h ( \cdot, t + \tau ) * S ) ( \tau ) } \\ & { ~ }\end{array}
+\end{equation}
+
+
+This parametrisation is used in and delivers a realistic approximation of realworld scenariosfor numbersof summands greater than100.In order to allow
+continuous time delays tobe applied to discretetime signals,theimpulsefunction 8()(  in Ois convolved with a windowed sinc(  function scaled with
+a given bandwidth. Overall, the channel transmission including pulse shaping
+with bandwidth restricted to half the sample rate
+and additive noise is approximated by replacing the 0()() in O by
+sin( ( /2))/( ( /2))1(-8,8) and adding independent and identically distributed
+Gaussian white noise\textasciitilde{}N(O,o )to the transmitted signalwithpowero resulting in a signal-to-noise ratio of 12dB.
+
+
+\subsection*{1 Channel Estimation}
+
+
+The time-variant channel transfer functions Fh(-,t + ) for t = 0,...,4095T
+and O   T < T simulated in Section are approximated by a time series of
+block wise time-invariant transfer functions \{Fht\}t=0..,4095 based on which
+theestimationandpredictionofthechanneltransmissionareconducted.For
+eachtransmissionblockbeginningattimestept,inordertoestimatethe
+corresponding channel transfer function Fh',a complex-valued(white noise)
+test signal \{St\}=.,N-1 whose Fourier transform has constant amplitude
+andrandomphases\textasciitilde{}U(- , )isgeneratedandthentransmittedthroughthe
+channel simulated in Section resulting in a received signal \{Rt \}-=o..,N-1.
+
+% [footer: 1]
+\end{document}

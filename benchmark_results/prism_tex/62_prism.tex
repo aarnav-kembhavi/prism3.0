@@ -1,0 +1,55 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+0.11Average direct effect under d = 1 on compliers
+In the following, we show that
+
+
+\begin{equation}
+\begin{array} { r } { \theta _ { 1 } ^ { c } ( 1 ) = E [ Y _ { 1 } ( 1, 1 ) - Y _ { 1 } ( 0, 1 ) | \tau = c ], } \\ { = \frac { p _ { 1 | 1 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } E [ Y _ { 1 } - Q _ { 0 1 } ( Y _ { 0 } ) | D = 1, M = 1 ] } \\ { - \frac { p _ { 1 | 0 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } E [ Q _ { 1 1 } ( Y}\end{array}
+\end{equation}
+
+
+Plugging O in O, we obtain
+
+
+\begin{equation}
+\begin{array} { r } { E [ Y _ { 1 } | D = 1, M = 1 ] = \frac { p _ { a } } { p _ { a } + p _ { c } } E [ Q _ { 1 1 } ( Y _ { 0 } ) | D = 0, M = 1 ] } \\ { + \frac { p _ { c } } { p _ { a } + p _ { c } } E [ Y _ { 1 } ( 1, 1 ) | \tau = c ]. } \end{array}
+\end{equation}
+
+
+This allows identifying
+
+
+E[Yi(1,1)| = c = ;
+P10P1|1 - P1|0-E[Q1(Yo)|ID = 0, M = 1]. (1)
+P1|1p10
+
+
+From () we have E[Yi(0, 1)|D = 1, M = 1] = E[Qoi(Yo)|D = 1, M = 1]. Applying
+the law of iterative expectations,gives
+
+
+\begin{equation}
+\begin{array} { r } { E [ Y _ { 1 } ( 0, 1 ) | D = 1, M = 1 ] = \frac { p _ { a } } { p _ { a } + p _ { c } } E [ Y _ { 1 } ( 0, 1 ) | D = 1, M = 1, \tau = a ] } \\ { + \frac { p _ { c } } { p _ { a } + p _ { c } } E [ Y _ { 1 } ( 0, 1 ) | D = 1, M = 1, \tau = c ], } \\ { \xrightarrow { A? } \frac { p _ { a } } { p _ { a } + p _}}\end{array}
+\end{equation}
+
+
+After some rearrangements and using O, we obtain
+
+
+\begin{equation}
+E [ Y _ { 1 } ( 0, 1 ) | \tau = c ] = \frac { p _ { a } + p _ { c } } { p _ { c } } E [ Q _ { 0 1 } ( Y _ { 0 } ) | D = 1, M = 1 ] - \frac { p _ { a } } { p _ { c } } E [ Y _ { 1 } | D = 0, M = 1 ].
+\end{equation}
+
+\end{document}

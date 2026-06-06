@@ -74,7 +74,14 @@ def _get_rapidocr():
     global _rapid_ocr
     if _rapid_ocr is None:
         from rapidocr_onnxruntime import RapidOCR
-        _rapid_ocr = RapidOCR()
+        # Switch Det from limit_type='min' (upscales short dim to 736)
+        # to 'max' (caps long dim at 1280). For our wide stitched images
+        # the 'min' mode was upscaling tall stitched images from ~640→736
+        # wide, making DBNet process 1.7M+ pixels instead of ~0.5-1M.
+        _rapid_ocr = RapidOCR(
+            det_limit_type='max',
+            det_limit_side_len=1280,
+        )
     return _rapid_ocr
 
 
@@ -101,7 +108,7 @@ def _get_texo():
         from transformers import AutoTokenizer
         MODEL_PATH = os.path.join(ROOT_DIR, "Texo", "model")
         _texo_tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-        _texo_model     = FormulaNet.from_pretrained(MODEL_PATH)
+        _texo_model = FormulaNet.from_pretrained(MODEL_PATH)
         _texo_model.eval().to(_device)
         _texo_processor = EvalMERImageProcessor(image_size={'width': 384, 'height': 384})
     return _texo_model, _texo_tokenizer, _texo_processor
@@ -123,18 +130,13 @@ def _preprocess_crop_for_ocr(crop: Image.Image, is_screenshot: bool = False) -> 
     """
     Sharpen, contrast-boost, and optionally binarize a crop before RapidOCR.
 
-    Steps:
-      1. Convert to greyscale, measure RMS contrast.
-      2. If contrast is low (< 40), apply autocontrast to recover faded ink.
-      3. Apply unsharp-mask to restore crisp letter edges.
-      4. Phone photos only — adaptive binarization when contrast is still low
-         after step 2/3 (RMS < 40).
-      5. Return as RGB (RapidOCR expects colour input).
-
-    The binarization (step 4) uses OpenCV adaptiveThreshold with a Gaussian
-    neighbourhood (block=25, C=12) to handle illumination gradients robustly.
-    It is skipped for screenshots (already clean) and high-contrast phone crops.
+    Screenshots skip all enhancement — they are already clean and high-contrast.
+    Phone photos get: autocontrast (if low contrast) → unsharp mask → adaptive
+    binarization (if still low contrast after sharpening).
     """
+    if is_screenshot:
+        return crop.convert("RGB")
+
     import cv2
     grey = crop.convert("L")
     arr  = np.array(grey, dtype=np.float32)
@@ -142,30 +144,25 @@ def _preprocess_crop_for_ocr(crop: Image.Image, is_screenshot: bool = False) -> 
 
     result = crop.convert("RGB")
 
-    # Step 2: auto-contrast on low-contrast crops
     if rms_contrast < 40:
         grey_eq = ImageOps.autocontrast(grey, cutoff=1)
         result  = Image.merge("RGB", [grey_eq, grey_eq, grey_eq])
         grey    = grey_eq
 
-    # Step 3: unsharp mask
     result = result.filter(ImageFilter.UnsharpMask(radius=1.5, percent=180, threshold=3))
 
-    # Step 4: adaptive binarization for low-contrast phone photos
-    if not is_screenshot:
-        grey_sharp = result.convert("L")
-        rms_after  = float(np.array(grey_sharp, dtype=np.float32).std())
-
-        if rms_after < 40:
-            grey_np   = np.array(grey_sharp, dtype=np.uint8)
-            binary_np = cv2.adaptiveThreshold(
-                grey_np, 255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY,
-                blockSize=25,
-                C=12,
-            )
-            result = Image.fromarray(binary_np).convert("RGB")
+    grey_sharp = result.convert("L")
+    rms_after  = float(np.array(grey_sharp, dtype=np.float32).std())
+    if rms_after < 40:
+        grey_np   = np.array(grey_sharp, dtype=np.uint8)
+        binary_np = cv2.adaptiveThreshold(
+            grey_np, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            blockSize=25,
+            C=12,
+        )
+        result = Image.fromarray(binary_np).convert("RGB")
 
     return result
 
@@ -250,11 +247,54 @@ def _reconstruct_lines(res: list) -> str:
     return '\n'.join(output_lines)
 
 
+def _stitch_and_run(engine, processed_nps: list) -> list[list]:
+    """
+    Stitch processed numpy crops into one tall image and run one DBNet pass.
+    Returns per-crop list of matching OCR entries (already y-shifted to local coords).
+    """
+    SEP   = 20
+    max_w = max(p.shape[1] for p in processed_nps)
+    strips    = []
+    y_ranges  = []
+    y = 0
+    for p in processed_nps:
+        h, w = p.shape[:2]
+        canvas = np.full((h, max_w, 3), 255, dtype=np.uint8)
+        canvas[:h, :w] = p
+        y_ranges.append((y, y + h))
+        strips.append(canvas)
+        y += h + SEP
+        strips.append(np.full((SEP, max_w, 3), 255, dtype=np.uint8))
+    stitched = np.vstack(strips[:-1])
+
+    res, _ = engine(stitched)
+    per_crop = [[] for _ in processed_nps]
+    if res:
+        for entry in res:
+            bbox_poly, text, conf = entry[0], entry[1], entry[2]
+            try:
+                cy = sum(pt[1] for pt in bbox_poly) / len(bbox_poly)
+            except (TypeError, IndexError):
+                cy = (bbox_poly[1] + bbox_poly[3]) / 2
+            for crop_idx, (y_start, y_end) in enumerate(y_ranges):
+                if y_start <= cy < y_end:
+                    adj = [[pt[0], pt[1] - y_start] for pt in bbox_poly]
+                    per_crop[crop_idx].append([adj, text, conf])
+                    break
+    return per_crop
+
+
 def run_text_ocr_batched(
     crops: list[Image.Image],
     chunk_size: int = 10,
     is_screenshot: bool = False,
 ) -> list[str]:
+    """
+    Stitch crops into chunks of chunk_size, one DBNet pass per chunk.
+    Chunking keeps stitched image height bounded so DBNet doesn't process
+    an excessively tall image (det_limit_side_len=1280 max-type already
+    helps, but chunking gives a second layer of protection).
+    """
     global text_batch_latencies
     if not crops:
         return []
@@ -262,40 +302,41 @@ def run_text_ocr_batched(
         engine        = _get_rapidocr()
         final_results = [""] * len(crops)
 
-        t_start = time.perf_counter()
+        # Screenshots are clean — smaller quiet zone and tighter size cap
+        border   = 10 if is_screenshot else 30
+        max_side = 960 if is_screenshot else 1500
 
         def process_single_crop(crop):
             sharpened = _preprocess_crop_for_ocr(crop, is_screenshot=is_screenshot)
-
-            # Quiet Zone: white border helps DBNet segment edge characters
-            padded = ImageOps.expand(sharpened, border=30, fill='white')
-
-            # Clamp oversized crops to ≤1500px (no min upscale — upscaling
-            # many small crops simultaneously spikes RAM by 10x+)
-            max_dim = max(padded.width, padded.height)
-            if max_dim > 1500:
-                scale = 1500 / max_dim
+            padded    = ImageOps.expand(sharpened, border=border, fill='white')
+            max_dim   = max(padded.width, padded.height)
+            if max_dim > max_side:
+                scale  = max_side / max_dim
                 padded = padded.resize(
                     (int(padded.width * scale), int(padded.height * scale)),
                     Image.Resampling.LANCZOS,
                 )
             return np.array(padded.convert("RGB"))
 
-        # Sequential preprocessing — parallel holds all enlarged arrays in RAM simultaneously
         processed_nps = [process_single_crop(crop) for crop in crops]
 
-        # Sequential OCR calls (RapidOCR ONNX runtime is not thread-safe)
-        for i, img_np in enumerate(processed_nps):
-            res, _ = engine(img_np)
-            if res:
-                text = _reconstruct_lines(res)
-                text = _filter_nonascii(text)
-                final_results[i] = escape_latex_chars(text)
+        t_start = time.perf_counter()
+
+        # Process in chunks to keep each stitched image height manageable.
+        for chunk_start in range(0, len(crops), chunk_size):
+            chunk_nps = processed_nps[chunk_start:chunk_start + chunk_size]
+            per_crop  = _stitch_and_run(engine, chunk_nps)
+            for ci, matches in enumerate(per_crop):
+                if matches:
+                    txt = _reconstruct_lines(matches)
+                    txt = _filter_nonascii(txt)
+                    final_results[chunk_start + ci] = escape_latex_chars(txt)
 
         t_end      = time.perf_counter()
         latency_ms = (t_end - t_start) * 1000
         text_batch_latencies.append(latency_ms)
-        print(f"    [text] RapidOCR {len(crops)} regions: {latency_ms:.2f} ms")
+        n_chunks = (len(crops) + chunk_size - 1) // chunk_size
+        print(f"    [text] RapidOCR {len(crops)} regions ({n_chunks} chunk(s)): {latency_ms:.2f} ms")
 
         return final_results
     except Exception as e:
@@ -307,12 +348,66 @@ def run_text_ocr(crop: Image.Image, is_screenshot: bool = False) -> str:
     return run_text_ocr_batched([crop], is_screenshot=is_screenshot)[0]
 
 
+def run_text_ocr_full_page(
+    image: Image.Image,
+    text_detections: list,
+    is_screenshot: bool = False,
+) -> list[str]:
+    """
+    Run RapidOCR once on the full page, then assign each word to its enclosing
+    YOLO detection bbox by center-point lookup.
+
+    One full-page inference call instead of N per-crop calls — much faster when
+    there are many text regions (e.g. 14 crops → 1 call).
+    """
+    if not text_detections:
+        return []
+
+    engine = _get_rapidocr()
+
+    img = image.convert("RGB")
+    # Screenshots are clean; phone photos get a light contrast boost
+    if not is_screenshot:
+        img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=180, threshold=3))
+    img_np = np.array(img)
+
+    t_start = time.perf_counter()
+    res, _ = engine(img_np)
+    latency_ms = (time.perf_counter() - t_start) * 1000
+    text_batch_latencies.append(latency_ms)
+    print(f"    [text] RapidOCR full-page ({len(text_detections)} regions): {latency_ms:.2f} ms")
+
+    if not res:
+        return [""] * len(text_detections)
+
+    results = [""] * len(text_detections)
+    for det_idx, det in enumerate(text_detections):
+        x1, y1, x2, y2 = det["bbox"]
+        matching = []
+        for entry in res:
+            bbox_poly, text, conf = entry[0], entry[1], entry[2]
+            try:
+                cx = sum(pt[0] for pt in bbox_poly) / len(bbox_poly)
+                cy = sum(pt[1] for pt in bbox_poly) / len(bbox_poly)
+            except (TypeError, IndexError):
+                cx = (bbox_poly[0] + bbox_poly[2]) / 2
+                cy = (bbox_poly[1] + bbox_poly[3]) / 2
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                matching.append(entry)
+        if matching:
+            text_out = _reconstruct_lines(matching)
+            text_out = _filter_nonascii(text_out)
+            results[det_idx] = escape_latex_chars(text_out)
+
+    return results
+
+
 # ────────────────────────────────────────────────────────────────
 # MATH & TABLES
 # ────────────────────────────────────────────────────────────────
 
 # Maximum tokens Texo may generate per formula.
-_TEXO_MAX_NEW_TOKENS  = 300
+_TEXO_MAX_NEW_TOKENS  = 150
 _TEXO_REPEAT_PENALTY  = 1.15
 
 # Repeated filler sequences Texo hallucinates on bad crops (e.g. 200 tildes)

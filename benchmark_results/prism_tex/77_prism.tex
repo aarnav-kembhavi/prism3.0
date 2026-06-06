@@ -1,0 +1,84 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+\noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
+
+P1 Affine invariance: d(x;F) = d(Ax + b;FA,b);
+
+
+P2 Maximality at center: if F is  symmetric  around   then d(x; F)  
+d(p; F) for all x; for a more detailed discussion on symmetry see ?.
+
+
+P3 Monotonicity: if O holds, then
+
+
+d(x; F)   d(  + (x - ); F)   E [0, 1] ;
+
+
+O  (4 :x)p   o I x  :oz uoeoddy d
+
+
+\subsection*{1 Gervini-Yohai depth}
+
+
+Here we want to show that the Gervini-Yohai depth, defined as dgy(t, F, G) =
+1 - G( (t,  (F),  (F))), is a proper statistical depth function, i.e., it satisfies the four properties introduced above.
+
+
+1. Affine invariance: it follows directly from the affine invariance property
+of the Mahalanobis distance;
+
+
+2. Maximality at center: if F is elliptically symmetric around p(F),
+
+
+dGy( (F), F, G) = 1 - G( ( (F),  (F),  (F))) = 1 - G(0)
+
+
+For any t    (F) we have
+
+
+(t,  (F), (F)) > 0
+
+
+G( (t,  (F),  (F)))   G(0)
+
+
+- G( (t,  (F),  (F)))   1 - G(0)
+
+
+dGy(t,F, G)   dgy( (F),F, G),
+
+
+when G is strictly monotone then strict inequality holds, and  (F) is
+the unique maximizer of the Gervini-Yohai depth.
+
+
+3. Monotonicity:
+
+
+((()-) )-()(()-) ) =(() () (()-)+())
+=  (t- (F))+ (F)-1(t- (F))
+=    (t, (F), (F))
+  (t, (F), (F))
+
+
+Then dGr( (F) + (t -  (F)),F,G)   dgy(t,F, G).
+
+
+4. Approaching zero: if Il t II  0o we have that  (t, (F), (F))    0
+and consequently G( (t, (F), (F)))   1. Then
+
+
+dGy(t, F, G) = 1 - G( (t,  (F),  (F)))   0
+
+\end{document}
