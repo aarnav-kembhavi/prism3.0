@@ -67,6 +67,8 @@ _texo_model      = None
 _texo_tokenizer  = None
 _texo_processor  = None
 _table_solver    = None
+_yolo_model      = None
+_yolo_model_path = None
 _device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -74,14 +76,29 @@ def _get_rapidocr():
     global _rapid_ocr
     if _rapid_ocr is None:
         from rapidocr_onnxruntime import RapidOCR
-        # Switch Det from limit_type='min' (upscales short dim to 736)
-        # to 'max' (caps long dim at 1280). For our wide stitched images
-        # the 'min' mode was upscaling tall stitched images from ~640→736
-        # wide, making DBNet process 1.7M+ pixels instead of ~0.5-1M.
-        _rapid_ocr = RapidOCR(
+        import importlib.util
+
+        kwargs = dict(
             det_limit_type='max',
             det_limit_side_len=1280,
         )
+
+        # Use English PP-OCRv4 rec model if available — smaller char set,
+        # better accuracy on English-only academic text than the default
+        # Chinese-dominant model.
+        en_rec  = os.path.join(ROOT_DIR, 'en_PP-OCRv4_rec.onnx')
+        paddle_spec = importlib.util.find_spec('paddleocr')
+        if os.path.exists(en_rec) and paddle_spec is not None:
+            import paddleocr as _poc
+            en_dict = os.path.join(
+                os.path.dirname(_poc.__file__), 'ppocr', 'utils', 'en_dict.txt'
+            )
+            if os.path.exists(en_dict):
+                kwargs['rec_model_path'] = en_rec
+                kwargs['rec_keys_path']  = en_dict
+                print('[*] RapidOCR: using English PP-OCRv4 rec model')
+
+        _rapid_ocr = RapidOCR(**kwargs)
     return _rapid_ocr
 
 
@@ -114,12 +131,114 @@ def _get_texo():
     return _texo_model, _texo_tokenizer, _texo_processor
 
 
-def _get_table_solver():
-    global _table_solver
-    if _table_solver is None:
-        from solver import TextAndTableSolver
-        _table_solver = TextAndTableSolver()
-    return _table_solver
+def get_yolo_model(model_path: str):
+    global _yolo_model, _yolo_model_path
+    if _yolo_model is None or _yolo_model_path != model_path:
+        from ultralytics import YOLO
+        print(f"[*] Loading YOLO model: {model_path}")
+        try:
+            _yolo_model = YOLO(model_path, task='detect')
+        except Exception as e:
+            print(f"[!] Falling back to .pt: {e}")
+            _yolo_model = YOLO("yolov11n-doclaynet.pt")
+        _yolo_model_path = model_path
+    return _yolo_model
+
+
+def unload_texo():
+    global _texo_model, _texo_tokenizer, _texo_processor
+    if _texo_model is not None:
+        del _texo_model, _texo_tokenizer, _texo_processor
+        _texo_model     = None
+        _texo_tokenizer = None
+        _texo_processor = None
+        import gc as _gc
+        _gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("[*] Texo unloaded")
+
+
+def _table_heuristic(tokens: list, img_w: int) -> str:
+    """Coordinate-based table grid builder using RapidOCR token bboxes."""
+    # 1. Group rows by Y centroid proximity
+    tokens.sort(key=lambda t: t['cy'])
+    rows = []
+    current_row: list = []
+    current_y = None
+    for tok in tokens:
+        if current_y is None:
+            current_y = tok['cy']
+            current_row.append(tok)
+        elif abs(tok['cy'] - current_y) < max(tok['h'], 10) * 0.6:
+            current_row.append(tok)
+            current_y = sum(t['cy'] for t in current_row) / len(current_row)
+        else:
+            rows.append(current_row)
+            current_row = [tok]
+            current_y = tok['cy']
+    if current_row:
+        rows.append(current_row)
+
+    # 2. X-axis projection to find column boundary gaps
+    proj = np.zeros(img_w, dtype=int)
+    for tok in tokens:
+        if tok['w'] > 0.4 * img_w:
+            continue
+        proj[max(0, int(tok['x1'])):min(img_w, int(tok['x2']))] += 1
+
+    in_col = False
+    col_segments: list = []
+    start = 0
+    for i in range(img_w):
+        if proj[i] > 0 and not in_col:
+            in_col = True
+            start = i
+        elif proj[i] == 0 and in_col:
+            in_col = False
+            col_segments.append((start, i))
+    if in_col:
+        col_segments.append((start, img_w))
+    if not col_segments:
+        col_segments = [(0, img_w)]
+
+    # 3. Assign tokens to column slots, build grid
+    grid = []
+    for row_tokens in rows:
+        row_cells: list = [[] for _ in range(len(col_segments))]
+        for tok in row_tokens:
+            best_col, max_overlap, min_dist = 0, -1, float('inf')
+            for i, (cs, ce) in enumerate(col_segments):
+                overlap = max(0, min(tok['x2'], ce) - max(tok['x1'], cs))
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    best_col = i
+                dist = (0 if cs <= tok['cx'] <= ce
+                        else min(abs(tok['cx'] - cs), abs(tok['cx'] - ce)))
+                if overlap == 0 and dist < min_dist and max_overlap <= 0:
+                    min_dist = dist
+                    best_col = i
+            row_cells[best_col].append(tok)
+
+        final_row = []
+        for cell_tokens in row_cells:
+            cell_tokens.sort(key=lambda t: t['x1'])
+            final_row.append(escape_latex_chars(" ".join(t['text'] for t in cell_tokens)))
+        if any(c.strip() for c in final_row):
+            grid.append(final_row)
+
+    # 4. Emit booktabs table
+    if not grid:
+        return ""
+    col_count = max(len(row) for row in grid)
+    lines = [f"\\begin{{tabular}}{{{'l' * col_count}}}", "\\toprule"]
+    for i, row in enumerate(grid):
+        padded = row + [""] * (col_count - len(row))
+        lines.append(" & ".join(padded) + " \\\\")
+        if i == 0:
+            lines.append("\\midrule")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    return "\n".join(lines)
 
 
 # ────────────────────────────────────────────────────────────────
@@ -178,8 +297,6 @@ def _reconstruct_lines(res: list) -> str:
     gaps indicate a genuine word boundary, and joins lines with newlines.
 
     SPACE_GAP_FACTOR = 0.35: insert space when gap >= 35% of median char width.
-      Slightly lower than the previous 0.45 to catch tighter inter-word gaps
-      on compressed or small-font crops without introducing spurious splits.
     LINE_MERGE_FRAC = 0.6: detections within 60% of min-height of each other
       belong to the same line.
     """
@@ -548,16 +665,48 @@ def run_math_recognition(
 
 
 def run_table_extraction(crop: Image.Image) -> str:
+    """Extract table structure using RapidOCR (already-warm) + coordinate heuristic.
+
+    Replaces EasyOCR + PaddleOCR TextAndTableSolver — eliminates 20-40s cold load.
+    Same heuristic grid logic, zero extra model weight.
+    """
     global table_latencies
     try:
         t_start = time.perf_counter()
-        solver  = _get_table_solver()
-        region  = {"type": "Table", "image": np.array(crop.convert("RGB")), "region_id": "0"}
-        result  = solver.solve(region)
+        engine  = _get_rapidocr()
+        img_np  = np.array(crop.convert("RGB"))
+        img_w   = img_np.shape[1]
+
+        result, _ = engine(img_np)
+
+        tokens = []
+        if result:
+            for entry in result:
+                try:
+                    bbox_poly, text, _conf = entry[0], entry[1], entry[2]
+                    text = text.strip()
+                    if not text or re.match(r'^[\-\_\=\.]+$', text):
+                        continue
+                    xs = [pt[0] for pt in bbox_poly]
+                    ys = [pt[1] for pt in bbox_poly]
+                    x1, x2 = min(xs), max(xs)
+                    y1, y2 = min(ys), max(ys)
+                    if (x2 - x1) > 0.8 * img_w:
+                        continue
+                    tokens.append({
+                        'text': text,
+                        'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2,
+                        'cx': (x1 + x2) / 2, 'cy': (y1 + y2) / 2,
+                        'h': y2 - y1, 'w': x2 - x1,
+                    })
+                except (TypeError, IndexError, ValueError):
+                    continue
+
+        latex = _table_heuristic(tokens, img_w) if tokens else ""
         latency_ms = (time.perf_counter() - t_start) * 1000
         table_latencies.append(latency_ms)
-        print(f"    [table] Table Solver: {latency_ms:.2f} ms")
-        return result.get("latex", "")
+        print(f"    [table] Table (RapidOCR): {latency_ms:.2f} ms")
+        return latex
     except Exception as e:
-        print(f"    [table] Table Solver failed: {e}")
+        print(f"    [table] Table extraction failed: {e}")
         return ""

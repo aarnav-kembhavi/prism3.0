@@ -89,9 +89,20 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         print("  [norm] Step 6: Contrast normalization (CLAHE)")
         img = normalize_contrast(img)
 
-        print("  [norm] Step 7: DPI resize")
-        img = _smart_dpi_resize(img, target_dpi, source_dpi)
-        fidelity_img = _smart_dpi_resize(fidelity_img, target_dpi, source_dpi)
+        # Screenshots need no DPI upscale — they're already clean, and our
+        # OCR backend (DBNet) caps internally at 1280px anyway. Upscaling
+        # 700px → 1815px wastes ~6x RAM and YOLO/crop processing time.
+        # Only downscale if the screenshot is unusually large (>1280px).
+        SCREENSHOT_MAX_SIDE = 1280
+        h, w = img.shape[:2]
+        if max(h, w) > SCREENSHOT_MAX_SIDE:
+            scale    = SCREENSHOT_MAX_SIDE / max(h, w)
+            new_w, new_h = int(w * scale), int(h * scale)
+            img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_AREA)
+            fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            print(f"  [norm] Screenshot: downsampled to {new_w}x{new_h}")
+        else:
+            print(f"  [norm] Screenshot: keeping original {w}x{h} (no upscale)")
 
     else:
         print("  [norm] Phone photo path: full pipeline")

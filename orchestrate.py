@@ -25,12 +25,11 @@ import torch
 import numpy as np
 from pathlib import Path
 from PIL import Image
-from ultralytics import YOLO
 
 from normalization import normalize_image_pil
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
-    run_table_extraction,
+    run_table_extraction, get_yolo_model, unload_texo,
     get_math_latencies, get_math_batch_latencies,
     get_text_latencies, get_table_latencies, get_text_batch_latencies,
 )
@@ -58,15 +57,6 @@ IMAGE_CLASSES  = {"Picture"}
 LIST_ITEM_CLASS = "List-item"
 
 
-def load_model(model_path: str) -> YOLO:
-    print(f"[*] Loading YOLO model: {model_path}")
-    try:
-        model = YOLO(model_path, task='detect')
-    except Exception as e:
-        print(f"[!] Falling back to .pt: {e}")
-        model = YOLO("yolov11n-doclaynet.pt")
-    return model
-
 
 def _is_likely_logo(crop_pil: Image.Image) -> bool:
     arr      = np.array(crop_pil.convert("RGB"), dtype=np.float32)
@@ -85,7 +75,7 @@ def _adjust_figure_paths(parts: list[str]) -> list[str]:
     ]
 
 
-def run_detection(model: YOLO, image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
+def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
     results    = model(image_path, verbose=False)
     detections = []
     result     = results[0]
@@ -219,17 +209,11 @@ def main():
 
     # ── Stage 2: Layout Detection ────────────────────────────────
     t_stage2_start = time.perf_counter()
-    model      = load_model(YOLO_MODEL_PATH)
+    model      = get_yolo_model(YOLO_MODEL_PATH)
     yolo_input = str(assets_dir / "normalized.png")
     detections = run_detection(model, image_norm, image_fidelity, yolo_input)
     img_width, img_height = image_norm.width, image_norm.height
     detections = postprocess_detections(detections, img_width, img_height)
-
-    print("[*] Unloading YOLO model to free RAM...")
-    del model
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     t_stage2_end  = time.perf_counter()
     mem_stage2_end = process.memory_info().rss / 1024 / 1024
 
@@ -333,6 +317,9 @@ def main():
         )
         body_parts = _adjust_figure_paths(body_parts)
         document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
+
+    # Texo only needed during math extraction — free it now to reclaim RAM
+    unload_texo()
 
     t_stage3_end  = time.perf_counter()
     mem_stage3_end = process.memory_info().rss / 1024 / 1024
