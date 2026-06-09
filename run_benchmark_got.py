@@ -25,7 +25,11 @@ from pathlib import Path
 import psutil
 import torch
 from PIL import Image
-from ultralytics import YOLO
+
+from sacrebleu.metrics import BLEU
+from rouge_score import rouge_scorer
+from evaluation.normalizer import normalize_latex, split_math_and_text
+from evaluation.eval import levenshtein_distance
 
 from normalization import normalize_image_pil
 from normalization.modality import CaptureModality
@@ -34,6 +38,7 @@ from models_interface import (
     run_text_ocr_full_page,
     run_math_recognition_batched,
     run_table_extraction,
+    get_yolo_model,
     get_math_batch_latencies,
     get_text_batch_latencies,
     get_table_latencies,
@@ -59,6 +64,8 @@ IMAGES_DIR      = Path("benchmark_results/temp_images")
 GT_DIR          = Path("pdf2latex_dataset/dataset")
 PRISM_TEX_DIR   = Path("benchmark_results/prism_tex")
 LATENCY_LOG     = Path("benchmark_results/latency_log_got.csv")
+RESULTS_CSV     = Path("benchmark_results/benchmark_results_got.csv")
+REPORT_PATH     = Path("benchmark_results/final_report_got.md")
 
 PRISM_TEX_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -68,9 +75,36 @@ image_paths = sorted(
 )
 print(f"[*] {len(image_paths)} pages to process (GT matched)\n")
 
+# ── Helper functions ───────────────────────────────────────────────────────────
+_bleu_scorer  = BLEU(effective_order=True)
+_rouge_scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
+
+def compute_metrics(pred_latex, gt_latex):
+    pred_norm = normalize_latex(pred_latex, remove_spaces=True)
+    gt_norm   = normalize_latex(gt_latex,   remove_spaces=True)
+    pred_word = normalize_latex(pred_latex, remove_spaces=False)
+    gt_word   = normalize_latex(gt_latex,   remove_spaces=False)
+    pred_math, pred_text = split_math_and_text(pred_norm)
+    gt_math,   gt_text   = split_math_and_text(gt_norm)
+    ed_total  = levenshtein_distance(pred_norm, gt_norm)
+    edr_total = 1.0 - (ed_total / len(gt_norm)) if gt_norm else 1.0
+    ed_math   = levenshtein_distance(pred_math, gt_math)
+    edr_math  = 1.0 - (ed_math / len(gt_math)) if gt_math else 1.0
+    ed_text   = levenshtein_distance(pred_text, gt_text)
+    edr_text  = 1.0 - (ed_text / len(gt_text)) if gt_text else 1.0
+    p_words, g_words = pred_word.split(), gt_word.split()
+    cer = (levenshtein_distance(pred_norm, gt_norm) / len(gt_norm) * 100) if gt_norm else 0
+    wer = (levenshtein_distance(p_words, g_words) / len(g_words) * 100) if g_words else 0
+    try:    bleu = _bleu_scorer.sentence_score(pred_word, [gt_word]).score
+    except: bleu = 0.0
+    try:    rouge = _rouge_scorer.score(gt_word, pred_word)['rougeL'].fmeasure * 100
+    except: rouge = 0.0
+    return dict(edr_total=edr_total, edr_math=edr_math, edr_text=edr_text,
+                cer=cer, wer=wer, bleu=bleu, rouge=rouge, gt_len=len(gt_norm))
+
 # ── Load YOLO once ─────────────────────────────────────────────────────────────
 print("[*] Loading YOLO model (kept warm for all pages)...")
-yolo_model = YOLO(YOLO_MODEL_PATH, task="detect")
+yolo_model = get_yolo_model(YOLO_MODEL_PATH)
 print("[*] YOLO ready.\n")
 
 process    = psutil.Process(os.getpid())
@@ -255,35 +289,96 @@ for idx, img_path in enumerate(image_paths, 1):
     shutil.copy(tex_out, dest)
     shutil.rmtree(out_dir, ignore_errors=True)
 
+    # Accuracy metrics
+    gt_path = GT_DIR / f"{page_id}_gt.tex"
+    with open(dest, "r", encoding="utf-8", errors="ignore") as f:
+        pred_latex = f.read()
+    with open(gt_path, "r", encoding="utf-8", errors="ignore") as f:
+        gt_latex = f.read()
+    acc = compute_metrics(pred_latex, gt_latex)
+
     row = {
-        "page_id":   page_id,
-        "total_sec": round(t_total,   2),
-        "norm_sec":  round(t_norm,    2),
-        "yolo_sec":  round(t_yolo,    2),
-        "rapid_sec": round(t_text,    2),
-        "math_sec":  round(t_math,    2),
-        "table_sec": round(t_table,   2),
-        "peak_mb":   round(peak_mb,   1),
+        "page_id":       page_id,
+        "total_sec":     round(t_total,   2),
+        "norm_sec":      round(t_norm,    2),
+        "yolo_sec":      round(t_yolo,    2),
+        "rapid_sec":     round(t_text,    2),
+        "math_sec":      round(t_math,    2),
+        "table_sec":     round(t_table,   2),
+        "peak_mb":       round(peak_mb,   1),
         "n_math_crops":  len(math_lats),
         "n_rapid_crops": len(text_lats),
+        **{k: round(v, 4) for k, v in acc.items()},
     }
     rows.append(row)
 
     print(
         f"  total={t_total:.1f}s  "
-        f"texo={t_math:.1f}s({len(math_lats)} eq)  "
-        f"rapid={t_text:.1f}s(1 full-page call)  "
+        f"got={t_math:.1f}s({len(math_lats)} eq)  "
+        f"rapid={t_text:.1f}s  "
+        f"EDR={acc['edr_total']:.3f}  math_EDR={acc['edr_math']:.3f}  "
         f"peak={peak_mb:.0f}MB"
     )
 
-# ── Write latency CSV ──────────────────────────────────────────────────────────
+# ── Write CSVs ─────────────────────────────────────────────────────────────────
+with open(RESULTS_CSV, "w", newline="", encoding="utf-8") as f:
+    w = csv.DictWriter(f, fieldnames=rows[0].keys())
+    w.writeheader()
+    w.writerows(rows)
+print(f"\n[OK] Results -> {RESULTS_CSV}  ({len(rows)} pages)")
+
 fields = ["page_id","total_sec","norm_sec","yolo_sec","rapid_sec",
           "math_sec","table_sec","peak_mb","n_math_crops","n_rapid_crops"]
 with open(LATENCY_LOG, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=fields)
     w.writeheader()
-    w.writerows(rows)
-print(f"\n[OK] Latency log -> {LATENCY_LOG}  ({len(rows)} pages)")
+    w.writerows([{k: r[k] for k in fields} for r in rows])
+print(f"[OK] Latency log -> {LATENCY_LOG}  ({len(rows)} pages)")
+
+# ── Accuracy summary ────────────────────────────────────────────────────────────
+avg_edr      = statistics.mean(r["edr_total"] for r in rows)
+avg_math_edr = statistics.mean(r["edr_math"]  for r in rows)
+avg_text_edr = statistics.mean(r["edr_text"]  for r in rows)
+avg_bleu     = statistics.mean(r["bleu"]       for r in rows)
+avg_rouge    = statistics.mean(r["rouge"]      for r in rows)
+avg_cer      = statistics.mean(r["cer"]        for r in rows)
+print(f"\n=== ACCURACY (GOT-OCR2, {len(rows)} pages) ===")
+print(f"  Overall EDR : {avg_edr:.3f}  ({avg_edr*100:.1f}%)")
+print(f"  Text EDR    : {avg_text_edr:.3f}  ({avg_text_edr*100:.1f}%)")
+print(f"  Math EDR    : {avg_math_edr:.3f}  ({avg_math_edr*100:.1f}%)")
+print(f"  BLEU-4      : {avg_bleu:.2f}")
+print(f"  ROUGE-L     : {avg_rouge:.2f}")
+print(f"  CER         : {avg_cer:.2f}%")
+
+report = f"""# PRISM + GOT-OCR2 Benchmark Report
+
+## Dataset Statistics
+- **Number of pages:** {len(rows)}
+
+## Accuracy vs Texo baseline
+
+| Metric | Texo (prev) | GOT-OCR2 | Change |
+|--------|------------|----------|--------|
+| Overall EDR | 62.9% | {avg_edr*100:.1f}% | {(avg_edr - 0.629)*100:+.1f}pp |
+| Math EDR | 22.2% | {avg_math_edr*100:.1f}% | {(avg_math_edr - 0.222)*100:+.1f}pp |
+| Text EDR | 69.8% | {avg_text_edr*100:.1f}% | {(avg_text_edr - 0.698)*100:+.1f}pp |
+| BLEU-4 | 43.5 | {avg_bleu:.1f} | {avg_bleu - 43.5:+.1f} |
+| ROUGE-L | 72.5% | {avg_rouge:.1f}% | {avg_rouge - 72.5:+.1f}pp |
+| CER | 37.1% | {avg_cer:.1f}% | {avg_cer - 37.1:+.1f}pp |
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Avg total latency | {statistics.mean(r["total_sec"] for r in rows):.2f}s |
+| Avg math latency | {statistics.mean(r["math_sec"] for r in rows):.2f}s |
+| Avg OCR latency | {statistics.mean(r["rapid_sec"] for r in rows):.2f}s |
+| Avg peak RAM | {statistics.mean(r["peak_mb"] for r in rows):.0f} MB |
+| Peak RAM (max) | {max(r["peak_mb"] for r in rows):.0f} MB |
+"""
+with open(REPORT_PATH, "w", encoding="utf-8") as f:
+    f.write(report)
+print(f"\n[OK] Report -> {REPORT_PATH}")
 
 # ── Print detailed latency table ───────────────────────────────────────────────
 totals    = [r["total_sec"] for r in rows]

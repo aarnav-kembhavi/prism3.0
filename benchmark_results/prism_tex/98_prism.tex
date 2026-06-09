@@ -11,10 +11,11 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-the expected values of FDR and FOR are the error rates e1 and eo in case the
-truthful answer being yes and no, respectively. Fig. displays the error rates eo
-and e1 as functions of 0. For   = 31,we compute eo   0,052 and e1   0,007,
-i.e.we have an error rate of 0,052 for rejecting and an error rate of 0,007 for
+such a splitting is referred to as modular In our Renyi-Ulam game variation,
+the expected values of FDR and FOR are the error rates and$e . { 1 }$ $c . { 0 }$ in case the
+truthful answer being yes and no, respectively. Fig. displays the error rates $\epsilon . { 0 }$
+andas functions of.For$e . { 1 }$ $\theta$ $\theta = 3 1$,we compute $c . { [ ] } \approx 0. 0 5 2$ and$c . { 1 } \approx 0. ( 1 )$
+i.e.  we have an error rate of O.052 for rejecting and an error rate of O.007 for
 confirming a base pair.
 
 
@@ -22,53 +23,59 @@ confirming a base pair.
 
 
 To quantify the uncertainty of an ensemble, we define the structural entropy
-of an ensemble,  , of an RNA sequence,x, as the Shannon entropy
+of an ensemble,. of an RNA sequence, x, as the Shannon entropy$[ \ell ]$
 
 
 \begin{equation}
-H ( \Omega ) = - \sum _ { s \in \Omega } p ( s ) \log _ { 2 } p ( s ),
+\begin{array} { c } { H ( \Omega ) = - \sum _ { s \in \Omega } p ( s ) \log _ { 2 } \mathfrak { p } ( s ), } \\ {.. \qquad \dots \qquad } \end{array}
 \end{equation}
 
 
-Proposition implies that a sample with small structural entropy contains a distinguished structure and a proof is given in . We refer to a sample having a
-distinguished structure of probability at least \ as being  -distinguished.
+Proposition implies that a sample with small structural entropy contains a dis
+tinguished structure and a proof is given in . We refer to a sample having a
+distinguished structure of probability at least $\lambda$ as being $\lambda$-distinguished.
 Next we quantify the reduction of a bit query on an ensemble. Recall that the
-associated r.v. Xi,j of a base pair (i,5) partitions the sample   into two disjoint
-sub-samples  o and  1, where  k = \{s E   : Xi,j(s) = k\} (k = 0,1). The
-conditional entropy, H( |Xi,j), represents the expected value of the entropies
-of the conditional distributions on  , averaged over the conditioning r.v. Xi,j
-and canbe computed by
+associated r.v. $X . { \mathfrak { r }, i }$ of a base pair $( i, j )$ partitions the sample $\mathbf { I }$ into two disjoint
+sub-samples $\Omega . { 0 }$ and $\mathfrak { I } . { 1 }$ where $\Omega . { k } ~ = ~ \{ s ~ \in ~ \Omega ~ : ~ X . { i, j } ( s ) ~ = ~ k \}$ $\star = 0, 1$).The
+conditional entropy, $H ( \mathfrak { \Omega } | X . { \bullet, j } )$represents the expected value of the entropies
+of the conditional distributions on,averaged over the conditioning r.v.$\Omega$ $x . { i, j }$
+and can be computed by
 
 
 \begin{equation}
-H ( \Omega [ X _ { i, j } ) = ( 1 - p _ { i, j } ) H ( \Omega _ { 0 } ) + p _ { i, j } H ( \Omega _ { 1 } ).
+H ( \Omega | X _ { i, j } ) = ( 1 - p _ { i, j } ) H ( \Omega _ { 0 } ) + p _ { i, j } H ( \Omega _ { 1 } ).
 \end{equation}
 
 
-Then the entropy reduction R( , X,i  of Xi, on   is the difference between
-the a priori Shannon entropy H( ) and the conditional entropy H( |Xi,),i.e.
-
-
-IP(s E *)=(1-eo)(1-e1)1,where lo and l1 denote the number of No-/Yesanswers to queried base pairs along the path, respectively. Fig. displays the
-distribution of l1. We observe that l1 has a mean around 5, i.e., the probabilities
-of queriedbase pairsbeing confirmedandbeing rejectedareroughly equal.
-For lo = l1 = 5,we have a theoretical estimate P(s E  *)  0,736. In Fig.
-we present that P(s E  *  decreases as the error rate eo increases, for fixed
-e1=0.01.
-
-
-\subsection*{1.Information theory}
-
-
-As the Boltzmann ensemble is a particular type of discrete probability spaces,
-the information-theoretic results on the ensemble trees will be stated in the more
-general setup. Let   = (S,P(S),p) be a discrete probability space consisting
-of the sample space S, its power set P(S) as the o-algebra and the probability
-measure p.The Shannon entropy of   is given by
+Then the entropy reduction$R ( \Omega. X . { i, j } )$ of $X . { i, j }$ on$\Omega$is the difference between
+the a priori Shannon entropy$H ( \Omega )$and the conditional entropy$H ( \Omega | X . { i, j } )$ i.e.
 
 
 \begin{equation}
-H ( \Omega ) = - \sum _ { s \in \mathfrak { S } } p ( s ) \log _ { 2 } p ( s ),
+\begin{array} { r } { R ( \Omega, X _ { i, j } ) = H ( \Omega ) - H ( \Omega | X _ { i, j } ). } \end{array}
+\end{equation}
+
+
+$\mathbb { P } ( s \in \Omega ^ { * } ) = ( 1e . { 0 } ) ^ { u } ( 1e . { 1 } ) ^ { t . { 1 } }$ where$t . { 0 }$ and $t . { 1 }$ denote the number of No-/Yesanswers to queried base pairs along the path, respectively. Fig. displays the
+distribution of$t . { 1 }$ We observe that$t . { 1 }$ has a mean around 5, i.e., the probabilities
+of queried base pairs being confirmed and being rejected are roughly equal.
+For $i . { 1 } ~ = ~ i . { 1 } ~ = ~ \mathfrak { U }$,we have a theoretical estimate $\mathbb { P } ( \mathfrak { s } ~ \in ~ \{ \mathfrak { l } ^ { * } \} ~ \approx ~ 0. 7 3 6$ In Fig
+we present that $\mathbb { P } ( \pmb { s } ~ \in ~ \Omega ^ { * }$| decreases as the error rate$\mathbf { \epsilon } . {. 0 } ^ { \prime }$ increases, for fixed
+$\mathfrak { e . { 1 } } = 0. 0 1$
+
+
+\subsection*{1. Information theory}
+
+
+As the Boltzmann ensemble is a particular type of discrete probability spaces,.
+the information-theoretic results on the ensemble trees will be stated in the more
+general setup.Let $\Omega ~ = ~ ( { \mathfrak { S } }, { \mathfrak { P } } ( { \mathfrak { S } } ), { \mathfrak { n } } )$ be a discrete probability space consisting
+of the sample space S, its power set$\mathbf { P } ( \mathfrak { S } )$ as the -algebra and the probability$^ \circ$
+measure$I ^ { \prime }$ The Shannon entropy of$\Im ~$is given by
+
+
+\begin{equation}
+H ( \Omega ) = - \sum _ { s \in S } p ( s ) \log _ { 2 } p ( s ),
 \end{equation}
 
 \end{document}

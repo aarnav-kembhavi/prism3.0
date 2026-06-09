@@ -29,7 +29,9 @@ from PIL import Image
 from normalization import normalize_image_pil
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
-    run_table_extraction, get_yolo_model, unload_texo,
+    run_page_got,
+    run_table_extraction, get_yolo_model,
+    unload_texo, unload_got,
     get_math_latencies, get_math_batch_latencies,
     get_text_latencies, get_table_latencies, get_text_batch_latencies,
 )
@@ -128,17 +130,19 @@ def route_and_extract(
     text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
     math_indices = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
 
-    if text_indices:
-        text_crops = [detections[i]["crop"] for i in text_indices]
-        text_texts = run_text_ocr_batched(text_crops, is_screenshot=is_screenshot)
-        for idx, raw in zip(text_indices, text_texts):
+    if math_indices:
+        crops = [detections[i]["crop"] for i in math_indices]
+        results = run_math_recognition_batched(crops, figures_dir, math_counter)
+        for idx, raw in zip(math_indices, results):
             detections[idx]["raw_content"] = raw
 
-    if math_indices:
-        math_crops = [detections[i]["crop"] for i in math_indices]
-        raw_maths  = run_math_recognition_batched(math_crops, figures_dir, math_counter)
-        for idx, raw in zip(math_indices, raw_maths):
-            detections[idx]["raw_content"] = raw
+    # ── Text → RapidOCR ───────────────────────────────────────────
+    if text_indices:
+        texts = run_text_ocr_batched(
+            [detections[i]["crop"] for i in text_indices], is_screenshot=is_screenshot
+        )
+        for idx, txt in zip(text_indices, texts):
+            detections[idx]["raw_content"] = txt
 
     for i, det in enumerate(detections):
         class_name = det["class_name"]
@@ -171,7 +175,9 @@ def route_and_extract(
 def main():
     parser = argparse.ArgumentParser(description="Screen2LaTeX Orchestrator")
     parser.add_argument("image_path", type=str)
-    parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--profile",       action="store_true")
+    parser.add_argument("--high-quality",  action="store_true",
+                        help="Use GOT-OCR2 for full-page LaTeX (slower, higher quality)")
     args = parser.parse_args()
 
     image_stem = Path(args.image_path).stem
@@ -195,6 +201,33 @@ def main():
 
     import psutil
     process = psutil.Process(os.getpid())
+
+    # ── High-quality mode: GOT-OCR2 full-page ───────────────────
+    if args.high_quality:
+        print("[*] High-quality mode: GOT-OCR2 full-page OCR")
+        t0 = time.perf_counter()
+        # Normalise first so GOT gets a clean image
+        image_norm, _, _ = normalize_image_pil(args.image_path)
+        norm_path = str(assets_dir / "normalized.png")
+        image_norm.save(norm_path)
+        del image_norm
+
+        raw_latex = run_page_got(norm_path)
+        unload_got()
+
+        # Wrap in a minimal document if GOT returned bare content
+        if not raw_latex.strip().startswith("\\documentclass"):
+            document = assemble_document([raw_latex], set(), False)
+        else:
+            document = raw_latex
+
+        save_tex(document, str(tex_path))
+        t_total = time.perf_counter() - t0
+        peak_mb = process.memory_info().rss / 1024 / 1024
+        if args.profile:
+            print(f"\n    TOTAL           | {t_total:6.2f}s | {peak_mb:7.1f} MB")
+        print("\n[OK] Done (high-quality mode).")
+        return
 
     # ── Stage 1: Normalization ───────────────────────────────────
     t_stage1_start = time.perf_counter()
@@ -318,7 +351,6 @@ def main():
         body_parts = _adjust_figure_paths(body_parts)
         document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
 
-    # Texo only needed during math extraction — free it now to reclaim RAM
     unload_texo()
 
     t_stage3_end  = time.perf_counter()

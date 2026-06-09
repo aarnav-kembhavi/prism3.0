@@ -213,6 +213,22 @@ def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> i
     return 1
 
 
+def _is_y_monotonic(
+    dets: List[Dict[str, Any]],
+    back_jump_threshold: float = 0.25,
+    min_back_jump_px: float = 50.0,
+) -> bool:
+    """Return True if dets are approximately top-to-bottom (≤25% backward y jumps)."""
+    if len(dets) < 3:
+        return True
+    centers = [(d['bbox'][1] + d['bbox'][3]) / 2 for d in dets]
+    back = sum(
+        1 for i in range(1, len(centers))
+        if centers[i] < centers[i - 1] - min_back_jump_px
+    )
+    return back / (len(centers) - 1) <= back_jump_threshold
+
+
 def split_detections_by_column(
     detections: List[Dict[str, Any]],
     image_width: int,
@@ -260,13 +276,18 @@ def split_detections_by_column(
         else:
             right_col.append(det)
 
-    if use_dag:
-        full_width = apply_semantic_reading_order(full_width, image_width, image_height)
-        left_col   = apply_semantic_reading_order(left_col,   image_width, image_height)
-        right_col  = apply_semantic_reading_order(right_col,  image_width, image_height)
-    else:
-        full_width = sort_detections_geometric(full_width)
-        left_col   = sort_detections_geometric(left_col)
-        right_col  = sort_detections_geometric(right_col)
+    def _sort(group):
+        if not use_dag:
+            return sort_detections_geometric(group)
+        dag_sorted = apply_semantic_reading_order(group, image_width, image_height)
+        if _is_y_monotonic(dag_sorted):
+            return dag_sorted
+        # DAG produced a non-monotonic order (cycle or bad edge) — fall back
+        print("    [layout] DAG order non-monotonic; falling back to geometric sort")
+        return sort_detections_geometric(group)
+
+    full_width = _sort(full_width)
+    left_col   = _sort(left_col)
+    right_col  = _sort(right_col)
 
     return full_width, left_col, right_col

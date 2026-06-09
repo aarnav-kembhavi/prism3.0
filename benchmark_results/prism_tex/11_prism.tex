@@ -14,15 +14,16 @@
 \subsection*{0.0.1Summary of first-order equations}
 
 
-foundtobe
+To summarize, the first-order equations for the warp factor$f$and the scalars ${ \pmb { \sigma } }, { \pmb { \phi } } ^ { 0 } ; { \pmb { \phi } } ^ { 3 }$ are
+found to be
 
 
 \begin{equation}
-\begin{array} { c } { f ^ { \prime } = 2 \left ( G _ { 0 } S _ { 0 } + G _ { 3 } S _ { 3 } \right ) } \\ { \sigma ^ { \prime } = 2 \eta \sqrt { N _ { 0 } ^ { 2 } + N _ { 3 } ^ { 2 } } \qquad }\end{array}
+\begin{array} { c c } { f ^ { \prime } = 2 \left ( G _ { 0 } S _ { 0 } + G _ { 3 } S _ { 3 } \right ) } \\ { \sigma ^ { \prime } = 2 \eta \sqrt { N _ { 0 } ^ { 2 } + N _ { 3 } ^ { 2 } } } \\ { \cos \phi ^ { 3 } \left ( \phi ^ { 0 } \right ) ^ { \prime } = - \left ( G _ { 0 } M _ { 0 } + G _ { 5 } M _ { 3 } \right ) } \\ { = i \left ( G _ { 3 } M _ { 0 } - G _ { 0 } M _ { 3 } \right}\end{array}
 \end{equation}
 
 
-Furthermore,for consistency these were required to satisfy the algebraic constraint
+Furthermore, for consistency these were required to satisfy the algebraic constraint
 
 
 \begin{equation}
@@ -36,21 +37,22 @@ The various functions featured in these equations were defined in and
 \subsection*{0.1Numeric solutions}
 
 
-In order to get acceptable numerical solutions from these equations,we must choose appropriate initial conditions. It is easy to check that the following initial conditions ensure
-smoothness of all three scalars, as well as the vanishing of e2f at the origin,
+In order to get acceptable numerical solutions from these equations, we must choose ap-.
+propriate initial conditions. It is easy to check that the following initial conditions ensure
+smoothness of all three scalars, as well as the vanishing of  at the origin,.$e ^ { 2 f }$
 
 
 \begin{equation}
-\begin{array} { c } { \phi _ { 0 } ^ { 3 } = \sin ^ { - 1 } \left [ \frac { 1 } { 8 \operatorname { t a n h } \phi _ { 0 } ^ { 6 } } \left ( - 3 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { \mathbf { 0 } } ^ { 0 } } \right ) \right ] } \\ { \sigma _ { 0 } = \frac { 1 } { 4 } \log \left [ \frac { \cosh \phi _ { 0 } ^ { 6 } \left ( 5 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { 0 } ^ { 0 } } \right )}}\end{array}\right.
+\begin{array} { c c } { \phi _ { 0 } ^ { 3 } = \sin ^ { - 1 } \left [ \frac { \cdots } { 8 \operatorname { t a n h } \phi _ { 0 } ^ { 4 } } \left ( - 3 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { 0 } ^ { 4 } } \right ) \right ] } & { } \\ { \sigma _ { 0 } = \frac { 1 } { 4 } \log \left [ \frac { \cosh \phi _ { 0 } ^ { 5 } \left ( 5 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { 0 } ^ { 4 } } \right}}\end{array}\right.
 \end{equation}
 
 
-We have defined for notational convenience  \% =  *(O) and oo = o(O). For these initial
-conditionstobe real,wemustensure that
+We have defined for notational convenience $\phi . { \mathbf { 0 } } ^ { \mathbf { \alpha } } ~ \equiv ~ \phi ^ { \mathbf { \alpha } } ( \mathbf { 0 } )$and $\sigma . { 0 } ~ \equiv ~ \sigma ( \mathbf { 0 } )$ For these initial.
+conditions to be real, we must ensure that.
 
 
 \begin{equation}
-| f ( \phi _ { 0 } ^ { 6 } ) | \leq 1 \qquad \qquad f ( \phi _ { 0 } ^ { 0 } ) \equiv \frac { 1 } { 8 \operatorname { t a n h } \phi _ { 0 } ^ { 0 } } \left ( - 3 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { 0 } ^ { 6 } } \right ) \qquad \qquad ( 4 )
+| f ( \phi _ { 0 } ^ { 0 } ) | \leq 1 \qquad \qquad f ( \phi _ { 0 } ^ { 0 } ) \equiv \frac { 1 } { 8 \operatorname { t a n h } \phi _ { 0 } ^ { b } } \left ( - 3 + \sqrt { 9 + 1 6 \operatorname { t a n h } ^ { 2 } \phi _ { 0 } ^ { 0 } } \right ) \qquad \qquad ( 4 )
 \end{equation}
 
 
@@ -58,15 +60,15 @@ Noting that
 
 
 \begin{equation}
-\operatorname * { l i m } _ { \phi _ { 0 } ^ { 0 } \rightarrow - \infin } f ( \phi _ { 0 } ^ { 0 } ) = - \frac { 1 } { 4 } \qquad \qquad \operatorname * { l i m } _ { \phi _ { 0 } ^ { 0 } \rightarrow + \infin } f ( \phi _ { 0 } ^ { 0 } ) = \frac { 1 } { 4 } \qquad ( 5 )
+~ \operatorname * { l i m } _ { \sigma _ { 0 } ^ { 0 } \rightarrow - \infin } f ( \phi _ { 0 } ^ { 0 } ) = - \frac { 1 } { 4 } \qquad \qquad \operatorname * { l i m } _ { \sigma _ { 0 } ^ { 0 } \rightarrow + \infin } f ( \phi _ { 0 } ^ { 0 } ) = \frac { 1 } { 4 } \qquad ( 5 )
 \end{equation}
 
 
-and also that f( \%) is monotonically increasing, i.e.
+and also that $f ( \mathfrak { F } . { 0 } ^ { ( 1 ) } )$ is monotonically increasing, i.e.
 
 
 \begin{equation}
-\frac { d f } { d \phi _ { 0 } ^ { 0 } } > 0 ~ ~ ~ ~ ~ \forall \phi _ { 0 } ^ { 0 } \in \mathbb { R } \qquad ( 6 )
+\frac { d f } { d \phi _ { 0 } ^ { 0 } } > 0 ~
 \end{equation}
 
 \end{document}

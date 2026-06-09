@@ -15,50 +15,52 @@
 \begin{paracol}{2}
 \RaggedRight
 
-However,this approach quicklybecomes infeasible as it
+However, this approach quickly becomes infeasible as it
 requires an exponential number of models with respect to
 the dimensionality of the input space. In this work, we propose several conditional transformations that handle arbitrary dimensionality in a principled manner. Our contributions are as follows. 1) We propose a novel extension of
-flow-basedgenerativemodelstomodel theconditionaldistributionof arbitraryunobservedcovariates indataimputationtasks.Our method is thefirst todevelopinvertible
-ates. 2) We strengthen a fow-based model by using a novel
-autoregressive conditional likelihood. 3)We propose a novel
-penalty to generate a single imputed  best guess"for models without an analytically availablemean.4)Werunextensive empiricalstudies and show that achievesstate-of-the-art
-performanceforbothmissingfeatureimputation andimage
+flow-based generative models to model the conditional distribution of arbitrary unobserved covariates in data imputation tasks. Our method is the first to develop invertible
+transformations that operate on an arbitrary set of covariates. 2) We strengthen a flow-based model by using a novel
+autoregressive conditional likelihood. 3) We propose a novel
+penalty to generate a single imputed "best guess for models without an analytically available mean. 4) We run extensive empirical studies and show that achieves state-of-the-art
+performance for both missing feature imputation and image
 inpainting on benchmark real-world datasets.
 
 
 \subsection*{1Problem Formulation}
 
 
-Consider a real-valued distribution p(z) over Rd. We are
+Consider a real-valued distribution $p ( { \pmb x } )$ over $\mathbb { R } ^ { \mathbf { d } }$ We are
 interested in estimating the conditional distribution of all
-possible subsets of covariates u  \{1,...,d\} conditioned
-on the remaining observed covariates o = \{1,..., d\} \u.
-That is, we shall estimate p(cu | c   where Cu E Rlul
-and c  E Rlol, for all possible subsets u. For ease of notation, let b   \{0, 1\}d be a binary mask indicating which dimensions are observed.Furthermore,let v[b]index dimensions vfor which b=1 for the bitmask b on a vector v. Thus,c  = c [b] denotes observed dimensions and
-Cu = c [1b] denotes unobserved dimensions. We also apply this index to matrices such that W[b,b] indexes rows
-and then columns.Withoutloss ofgenerality,conditionals
-may also be conditioned on the bitmask b, p(cu | co,b),
-andwillbe estimatedwith maximumlog-likelihood estimation as described below. In addition, imputation tasks shall
+possible subsets of covariates $u \subseteq \{ 1, \dots, d \}$ conditioned
+on the remaining observed covariates${ \mathfrak { o } } ~ = ~ \{ 1, \dots, d \} ~ { \mathfrak { u } }.$
+That is, we shall estimate $\pmb { p } ( \pmb { x } . { \pmb { u } } ~ \mid \pmb { x } . { o } )$ where $\pmb { x } . { \pmb { u } } ~ \in ~ \mathbb { R } ^ { | \pmb { u } | }$
+and$\pmb { x } . { \pmb { a } } ~ \in ~ \mathbb { R } ^ { | \pmb { a } | }$ for all possible subsets.$^ { u }$ For ease of notation, let$b \in \{ 0, 1 \} ^ { a }$ be a binary mask indicating which dimensions are observed. Furthermore, let${ \pmb \nu } [ { \mathfrak { b } } ]$index dimensions$\imath . { \mathbf { i } }$ for which $\mathfrak { b } . { \mathrm { i } } ~ = ~ 1$ for the bitmask $^ { h }$ on a vector $t ^ { 3 }$ Thus, $x . { a } ~ = ~ x \left [ { \mathfrak { h } } \right ]$ denotes observed dimensions and
+$\pmb { x } . { \pmb { u } } = \pmb { x } \left [ 1 - \pmb { b } \right ]$denotes unobserved dimensions. We also apply this index to matrices such that $M [ b, b ]$ indexes rows
+and then columns. Without loss of generanty, conditionals
+may also be conditioned on the bitmask $b$ $p ( \mathbf { r } . { u } \mid \mathbf { r } . { o }, \mathbf { h } )$
+and will be estimated with maximum log-likelihood estimation as described below. In addition, imputation tasks shall
 be accomplished by generating samples from the conditional
-distributions p(xu|co,b).
+distributions${ \mathfrak { p } } ( { \mathfrak { x } } . { \mathfrak { u } } \mid { \mathfrak { x } } . { \mathfrak { o } }, { \mathfrak { b } } )$
 
 
 \subsection*{2Background}
 
 
 builds on Transformation Autoregressive Networks (TANs)
-,a flow-basedmodel that combines transformation ofvariableswith autoregressivelikelihoods.Weexpound onflowbased models and TANsbelow.The change of variable theorem (??)is the cornerstone of flow-based generative models,
-whereqrepresents aninvertibletransformationthattrans-
+, a flow-based model that combines transformation of vari-.
+ables with autoregressive likelihoods. We expound on flowbased models and TANs below. The change of variable theorem (??) is the cornerstone of flow-based generative models,
+where represents an invertible transformation that trans-$q$
+forms covariates from input space$\boldsymbol { \mathcal { X } } ^ { \prime }$into a latent space Z.
 
 
 \begin{equation}
-\begin{array} { r l } & { \cdot ^ { \cdot } } \\ { p _ { \mathcal { X } } ( x ) = \left | \operatorname* { d e t } \frac { d q } { d x } \right | p _ { \mathcal { Z } } ( q ( x ) ) } \\ & { \cdot } \end{array} \qquad
+\begin{array} { r } { \underbrace { \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots \cdots } _ { ( 1 ) } } \\ { p _ { \mathcal { X } } ( x ) = \left. \underbrace { p _ { \mathcal { X } } ( q ( x ) ) } _ { \mathrm { ~ t o n i s ~ e r a m e d ~ t h a r e r a n d ~ s t h a ~ t r e r a n d ~ f o r e r e } } \right. } \end{array}
 \end{equation}
 
 
-In order to efficiently compute the determinant, the transformationqisoftendesignedtohaveadiagonalor triangular
-Jacobian.Since this type of transformation israther restrictive, the flow models are often composed of multiple transformations in a sequence to get a more fexible composite
-variatesflowthrough achain of transformations,substituting
+In order to efficiently compute the determinant, the transformation is often designed to have a diagonal or triangular$t . { t }$
+tive, the flow models are often composed of multiple transformations in a sequence to get a more flexible composite
+transformation, i.e. $q = q . { m } \circ q . { m - 1 } \circ \dots \circ q . { 1 }$ Here, the covariates flow through a chain of transformations, substituting
 the last output variable as input for the next transformation.
 Typically, a flow-based model transforms the covariates to a
 
@@ -66,63 +68,67 @@ Typically, a flow-based model transforms the covariates to a
 \RaggedRight
 
 latent space with a simple base distribution, like a standard
-Gaussian.However,TANsprovides moreflexibility by modeling the latent distribution with an autoregressive approach
-.This alters the earlier equation, in that pz(q(x))is now
-represented astheproduct ofdconditional distributions.
+Gaussian. However, TANs provides more flexibility by mod
+eling the latent distribution with an autoregressive approach
+ This alters the earlier equation, in that ${ \mathfrak { p } } { \mathfrak { z } } \{ { \mathfrak { q } } ( { \mathfrak { x } } ) \}$ ISnow
+represented as the product of  conditional distributions.$d$
 
 
 \begin{equation}
-\begin{array} { r } { p _ { \mathcal { X } } ( x ) = \left | \operatorname* { d e t } \frac { d q } { d x } \right | \prod _ { i = 1 } ^ { d } p _ { \mathcal { Z } } \big ( z ^ { i } \mid z ^ { i - 1 },..., z ^ { 1 } \big ) \qquad ( 2 ) } \\ { \underbrace { p _ { \mathcal { X } } ( x ) = \sum _ { i = 1 } ^ { d } p _ { \mathcal { X } } ( x ) = } _ { \substack { \mathrm { ~ a m u s ~ m a l a l ~ c o n d}}}}\end{array}
+\begin{array} { r } { { p _ { \mathrm { X a n c e ~ m o r ~ ~ s u r e ~ ~ c o n ~ } } } ~ }\end{array}
 \end{equation}
 
 
-Sincefowmodelsgive theexact likelihood,theycanbe
+Since flow models give the exact likelihood, they can be
 trained by directly optimizing the log likelihood. In addition, thanks to the invertibility of the transformations, one
-candrawsamplesbysimplyinverting thetransformations
+can draw samples by simply inverting the transformations
 over a set of samples from the latent space.
 
 
 \subsection*{3Methods}
 
 
-Wenowdevelopby constructingboth conditionaltransformations of variables and autoregressive likelihoods that
-work with an arbitrary set of unobserved covariates.To deal
-with arbitrary dimensionalityfor conditioning covariates o
-we define a zero imputing function  (v;b)that imputes input vector v with zeros based on the specified binary mask
+We now develop by constructing both conditional trans-.
+formations of variables and autoregressive likelihoods that
+work with an arbitrary set of unobserved covariates. To deal
+with arbitrary dimensionality for conditioning covariates$x . { \alpha }$
+we define a zero imputing function ${ \dot { \phi } } ( r : h )$ that imputes input vectorwith zeros based on the specitied binary mask$\mathbf { v }$
+b:
 
 
 \begin{equation}
-\begin{array} { r } { w = \phi ( v ; b ), \quad w _ { i } = \left \{ \begin{array} { l l } { v _ { c }, } & { \quad b _ { i } = 1 } \\ { 0, } & { \quad b _ { i } = 0 } \end{array} \right., \qquad ( 3 ) } \\ { \longrightarrow ~. \qquad. } \end{array}}
+\begin{array} { c } { w = \phi ( v ; b ), \quad w _ { i } = \left \{ \begin{array} { l l } { v _ { c }, } & { \quad b _ { i } = 1 } \\ { 0, } & { \quad b _ { i } = 0 } \end{array} \right., \qquad ( 3 ) } \\ { \cdots ~, \quad ~ }}\end{array}
 \end{equation}
 
 
-where c =   =1 bj represents the cumulative sum over
-b. For example,  (c ;b) gives a d-dimensional vector with
-missing values imputed by zeros (See Fig.for an illustration.). Thus, we get a conditioning vector with fixed dimensionality.However,handling the arbitrary dimensionality of
-Cu requires further care, as discussed below. We first consider aconditional extension tothechangeofvariabletheorem:
+where ${ \mathfrak { c } } ~ = ~ \sum . { j = 1 } ^ { \mathrm { i } } b . { j }$ represents the cumulative sum over
+$^ { h }$ For example, ${ \dot { \varphi } } \{ { \pmb x } . { \alpha } ; { \pmb b } \}$gives adimensional vector with$d$
+tion.). Thus, we get a conditioning vector with fixed dimensionality. However, handling the arbitrary dimensionality of
+$x . { u }$ requires further care, as discussed below. We first consider a conditional extension to the change of variable theorem:
 
 
 \begin{equation}
-\begin{array} { r l } & { \mathrm { t o m s. } } \\ & { p _ { \mathcal { X } } ( x _ { u } \mid x _ { o }, b ) = \left | \operatorname* { d e t } \frac { d q _ { x _ { o }, b } } { d x _ { u } } \right | p _ { \mathcal { Z } } ( q _ { x _ { o }, b } ( x _ { u } ) \mid x _ { o }, b ), ~ ~ ( 4 ) } \\ & { \! }\end{array}
+\begin{array} { r l } & { \mathrm { t e n a, ~ } } \\ & { p _ { \mathcal { X } } ( x _ { u } \mid x _ { o }, b ) = \left | \operatorname* { d e t } \frac { d q _ { x _ { u }, b } } { d x _ { u } } \right | p _ { \mathcal { Z } } ( q _ { x _ { u }, b } ( x _ { u } ) \mid x _ { o }, b ), ~ ~ ( 4 ) } \\ & { \mathrm { w h e r m ~ o ~ } \quad, ~ ~ \mathrm { i s e ~ a ~ t r m}}\end{array}
 \end{equation}
 
 
-where qx ,b is a transformation on the unobserved covariates Cu with respect to the observed covariates c and binary mask b as demonstratedinFig..However,thefact that
-Cu could have varying dimensionality and arbitrarymissing dimensions makes it challenging to define qr ,b's across
-different bitmasks b. One challenge comes from requiring
+where $q . { a, b }$ is a transformation on the unobserved covariates$x . { \mathbf { u } }$with respect to the observed covariates$\mathcal { X } . { a }$ and binary mask as demonstrated in Fig.. However, the fact that$b$
+$x . { \mathbf { u } }$
+ing dimensions makes it challenging to define $q . { x . { o }, b }$ s across
+different bitmasks $b$
 the transformation to have adaptive outputs that can adapt
-todifferentdimensionalityofcu.Another challengeis that
-different missing patterns require the transformation to capture different dependencies. Since the missing pattern could
+to different dimensionality of$x . { u }$ Another challenge is that
+ different missing patterns require the transformation to capture different dependencies. Since the missing pattern could
 be arbitrary, we require the transformation to learn a large
-rangeofpossibledependencies.Aimingatsolvingthose
+range of possible dependencies. Aiming at solving those
 challenges, we propose several conditional transformations
-that leverage the conditioning information in c  and b and
-canbe adapted tocuwitharbitrarydimensionality.Wedescribe them in detail below.For notation simplicity,we drop
-the subscriptsX and Zin the following sections.
+that leverage the conditioning information in$x . { u }$and $b$ and
+can be adapted to$x . { \mathbf { u } }$with arbitrary dimensionality. We describe them in detail below. For notation simplicity, we drop
+the subscripts$\boldsymbol { \chi } ^ { * }$ $z$in the following sections.
 
 
-Affine Coupling TransformationAffine coupling is a
-commonly used flow transformation.Here,we derive a conditionalextension toit.Just as intheunconditionalcounterparts we divide the unobserved covariates u into two
+Affine Coupling TransformationAffine couplingis a
+commonly used flow transformation. Here, we derive a conditional extension to it. Just as in the unconditional counterparts , we divide the unobserved covariates$r . { u }$ into two
 parts
 
 \end{paracol}

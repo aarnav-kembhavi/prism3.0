@@ -11,37 +11,44 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
+function is$F . { Y . { t } | D = d, M = m } ^ { - 1 } ( q ) = \operatorname* { i n f } \{ y : F . { Y . { t } | D = d, M = m } ( y ) \geq q \}$ Furthermore,
 
 
-
-is the quantile-quantile transform of the conditional outcome from period O to 1
-period 0 (q = Fyo(D=d,M=m(y) into the corresponding y' at rank q in period 1
-(3y = FyID=ad,M=m().
-
-
-\subsection*{1  Identification and Estimation}
+\begin{equation}
+Q _ { d m } ( y ) : = F _ { Y _ { 1 } | D = d, M = m } ^ { - 1 } \circ F _ { Y _ { 0 } | D = d, M = m } ( y ) = F _ { Y _ { 1 } | D = d, M = m } ^ { - 1 } ( F _ { Y _ { 0 } | D = d, M = m } ( y ) )
+\end{equation}
 
 
-\subsection*{1.11Identification}
+is the quantile-quantile transform of the conditional outcome from period to 1$( )$
+given treatment and mediator status . This transform maps at rank in$d$ $i r i$ $y$ $\eta$
+period$0$ $. q ~ = ~ F . { Y . { 0 } | D = d, M = m } ( y ) )$ into the corresponding at rank in period 1$y ^ { \prime }$ $q$
+$( y ^ { \prime } = F . { Y . { 1 } | D = d, M = m } ^ { - 1 } ( q ) )$
+
+
+\subsection*{1 Identification and Estimation}
+
+
+\subsection*{1.1Identification}
 
 
 This sections discusses the identifying assumptions along with the identification
 results for the various direct and indirect effects.We note that our assumptions
 could be adjusted to only hold conditional on a vector of observed covariates. In
-this case, the identification results would hold within cells defined upon covariate values. In our main discussion,however, covariates are not considered for the
+this case, the identification results would hold within cells defined upon covariate values. In our main discussion, however, covariates are not considered for the
 sake of ease of notation. For notational convenience, we maintain throughout that
-Pr(T = t,D = d, M = m) > 0 for t,d,m E \{1,0\}, implying that all possible
+$\operatorname* { P r } ( T ~ = ~ t, D ~ = ~ d, M ~ = ~ m ) ~ > ~ 0$ for $t. d, m \in ~ \{ 1. 0 \}$, implying that all possible
 treatment-mediator combinations exist in the population in both time periods. Our
-first assumption implies that potential outcomes are characterized by a continuous
-nonparametric function, denoted by h, that is strictly monotonic in a scalar U that
+nonparametric function, denoted by , that is strictly monotonic in a scalar that$f . { t }$ $U ^ { i }$
 reflects unobserved heterogeneity.
 
 
-Assumption 1: Strict monotonicity of continuous potential outcomes in unobserved heterogeneity.
+Assumption 1: Strict monotonicity of continuous potential outcomes in unob-.
+served het erogeneity.
 
 
-The potential outcomes satisfy the following model: Yt(d,m) = h(d,m,t,U), with
-the general function h being continuous and strictly increasing in the scalar unobservable U E R for all d, m,t E \{o, 1\}.
+The potential outcomes satisfy the following model: $Y . { t } ( d, m ) = h ( d, m, t, U )$ with
+the general function being continuous and strictly increasing in the scalar unob$h . { t }$
+servable$U \in \mathbb { R }$ for all$d, m, t \in \{ 0, 1 \}$
 
 
 Assumption 1 requires the potential outcomes to be continuous implying that there

@@ -16,111 +16,114 @@
 \RaggedRight
 
 ZENIT (Zero Emission Neighborhood Investment Tool) is
-a toolforminimizing the cost of investing and operating the
+a tool for minimizing the cost of investing and operating the
 energy system of a Zero Emission Neighborhood (ZEN). It
-usesaMILPmodeltofindthe optimaltype andsize of
+uses a MILP model to find the optimal type and size of
 technology needed to provide heat and electricity to a ZEN.
 The concept contains much more than only the energy system
 (materials and architecture to name two examples) but this
 tool's focus is energy systems. The idea behind ZEN is to limit
 emissions and that it is possible to compensate for the various
-emissions of CO2in the neighborhood by exporting electricity
-on-site renewable to the grid,we assume that the production
+emissions of in the neighborhood by exporting electricity.$. { c. } ^ { \prime } U . { z }$
+to the grid. Indeed, by exporting electricity produced from
+on-site renewable to the grid, we assume that the production
 in the system is reduced by the corresponding amount and
-thus reduces the emissionof the totalsystem.Themodel
+thus reduces the emission of the total system. The model
 used in this paper is based on the model presented in . In
-this section,the main elements of the model will be repeated
+this section, the main elements of the model will be repeated
 and the differences with the model from presented. For the
-details on the model not repeated,one can refer to that paper.
+details on the model not repeated, one can refer to that paper.
 Then the implementation and case chosen will be presented.
-The optimization is written in Python anduses Gurobi as a
+The optimization is written in Python and uses Gurobi as a
 solver. In this paper, we interpret the definition of a ZEN as
-a neighborhood that has O emissions over its lifetime,which
+a neighborhood that has O emissions over its lifetime, which
 is set to 60 years. However due to practical reasons and to
-reduce the computational time,differentperiods of thelifetime
+reduce the computational time, different periods of the lifetime
 can be defined using one representative year for each. In this
 study we use a single period. The different decision variables
 are the amount of investment in each technology for heat,
+power and energy storage as well as the operation related
 variables defined for each hour (e.g. amount of electricity
 produced, amount of fuel consumed). Multiple constraints are
-used, to enforce the CO2 limitations necessary in the ZEN
-context and torepresent the operation of the neighborhood
+used, to enforce the $c. c . { z }$ limitations necessary in the ZEN
+context and to represent the operation of the neighborhood
 and in particular of each technology. It is important to note
 that part load limitations and start up/shutdown constraints are
 not implemented. The objective function of the optimization
-is thefollowing:Minimize:
+is the following: Minimize:
 
 
-Cdisc . ci + bhg   Chg +
-Er,Di
- (f,t   Pfuel + (Pspot + pgrid
-r,D
-+ Pret) (ytmp +>mp)-Pspot .yexp)9t,est (1)
-est
+\begin{equation}
+\begin{array} { l } { \sum _ { i } C _ { i } ^ { d i s c } \cdot x _ { i } + b _ { h g } \cdot C _ { h g } + \frac { 1 } { \varepsilon _ { r, D } ^ { t o t } } \sum _ { t } C _ { i } ^ { m a i n t } \cdot x _ { i } } \\ { ~ }\end{array}
+\end{equation}
 
 
-Where Cdisc is the discounted investment cost in technology
- including re-investments and salvage value, c the capacity
-of technology i,bhg the binary variable for investment in
-discount factor for the whole lifetime of the neighborhood
-with discount rate r, Crnaint the annual maintenance cost,
-the neighborhood and yt,est
-storage.The subscript trepresent timesteps,thetechnologies
+Where $C . { i } ^ { a r s c }$ is the discounted investment cost in technology
+$\dot { \mathbf { s } }$ including re-investments and salvage value,$\mathbf { x } . { \mathbf { x } }$the capacity
+of technology $\imath$ $\mathfrak { b } . { h g }$ the binary variable for investment in
+a heating grid, $C . { h g }$ the cost of the heating grid, $\varepsilon . { \pmb { r }, \pmb { L } } ^ { t \alpha t }$ the
+discount factor for the whole lifetime of the neighbornood
+with discount rate r, $C . { i } ^ { \mathtt { r m a r n t } }$ the annual maintenance cost,
+$f . { f, t }$ the fuel consumption, $P . { f } ^ { f a r t }$ the fuel price, $P . { t } ^ { * j, v i. }$ the
+electricity spot price, $P ^ { g r i d }$ and $P ^ { r e t }$ the grid and retailer.
+tariffs, $y . { t } ^ { \mathrm { ~ v e p } }$ and$y . { t } ^ { e x . { p } }$the import and export of electricity from
+the neighborhood and $y . { t, c s t } ^ { s bi r m p }$ the import of electricity to the
+storage. The subscriptrepresent timesteps,the technologies$t$ $i$
 
 \switchcolumn
 \RaggedRight
 
-with in particular f for the technologies using other fuel than
-electricity and est for energy storages. It minimizes the cost
+with in particular $f$ for the technologies using other fuel than
+electricity and $^ { e s t }$ for energy storages. It minimizes the cost
 of investing in the different technologies and the operating
-costs,fuels,electricity and O\&M costs and contains the costs
+costs, fuels, electricity and O\&M costs and contains the costs
 of the heating grid and a binary associated with it that also
-gives access to technologies at a neighborhood level.The
-most important constraint in the case of ZENs is the CO2
+gives access to technologies at a neighborhood level. The
+most important constraint in the case of ZENs is the $c, o . { z }$
 balance (??), whose principle was explained earlier. In (??),
-Jt,est 9t,estgb\_impgb-exp and yt,estpb\_etparerespectivelytheimport and
-export on the grid side battery and the export from the on-
-CO2the
-CO2 factors for electricity and other fuels,Mest the efficiency
+$y . { t, c s t } ^ { g b . { - } i, t + 1 \}$ $y . { t, E s t } ^ { y b . { - } t ; L p }$ and $y . { t, c a t } ^ { 1 2 0. 5 7. 5 9 }$ are respectively the import and
+export on the grid side battery and the export from the onsite technologies producing electricity, $\varphi . { \mathbf { e } } ^ { c O . { 2 } }$ and $\psi . { f } ^ { c : v . { 2 } }$ the
+$C O . { 2 }$ factors for electricity and other fuels,. $t . { i e * t }$ the enciency
+of battery and $y . { t, y } ^ { \varepsilon \cdot x \cdot p }$ the export of electricity from the on-site
 technologies.
 
 
 \begin{equation}
-\begin{array} { c } { \sum _ { t } ( ( y _ { i } ^ { i m p } + \sum _ { e s t } y _ { t, e s t } ^ { g b \_ i, i m p } ) \cdot \varphi _ { \epsilon } ^ { C O _ { 2 } } ) } \\ { \qquad \qquad + \sum _ { t } \sum _ { f } ( \psi _ { f } ^ { e O _ { 2 } } \cdot f _ { f, t } ) \leq \sum _ { t } ( \sum _ { e s t } ( y _ { t, e s t } ^ { g b \_ e x p } } \\ & { \quad \quad \quad \quad}\end{array}
+\begin{array} { c } { \begin{array} { c c } { \sum _ { t } ( ( y _ { t } ^ { s m p } + \sum _ { e s t } y _ { t, e s t } ^ { g b _ { e } m p } ) \cdot \varphi _ { t } ^ { C O _ { 2 } } ) } \\ { \qquad + \sum _ { t } \sum _ { j } ( \gamma _ { f } ^ { C O _ { 2 } } \cdot f _ { f, i } ) \leq \sum _ { t } ( \sum _ { e s t } ( y _ { t, e s t } ^ { g b, e x p } } \\ &}\end{array}\end{array}
 \end{equation}
 
 
-Fig. presents graphically the electricity balance and the differentequationsassociated.Differenttechnologies areincluded
+Fig. presents graphically the electricity balance and the different equations associated. Different technologies are included
 in the study; some of them are only available at the building
 level and others at the neighborhood level in a centralized production plant. The different technologies are: at the building
-level : Solar Panels (PV), Solar Thermal (ST),Heat Pumps
-(HP),Biomass Boiler (BB),Electric Boiler (EB),Gas Boiler
-(GB);and at the neighborhood levels:CHP (nCHP),Gas
-Boiler (nGB),Electric Boiler (nEB),Heat Pumps (nHP). In
-addition,Batteries(Bat)and HeatStorage (HS)are available
-at both levels.Different subcategories can be available to
+level : Solar Panels (PV), Solar Thermal (ST), Heat Pumps
+(HP), Biomass Boiler (BB), Electric Boiler (EB), Gas Boiler
+(GB);and at the neighborhood levels: CHP (nCHP),Gas
+Boiler (nGB)Electric Boiler (nEB)Heat Pumps (nHP). In
+addition, Batteries (Bat) and Heat Storage (HS) are available
+at both levels. Different subcategories can be available to
 choose from within each category, for instance air-water or
-water-water heat pumps.In parenthesis is the notation used
+water-water heat pumps. In parenthesis is the notation used
 for the rest of the study for each technology. Unlike the
 model in , the model used for this paper uses a disaggregrated
 of buildings are identified and the loads are aggregated per
 building type. It is possible to use a completely disaggregated
-heat load but thelack of available data motivated not doing
+heat load but the lack of available data motivated not doing
 it. The input data necessary to run ZENIT are the electric and
 heating loads (ideally separated between domestic hot water
-and space heating),the outside andground temperatures,the
+and space heating), the outside and ground temperatures, the
 solar insolation and the electricity prices. Hourly timeseries
 for each representative years are necessary. A description of
-the neighborhood and its buildings with the foor and the roof
-area,and the layout of the neighborhoods is also needed.In
+the neighborhood and its buildings with the floor and the roof
+area, and the layout of the neighborhoods is also needed. In
 this study we assume the heating grid is there (and set the
 corresponding binary to 1) because there is one in the location
 that inspired this case. Its characteristics (layout, losses and
-cost)are then necessarybut a module canbe used toprovide
-anestimate of thelosses and cost based on thelayoutof the
-neighborhood.TheCO2factorsusedwere17gCO2/kWhfor
-electricity, 277 gCO2/kWh for gas and 7 gCO2/kWh for wood
-chips.Theelectricityproducedviasolar panels or
+cost) are then necessary but a module can be used to provide
+an estimate of the losses and cost based on the layout of the
+neighborhood. The${ C O } . { 2 }$ factors used were 17$\mathfrak { g C O } . { 2 } / k W h$ for
+electricity,$2 7 7 ~ \mathtt { g C D . { 2 } / k W h }$for gas and$7 ~ \mathsf { g C D . { 2 } / k W h }$ for wood
+chips . The electricity produced via solar panels or
 
 \end{paracol}
 

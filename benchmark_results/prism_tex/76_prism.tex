@@ -11,55 +11,54 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-\subsection*{Monte Carlo results}
+\subsection*{1Monte Carlo results}
 
 
 We performed a Monte Carlo simulation to assess the performance of the
-proposed filter based on halfspace depth.After the filter fags the outlying
-observations, the generalized S-estimator is applied to the data with added
-missing values. Our simulation study is based on the same setup described
-in ? to compare significantly the performance of our filter with respect to
-the filter introduced in their work. We considered samples from a Np(o, Eo),
-where all values in diag( o) are equal to 1, p = 10,20,30,40,50 and the
-sample size is n = 1op. We consider the following scenarios:
+proposed filter based on halfspace depth. After the filter flags the outlying
+observations, the generalized S-estimator is applied to the data with added.
+missing values. Our simulation study is based on the same setup described.
+in ? to compare significantly the performance of our filter with respect to.
+the filter introduced in their work. We considered samples from a$\mathbf { N } . { p } \{ \mathbf { 0 }. \mathbf { \Sigma } . { 0 } \}$
+where all values in $i i n g ( \mathbf { \Sigma . { 0 } } )$ are equal to,$^ { 1 }$ $p ~ = ~ 1 0, 2 0, 3 0, 4 0, 5 0$ and the
+sample size is $n = 1 0 p$ We consider the following scenarios:
 
 \begin{itemize}
-\item Clean data: data without changes.
+\item . Clean data: data without changes.
 
-\item Cell-Wise contamination: a proportion e of cells in the data is replaced
-by Xij \textasciitilde{} N(k, 0.1 ), where k = 1, ... , 10.
+\item : CellWise contamination: a proportionof cells in the data is replaced$\epsilon$
+by$X . { i j } \sim \aleph ( k, 0. 1 ^ { 2 } )$ where$k = 1, \dots, 1 0$
 
-\item Case-Wise contamination: a proportion e of cases in the data matrix
-is replaced by X; \textasciitilde{} 0.5N(cv, 0.1 1) + 0.5N(-cv, 0.[2]), where c =
-k(x2)-1(0.99), k = 1, 2, ... , 20 and v is the eigenvector corresponding
-to the smallest eigenvalue of Zo with length such that (vo)  E-1(vo)=1.
+\item : Case-Wise contamination: a proportion of cases in the data matrix$\epsilon$
+is replaced by $\mathbf { X . { i } \sim 0. 5 N ( c v. 0. 1 ^ { 2 } I ) + 0. 5 N ( - c v. 0. 1 ^ { 2 } I ) }$ where $c =$
+$\sqrt { k \{ \chi . { p } ^ { 2 } \} ^ { - 1 } ( 0. 9 9 ) }$ $k = 1, 2, \dots, 2 0$andis the eigenvector corresponding$\mathbf { v }$
+to the smallest eigenvalue of  with length such that$\mathbf { \Sigma } . { 0 }$ $( \mathbf { v } \! - \! \mu . { 0 } ) ^ {! } ~ \mathbf { \Sigma } . { 0 } ^ { - 1 } ( \mathbf { v } \! - \!$
+$\mu . { \mathbf { 0 } } ) = \mathbf { 1 }$
 
 \end{itemize}
 
-The proportions of contaminated rows chosen for case-wise contamination are
-E = 0.1, 0.2, and   = 0.02,0.05 for cell-wise contamination. The number of
-replicates in our simulation study is N =200.We measure the performance
-of a given pair of location and scatter estimators p and   using the mean
+$\mathfrak { \epsilon } = \mathfrak { 0. l ; l. 2 }$and $\epsilon = 0. 0 2, 0, 0. 5$ for cell-wise contamination.The number of
+replicates in our simulation study is $\mathbf { N } = 2 0 0$ We measure the performance
+of a given pair of location and scatter estimators$\hat { \mu }$ and $\ddot { \mathbf { \Sigma } }$ using the mean
 squared error (MSE) and the likelihood ratio test distance (LRT), as in:
 
 
 \begin{equation}
-\begin{array} { r } { M S E = \frac { 1 } { N } \sum _ { i = 1 } ^ { N } ( \hat { \boldsymbol { \mu } } _ { i } - \mathbf { \mu _ { 0 } } ) ^ { \top } ( \hat { \boldsymbol { \mu } } _ { \mathrm { i } } - \mathbf { \mu _ { 0 } } ) } \\ { L R T ( \hat { \mathbf { \Sigma } }, \mathbf { \Sigma _ { 0 } } ) = \frac { 1 } { \mathbf { N } } \sum _ { i = 1 } ^ { N } \mathbf { D ( \hat { \mathbf { \Sigma } } _ { i } }, \mathbf { \Sigma _ { 0 } }}\end{array}
+\begin{array} { c } { M S E = \frac { 1 } { N } \sum _ { i = 1 } ^ { N } ( \hat { \boldsymbol { \mu } } _ { i } - \boldsymbol { \mu } _ { 0 } ) ^ { \top } ( \hat { \boldsymbol { \mu } } _ { i } - \boldsymbol { \mu } _ { 0 } ) } \\ { L R T ( \hat { \mathbf { \Sigma } }, \mathbf { \Sigma } _ { 0 } ) = \frac { 1 } { N } \sum _ { i = 1 } ^ { N } \mathbf { D ( \hat { \mathbf { \Sigma } } _ { i }, \mathbf { \Sigma } _ { 0 } ) } } \end{array}
 \end{equation}
 
 
-\subsection*{2  Statistical data depth properties}
+\subsection*{2 Statistical data depth properties}
 
 
-A depth function d(:; F) measures the centrality of a point w.r.t. a probability distribution F.
+A depth function $i \{ : F \}$ measures the centrality of a point w.r.t. a probability distribution$F$
 
 
 \begin{equation}
-d = \mathbb { R } ^ { p } \rightarrow \mathbb { R } ^ { + } \cup \{ 0 \}, \qquad \mathbf { x } \rightarrow \mathbf { d } ( \mathbf { x } ; \mathbf { F } )
+d = \mathbb { R } ^ { \mu } \rightarrow \mathbb { R } ^ { + } \cup \{ 0 \}, \qquad \mathbf { x } \rightarrow \mathbf { d } ( \mathbf { x } ; \mathbf { F } )
 \end{equation}
 
 
-A statistical depth function should satisfy the following Prop
+A statistical depth function should satisfy the following Prop.
 
-% [footer: 1]
 \end{document}

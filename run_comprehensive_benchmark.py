@@ -117,9 +117,11 @@ def run_benchmark(limit=None):
             pdf_to_png(pdf_path, png_path)
             
             # 2. Run PRISM
-            # Important: specify encoding='utf-8' for Windows
-            cmd = ["python", "orchestrate.py", str(png_path), "--profile"]
-            proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', timeout=120)
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            cmd = ["python", "-u", "orchestrate.py", str(png_path), "--profile"]
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8',
+                                  timeout=300, env=env)
             
             if proc.returncode != 0:
                 print(f"[!] Error on page {base_id}: {proc.stderr}")
@@ -198,9 +200,10 @@ def run_benchmark(limit=None):
                 "latency": perf["total_latency"],
                 "mem_peak": perf["total_memory"],
                 "cpu_mean": perf["cpu_mean"],
-                "ocr_latency": perf["stages"].get("OCR (Unified)", {}).get("latency", 0),
+                "ocr_latency": perf["stages"].get("OCR (Rapid)", {}).get("latency", 0),
                 "layout_latency": perf["stages"].get("YOLO (ONNX)", {}).get("latency", 0),
-                "math_latency": perf["stages"].get("math", {}).get("latency", 0),
+                "math_latency": perf["stages"].get("Math (Texo)", {}).get("latency", 0),
+                "table_latency": perf["stages"].get("Table (Solver)", {}).get("latency", 0),
                 "gt_len": len(gt_norm)
             }
             all_page_metrics.append(page_data)
@@ -229,6 +232,10 @@ def run_benchmark(limit=None):
         "peak_ram": max([p["mem_peak"] for p in all_page_metrics]),
         "avg_ram": statistics.mean([p["mem_peak"] for p in all_page_metrics]),
         "avg_cpu": statistics.mean([p["cpu_mean"] for p in all_page_metrics]),
+        "avg_ocr_latency": statistics.mean([p["ocr_latency"] for p in all_page_metrics]),
+        "avg_layout_latency": statistics.mean([p["layout_latency"] for p in all_page_metrics]),
+        "avg_math_latency": statistics.mean([p["math_latency"] for p in all_page_metrics]),
+        "avg_table_latency": statistics.mean([p["table_latency"] for p in all_page_metrics]),
     }
     
     # Save CSVs
@@ -259,8 +266,13 @@ This report evaluates the PRISM Screen-to-LaTeX system against the PDF2LaTeX (Wa
 *Note: PDF2LaTeX reported 92.1 BLEU for formula recognition specifically.*
 
 ## Performance Breakdown
-- **Average OCR Latency:** {statistics.mean([p["ocr_latency"] for p in all_page_metrics]):.2f}s
-- **Average Layout Latency:** {statistics.mean([p["layout_latency"] for p in all_page_metrics]):.2f}s
+- **Average Total Latency:** {summary['avg_latency']:.2f}s
+- **Average Peak RAM:** {summary['avg_ram']:.1f} MB
+- **Peak RAM (max page):** {summary['peak_ram']:.1f} MB
+- **Average OCR Latency:** {summary['avg_ocr_latency']:.2f}s
+- **Average Layout Latency:** {summary['avg_layout_latency']:.2f}s
+- **Average Math Latency:** {summary['avg_math_latency']:.2f}s
+- **Average Table Latency:** {summary['avg_table_latency']:.2f}s
 
 ## Failure Analysis
 TBD

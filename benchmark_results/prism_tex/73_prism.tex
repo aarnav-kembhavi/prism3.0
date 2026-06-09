@@ -11,26 +11,28 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-with zero corresponding to a NA value.Next we want to identify the
+with zero corresponding to a NA value. Next we want to identify the
 bivariate outliers by iterating the filter over all possible pairs of variables.
-Consider a pair of variables X(jk) = \{(X;j, Xik)\},i = 1,...,n. The initial location and dispersion estimators are, respectively, the coordinate-wise
-median and the 2   2 sub-matrix S(it) of the estimate S computed by the
-generalized S-estimator on non-filtered data. Note that, this ensure the positive definiteness property for S and each d   d sub-matrix corresponding to
-a subset of d variables. For bivariate points with no fagged components by
-and
-hence apply the bivariate filter, for all 1 < j < k < p. At the end we want
-to identify the cells (i, j) which have to be fagged as cell-wise outliers. The
-procedure used for this purpose is described in ? and reported here. Let
+Consider a pair of variables $\mathbf { X ^ { [ j k ) } ~ = ~ \{ ( X . { i j. } X . { i k } ) \}, i ~ = ~ 1.... n}$ The ini-.
+tial location and dispersion estimators are, respectively, the coordinate-wise
+median and the.$2 \times 2$ sub-matrix $S ^ { ( j \pmb { k } ) }$ of the estimate computed by the$S$
+generalized S-estimator on non-filtered data. Note that, this ensure the pos-.
+itive definiteness property for and each$S$ $d \times d$ sub-matrix corresponding to
+a subset of  variables. For bivariate points with no flagged components by.$^ { d }$
+the univariate filter we compute the squared Mahalanobis distance.$\Delta . { i } ^ { ( \mathbf { j } \star ) }$ and
+hence apply the bivariate filter, for all $1 < j < k < p$ At the end we want.
+to identify the cells$( i, j )$ which have to be flagged as cell-wise outliers. The
+procedure used for this purpose is described in ? and reported here. Let.
 
 
 \begin{equation}
-J = \{ ( i, j, k ) : \Delta _ { i } ^ { ( j k ) } \mathrm { ~ i s ~ f l a g e d ~ a s ~ b i v a r i a t e ~ o u t l i e r } \}
+\begin{array} { c } { J = \{ ( i, j, k ) : \Delta _ { i } ^ { ( j k ) } ~ \mathrm { i s ~ f a g e d ~ a s ~ b i v a r i a t c ~ o u n l i e r } \} } \\ { \dots, \quad \dots, \quad \dots \dots \quad \dots \quad \dots \quad \dots \quad \dots \quad \dots \quad. } \end{array}
 \end{equation}
 
 
 be the set of triplets which identifies the pairs of cells flagged by the bivariate
-filter in rows i = 1, ... , n. For each cell (i, j) in the data, we count the number
-of fagged pairs in the i-th row in which the considered cell is involved:
+filter in rows$i = 1, \dots, n$ For each cell in the data, we count the number$( i, j )$
+of flagged pairs in the  th row in which the considered cell is involved:$i$
 
 
 \begin{equation}
@@ -38,26 +40,27 @@ m _ { i j } = \# \{ k : ( i, j, k ) \in J \}.
 \end{equation}
 
 
-In absence of contamination, m; follows approximately a binomial distribuoutliers undetected by the univariate filter. Hence,we fag the cell (i,j) if
-Mij > Cij, where Cij is the 0.99-quantile of Bin( k\# Ujk, 0.1). Finally, we
-perform the p-variate filter as described in subsection to the full data matrix.
-Detected observations (rows) are directly flagged as p-variate (case-wise) outliers. We denote the procedure based on univariate,bivariate and p-variate
-filters,HS-UBPF.
+In absence of contamination,$n t . { i j }$ follows approximately a binomial distribution $B i r ( \sum . { k \neq j } \mathbf { U . { j k } }, \delta )$ whererepresents the overall proportion of cell-wise.$\diamondsuit$
+outliers undetected by the univariate filter. Hence, we flag the cell $( i, j )$ if
+$m . { i j } ~ > ~ c . { i j }$where$\epsilon . { i j }$is the 0.99-quantile of$B i n ( \sum . { k \neq j } \mathbf { U . { j k }, 0. 1 } )$.Finally, we
+perform the -variate filter as described in subsection to the tull data matrix.$\boldsymbol { p }$
+Detected observations (rows) are directly flagged as -variate (case-wise) out-$\rho$
+liers. We denote the procedure based on univariate, bivariate and  -variate$\boldsymbol { p }$
+filters, HS-UBPF.
 
 
 \subsection*{0.1  A sequencing filtering procedure}
 
 
-Suppose we would like to apply a sequence of k filters with different dimension
-1   d   d2   ...   dk   p. For each d,i = 1,...,k, the filter updates
-the data matrix adding NA values to the d-tuples identified as d-variate
-outliers.In this way, each filter applies only those d-tuples that have not
-been fagged as outliers by the filters with lower dimension.Initial values for
-each procedures rather than di would be obtained by applying the GSE to
-the actual filtered values.This procedure aims to be a valid alternative to
-thatused in the presentedHS-UBPFfilter to perform a sequence of filters
+Suppose we would like to apply a sequence of filters with different dimension.$k ^ { * }$
+$1 ~ \leq ~ d . { 1 } ~ \leq ~ d . { 2 } ~ \leq ~ \dots ~ \leq ~ d . { k } ~ \leq p$ For each $d . { i }$ $\dot { t } = 1, \dots, k$,the filter updates
+the data matrix adding NA values to the -tuples identified as variate$t . { i }$ $a . { i }$
+outliers. In this way, each filter applies only those  -tuples that have not$\boldsymbol { \omega } . { i }$
+been flagged as outliers by the filters with lower dimension. Initial values for
+each procedures rather than  would be obtained by applying the GSE to$\boldsymbol { u } . { 1 }$
+the actual filtered values. This procedure aims to be a valid alternative to
+that used in the presented HS-UBPF filter to perform a sequence of filters
 with different dimensions. However, this is a preliminary idea, indeed it has
-notbeenimplementedyet.
+not been implemented yet.
 
-% [footer: 1]
 \end{document}

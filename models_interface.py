@@ -52,6 +52,7 @@ def escape_latex_chars(text: str) -> str:
     return text
 
 
+
 def _filter_nonascii(text: str) -> str:
     """Replace non-ASCII characters with a space; they are OCR hallucinations in LaTeX context."""
     if all(ord(c) < 128 for c in text):
@@ -66,6 +67,8 @@ _rapid_ocr       = None
 _texo_model      = None
 _texo_tokenizer  = None
 _texo_processor  = None
+_got_model       = None
+_got_tokenizer   = None
 _table_solver    = None
 _yolo_model      = None
 _yolo_model_path = None
@@ -157,6 +160,50 @@ def unload_texo():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         print("[*] Texo unloaded")
+
+
+def _get_got():
+    global _got_model, _got_tokenizer
+    if _got_model is None:
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        GOT_PATH = os.path.join(ROOT_DIR, 'GOT-OCR2')
+        print(f"[*] Loading GOT-OCR2 from {GOT_PATH} ...")
+        _got_tokenizer = AutoTokenizer.from_pretrained(
+            GOT_PATH, trust_remote_code=True
+        )
+        _got_model = AutoModelForCausalLM.from_pretrained(
+            GOT_PATH,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+        )
+        _got_model = _got_model.to(_device).eval()
+        print(f"[*] GOT-OCR2 loaded on {_device}")
+    return _got_model, _got_tokenizer
+
+
+def unload_got():
+    global _got_model, _got_tokenizer
+    if _got_model is not None:
+        del _got_model, _got_tokenizer
+        _got_model     = None
+        _got_tokenizer = None
+        import gc as _gc
+        _gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("[*] GOT-OCR2 unloaded")
+
+
+def run_page_got(image_path: str) -> str:
+    """Run GOT-OCR2 on a full-page image; returns raw LaTeX string."""
+    model, tokenizer = _get_got()
+    try:
+        result = model.chat(tokenizer, image_path, ocr_type='format')
+    except Exception as e:
+        print(f"[!] GOT-OCR2 failed: {e}")
+        result = ""
+    return result or ""
 
 
 def _table_heuristic(tokens: list, img_w: int) -> str:
@@ -595,34 +642,89 @@ def _preprocess_formula_crop(crop: Image.Image) -> Image.Image:
     return Image.fromarray(binary).convert("RGB")
 
 
+_GOT_MATH_DELIMS = ("$$", "$", r"\[", r"\]", r"\(", r"\)")
+_GOT_EQ_NUM_RE   = re.compile(r'^\s*\(\d+\)\s*$', re.MULTILINE)
+_GOT_ENV_RE      = re.compile(
+    r'\\begin\{(equation|align|gather|multline)[*]?\}(.*?)\\end\{\1[*]?\}',
+    re.DOTALL,
+)
+
+
+def _clean_got_math(text: str) -> str:
+    """Extract clean LaTeX from GOT-OCR2 format output for a formula crop.
+
+    GOT in format mode wraps equations in \\begin{equation}...\\end{equation}
+    and may include equation numbers (1), (2) from the surrounding crop region.
+    We extract just the math content.
+    """
+    text = text.strip()
+
+    # 1. Extract from named environments (equation / align / gather / multline)
+    env_match = _GOT_ENV_RE.search(text)
+    if env_match:
+        text = env_match.group(2).strip()
+
+    # 2. Extract from \[ ... \] display math
+    if text.startswith(r'\[') and r'\]' in text:
+        text = text[2:text.rfind(r'\]')].strip()
+
+    # 3. Extract from $$ ... $$
+    if text.startswith('$$') and text.count('$$') >= 2:
+        text = text[2:text.rfind('$$')].strip()
+
+    # 4. Remove bare equation-number lines like "  (1)  " that GOT adds
+    text = _GOT_EQ_NUM_RE.sub('', text).strip()
+
+    # 5. If output is multi-line and starts with pure-text lines, drop them
+    # (GOT sometimes prepends surrounding caption text before the math)
+    lines = [l for l in text.split('\n') if l.strip()]
+    math_lines = []
+    found_math = False
+    for line in lines:
+        has_math = any(c in line for c in ('\\', '_', '^', '{', '}', '='))
+        if has_math:
+            found_math = True
+        if found_math:
+            math_lines.append(line)
+    if math_lines:
+        text = '\n'.join(math_lines).strip()
+
+    # 6. Strip stray outer delimiters
+    for d in _GOT_MATH_DELIMS:
+        if text.startswith(d): text = text[len(d):]
+        if text.endswith(d):   text = text[:-len(d)]
+
+    return text.strip()
+
+
 def run_math_recognition_batched(
     crops: list[Image.Image],
     fallback_figures_dir: str = None,
     fallback_counter: list = None,
 ) -> list[str]:
+    """Recognize math formula crops using Texo (FormulaNet) in a single batched pass."""
     global math_batch_latencies
     if not crops:
         return []
     try:
         model, tokenizer, processor = _get_texo()
-
-        processed_list = [processor(_preprocess_formula_crop(c)) for c in crops]
-        processed_images = torch.stack(processed_list).to(_device)
+        preprocessed   = [_preprocess_formula_crop(c) for c in crops]
+        pixel_tensors  = torch.cat(
+            [processor(p).unsqueeze(0) for p in preprocessed], dim=0
+        ).to(_device)
 
         t_start = time.perf_counter()
         with torch.no_grad():
             outputs = model.generate(
-                pixel_values=processed_images,
-                max_new_tokens=_TEXO_MAX_NEW_TOKENS,
-                repetition_penalty=_TEXO_REPEAT_PENALTY,
+                pixel_values      = pixel_tensors,
+                max_new_tokens    = _TEXO_MAX_NEW_TOKENS,
+                repetition_penalty= _TEXO_REPEAT_PENALTY,
             )
-        t_end      = time.perf_counter()
-        latency_ms = (t_end - t_start) * 1000
+        latency_ms = (time.perf_counter() - t_start) * 1000
         math_batch_latencies.append(latency_ms)
-        print(f"    [math] Texo batch ({len(crops)} eq): {latency_ms:.2f} ms")
 
         results_raw = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        final_results = []
+        results = []
         for i, result in enumerate(results_raw):
             clean_res = result.strip()
             for delim in ("$$", "$", r"\[", r"\]", r"\(", r"\)"):
@@ -630,10 +732,11 @@ def run_math_recognition_batched(
                 if clean_res.endswith(delim):   clean_res = clean_res[:-len(delim)]
             clean_res = _sanitize_math_output(clean_res)
             if clean_res:
-                final_results.append(clean_res)
+                results.append(clean_res)
             else:
-                final_results.append(_math_fallback(crops[i], fallback_figures_dir, fallback_counter))
-        return final_results
+                results.append(_math_fallback(crops[i], fallback_figures_dir, fallback_counter))
+        print(f"    [math] Texo ({len(crops)} eq): {latency_ms:.2f} ms")
+        return results
     except Exception as e:
         print(f"    [math] Texo batch failed: {e}")
         return [_math_fallback(c, fallback_figures_dir, fallback_counter) for c in crops]

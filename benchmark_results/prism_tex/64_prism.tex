@@ -11,48 +11,49 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-Using O and rearranging the equation gives
+Using () and rearranging the equation gives
 
 
 \begin{equation}
-F _ { Y _ { 1 } ( 1, 1 ) \mid r = c } ( y ) = \frac { p _ { 1 | 1 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Y _ { 1 | D = 1, M = 1 } } ( y ) - \frac { p _ { 1 | 0 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Q _ { 1 1 } ( Y _ { 0 } ) \mid D = 0, M = 1 } ( y ). ~
+F _ { Y _ { 1 } ( 1, 1 ) | \tau = c } ( y ) = \frac { p _ { 1 | 1 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Y _ { 1 | D = 1, M = 1 } } ( y ) - \frac { p _ { 1 | 0 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Q _ { 1 1 } ( Y _ { 0 } ) | D = 0, M = 1 } ( y ). ~
 \end{equation}
 
 
-From (), we have Fy;(0.,1)ID=1,M(1)=1(y) = FQon(Yo)ID=1,M=1(y). Applying the law of
+From (), we have$F . { Y . { 1 } ( 0, 1 ) \mid D = 1, M ( 1 ) = 1 } ( y ) ~ = ~ F . { Q . { 0 1 } ( Y . { 0 } ) \mid D = 1, M = 1 } ( y )$ Applying the law of
 iterative expectations gives
 
 
 \begin{equation}
-\begin{array} { r } { F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1 } ( y ) = \frac { p _ { a } } { p _ { a } + p _ { c } } F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1, \tau = a } ( y ) } \\ { + \frac { p _ { c } } { p _ { a } + p _ { c } } F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1, \tau = c } ( y ), } \\ { \overset}\end{array}
+\begin{array} { r } { F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1 } ( y ) = \frac { p _ { a } } { p _ { a } + p _ { c } } F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1, \tau = a } ( y ), } \\ { \qquad + \frac { p _ { c } } { p _ { a } + p _ { c } } F _ { Y _ { 1 } ( 0, 1 ) | D = 1, M ( 1 ) = 1, r = c } ( y}\end{array}
 \end{equation}
 
 
-Using O and rearranging the equation gives,
-
-
-P10 -FY;(D=0,M=1(g). (2)
-P1|1 -P10 P1|1 -P10
-
-
-\subsection*{Proof of Theorem 5}
-
-
-\subsection*{1.1  Average treatment effect on the compliers}
-
-
-In O and O, we show that
+Using () and rearranging the equation gives,
 
 
 \begin{equation}
-\begin{array} { r l r } & { } & { \theta _ { 1 } ^ { \mathrm { c } } = E [ Y _ { 1 } ( 1, 1 ) - Y _ { 1 } ( 0, 0 ) | \tau = z ], } \\ & { } & { = \frac { p _ { 1 1 1 } } { p _ { 1 1 1 } - p _ { 1 0 } } E [ Y _ { 1 } | D = 1, M = 1 ] - \frac { p _ { 1 1 0 } } { p _ { 1 1 1 } - p _ { 1 0 } } E [ Q _ { 0 1 } ( Y _ { 0 } ) | D = 0}\end{array}
+F _ { Y _ { 1 } ( 0, 1 ) | r = r } ( y ) = \frac { p _ { 1 | 1 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Q _ { n 1 } ( Y _ { 0 } ) | D = 1 : M = 1 } ( y ) - \frac { p _ { 1 | 0 } } { p _ { 1 | 1 } - p _ { 1 | 0 } } F _ { Y _ { 1 | D = 0, M = 1 } } ( y ). ~
 \end{equation}
 
 
-\subsection*{1.2  Quantile treatment effect on the compliers}
+\subsection*{1  Proof of Theorem 5.}
 
 
-In O) and (), we show that Fy(1.,1)e(y) and Fy(o.o)e(y) are identified. Accordingly,
- (q) = Fy(a,1)l(9) - F(0.0)l(9) is identified.
+\subsection*{1.1 Average treatment effect on the compliers}
+
+
+In () and (), we show that
+
+
+\begin{equation}
+\begin{array} { r l r } & { } & { \theta _ { 1 } ^ { c } = E [ Y _ { 1 } ( 1, 1 ) - Y _ { 1 } ( 0, 0 ) | \tau = r ], } \\ & { } & { = \frac { p _ { 1 1 1 } } { p _ { 1 1 1 } - p _ { 1 0 } } E [ Y _ { 1 } | D = 1, M = 1 ] - \frac { p _ { 1 1 } } { p _ { 1 1 1 } - p _ { 1 0 } } E [ Q _ { 1 1 } ( Y _ { 0 } ) | D = 0, M = 1}\end{array}
+\end{equation}
+
+
+\subsection*{1.2 Quantile treatment effect on the compliers}
+
+
+In $( )$ and $\left ( \right )$, we show that $F . { Y . { \parallel } ( 1, 1 ) | c } \{ y \}$and$F . { Y . { 1 } ( 0, 0 ) \mid c } ( y )$ are identified. Accordingly,
+$\Delta . { 1 } ^ { c } ( q ) = F . { Y . { 1 } ( 1, 1 ) | r } ^ { - 1 } ( q ) - F . { Y . { 1 } ( 0, 0 ] | r } ^ { - 1 } ( q )$is identified.
 
 \end{document}

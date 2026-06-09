@@ -11,57 +11,45 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-o   ( - x1( - ) = 
+$\Delta . { x } ~ = ~ ( \mathbf { x } ~ - ~ \mathbf { T } . { 0 n } ) ^ { \top } \mathbf { C } . { 0 n } ^ { - 1 } ( \mathbf { x } ~ - ~ \mathbf { T } . { 0 n } )$ the squared Mahalanobis distance of $\mathbf { x }$
 using the initial location and dispersion estimates, the set can be rewritten
-n   s ()-(x)  ()-x) < x  x\} = ()g s
-tile of a chi-squared distribution with p degrees of freedom.Now we want
+as $C ^ { \alpha } ( F ) ~ = ~ \{ x ~ \in ~ \mathbb { R } ^ { p } | \Delta . { x } ~ > ~ ( \chi . { p } ^ { 2 } ) ^ { - 1 } ( \beta ) \}$where $( \chi . { p } ^ { 2 } ) ^ { - 1 } ( \beta )$ is a large quantile ot a chi-squared distribution with $\mu$degrees ot treedom. Now we want
 to show that the result given by Proposition holds for this particular case.
-Consider a random vector (X1,... ,Xn)   Fo( o,Eo) and suppose that Fo
-is an elliptically symmetric distribution. Also consider a pair of location and
-dispersion estimators Ton and Con such that Ton    o and Con   Eo a.s..
-Let F be a chosen reference distribution and Fn the empirical distribution
-function.If the reference distribution satisfies
+Consider a random vector $( \bf X . { 1 }..... X . { n } ) \sim F . { 0 } ( \mu . { 0 }, \Sigma . { 0 } )$ and suppose that $F . { 0 }$
+is an elliptically symmetric distribution. Also consider a pair of location and.
+dispersion estimators $\mathbf { I . { 0 n } }$and$\mathbf { C . { 0 n } }$ such that $\mathbf { T . { 0 n } } \rightarrow \pmb { \mu . { 0 } }$and$\mathbf { U . { 0 n } \rightarrow \Sigma . { 0 } }$ a.s..
+Let be a chosen reference distribution and$F$ $\dot { F } . { n }$ the empirical distribution
+function. If the reference distribution satisfies
 
 
-sup [dHs(x; F) - dHs(x; Fo)] < 0
-xEC (F0)
+\begin{equation}
+\begin{array} { c } { \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { d } ( \mathbf { F _ { 0 } } ) } [ d _ { H S } ( \mathbf { x } ; \mathbf { F } ) - \mathbf { d } _ { H S } ( \mathbf { x } ; \mathbf { F _ { 0 } } ) ] < \mathbf { 0 } } \\ { \qquad \qquad \qquad \qquad. } \end{array}
+\end{equation}
 
 
-where   is some large quantile of Fo, then
+where$\beta$is some large quantile of $F . { 0 }$ then
 
 
-ndn   0 as n   0
+Proof. In ?, it is proved that for i.i.d. $\mathbf { X . { 1 }, X . { 2 }, \dots, X . { n } }$ with distribution $F . { 0 },$$\boldsymbol { F } . { 0 }$
+as$n \rightarrow \infin$
 
 
-Proof. In ?, it is proved that for i.i.d. X1,X2, ...,Xn with distribution Fo
-asn oo
+\begin{equation}
+\begin{array} { r } { \operatorname* { s u p } _ { t \in \mathbb { R } ^ { d } } | d _ { H S } ( \mathbf { t }, \mathbf { F } _ { 0 } ) - d _ { H S } ( \mathbf { t }, \hat { \mathbf { F } } _ { n } ) | \rightarrow 0 ~ a. s. } \\ { \operatorname* { s u m } _ { t \in \mathbb { R } ^ { d } } | d _ { H S } ( \mathbf { t }, \mathbf { \tilde { F } } _ { n } ) | \rightarrow 0 ~ ~ ~ c / m... ~ ~ m. } \end{array}
+\end{equation}
 
 
-sup dHs(t, Fo) - dHs(t, Fn)I  > O a.s.
-tERd
+Note that, by the continuity of$F$ $F ( \mathbf { T } . { 0 n }. \mathbf { C } . { 0 n } ) \rightarrow \mathbf { F } ( . { t ^ { 0 } }, \mathbf { \Sigma } . { 0 } )$a.s.. Hence, for.
+each$\varepsilon > 0$ there exists$r . { 6 }$such that for all$n \gg n . { 0 }$we have
 
 
-Note that, by the continuity of F, F(Ton, Con)   F( o, Eo) a.s.. Hence, fol
-
-
-sup \{dHs(x;Fn) - dHs(x;F(Ton,Con))\}  
-xEC (F0)
-
-
-sup \{dHs(x;Fn) - dHs(x; Fo( o,  o))\}+
-xEC(F0)
-
-
-sup \{dHs(x; Fo( o,  o)) - dHs(x; F( o,  o))\}+
-xEC(F0)
-
-
-sup \{dHs(x; F( o,  o)) - dHs(x; F(Ton, Con))\}
-XEC (Fo)
+\begin{equation}
+\begin{array} { c } { \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { J } ( \mathbb { F } _ { 0 } ) } \{ d _ { H S } ( \mathbf { x } ; \hat { \mathbf { F } } _ { \mathbf { n } } ) - d _ { H S } ( \mathbf { x } ; \mathbf { F } ( \mathbf { T } _ { 0 n }, \mathbf { C } _ { 0 n } ) ) \} \leq } \\ { \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { J } ( \mathbb { F } _ { 0 } ) } \{ d _ { H S } (}}\end{array}
+\end{equation}
 
 
 In the next example, we illustrate a univariate filter based on half-space
-depth that controls independently the left and the right tail of the distribution. In the univariate case, given a point c there exist only two halfspaces
+depth that controls independently the left and the right tail of the distribution. In the univariate case, given a point t$x$ there exist only two halfspaces
 including it, hence the half-space depth assumes the explicit form
 
 

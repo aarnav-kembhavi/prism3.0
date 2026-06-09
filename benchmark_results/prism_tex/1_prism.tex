@@ -15,90 +15,93 @@
 \begin{paracol}{2}
 \RaggedRight
 
-PropositionofAppendixshows thatasufficientcondition
-for theidentifiabilityinthecaseofGaussian andBoltzmann
-linear policies is that the second moment matrix of the feature vector Es\textasciitilde{}d* [ (s) (s)] is non-singular along with
-the fact that the policy To plays each action with positive
+Proposition of Appendix shows that a sufficient condition
+for the identifiability in the case of Gaussian and Boltzmann
+linear policies is that the second moment matrix of the feature vector $\mathbb { E } . { \pmb { s } \sim d . { \pmb { \mu } } ^ { \pi } } \left [ \phi ( \pmb { s } ) \phi ( \pmb { s } ) ^ { T } \right ]$ is non-singular along with
+the fact that tne poncy  plays each action with positive$\pi \theta$
 probability for the Boltzmann policy.
 
 
-Concentration ResultWe are now ready to present a concentrationresult,ofindependentinterest,fortheparameters
-andthenegativelog-likelihood thatrepresentsthecentral
+Concentration Result We are now ready to present a concentration result, of independent interest, for the parameters
+and the negative log-likelihood that represents the central
 tool of our analysis (details and derivation in Appendix).
-Under Assumption and Assumption, let D
-\{(si,ai)\}=1 be a dataset of n > 0 independent samples,where Si\textasciitilde{}d*and ai\textasciitilde{}To*(-lsi). Let
-  = argminoeel(0) and o* = argminoeol(0) . If
+Under Assumption and Assumption, let $\begin{array} { r l r } { \mathcal { D } ~ } & { { } = } \end{array}$
+$\{ ( s . { i }, a . { i } ) \} . { i = 1 } ^ { n }$ be a dataset of $n > 0$ independent samples, where $s . { i } \quad \sim \quad d . { \mu } ^ { a, e + }$ and $\begin{array} { r l r } { a . { i } } & { { } \sim } & { \pi . { \theta ^ { * } } ( \cdot | s . { i } ) } \end{array}$ Let
+${ \widehat { \theta } } ~ ~ = ~ ~ { a r g ~ m i n } . { \theta \in \Theta } { \widehat { \ell } } ( \theta )$ and $\theta ^ { * } ~ ~ = ~ ~ a r g ~ m i n . { \theta \in \Theta } \ell ( \theta )$ .If
 the empirical FIM:
 
 
 \begin{equation}
-\begin{array} { r l } { \widehat { \mathcal { F } } ( \boldsymbol { \theta } ) = \frac { 1 } { n } \sum _ { i = 1 } ^ { n } \mathbb { E } _ { a \sim \pi _ { \boldsymbol { \theta } } ( \cdot \mid s ) } \left [ \overline { \mathbf { t } } ( s, a, \boldsymbol { \theta } ) \overline { \mathbf { t } } ( s, a, \boldsymbol { \theta } ) ^ { T } \right ] \quad } & { ( 1 ) } \\ { \quad } & { \qquad }\end{array}
+\begin{array} { r l } { \hat { \mathcal { F } } ( \theta ) = \frac { 1 } { n } \sum _ { i = 1 } ^ { n } \mathbb { E } _ { a \sim \pi _ { \theta } ( \cdot | s ) } \left [ \overline { \mathbf { t } } ( s, a, \theta ) \overline { \mathbf { t } } ( s, a, \theta ) ^ { T } \right ] \quad ( 1 ) } & { ( 1 ) } \\ & { \qquad }\end{array}
 \end{equation}
 
 
-has a positive minimum eigenvalue Xmin > 0 for all 0 e ,
-then, for any 8  [0,1],with probability at least 1 - 8:
+has a positive minimum eigenvalue$\lambda . { \operatorname* { m i n } } > 0$for all${ \boldsymbol { \theta } } \in \Theta,$
+then, for any$\delta \in [ 0, 1 ]$ with probability at least$1 - \delta$
 
 
 \begin{equation}
-\begin{array} { r } { \left \| \hat { \boldsymbol { \theta } } - { \boldsymbol { \theta } } ^ { * } \right \| _ { 2 } \leqslant \frac { \sigma } { \hat { \lambda } _ { \operatorname* { m i n } } } \sqrt { \frac { 2 d } { n } \log \frac { 2 d } { \delta } }. } \\ { \dots \qquad \dots \qquad \dots \qquad \qquad. } \end{array}
+\begin{array} { r l } & { \cdot } \\ & { \qquad }\end{array}
 \end{equation}
 
 
-Furthermore, with probability at least 1 - 8, individually:
+Furthermore, with probability at least $1 - 8$ individually:
 
 
 \begin{equation}
-\begin{array} { r l } & { \stackrel { * } { \ell ( \widehat { \theta } ) - \ell ( \theta ^ { * * } ) } \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \widehat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta } } \\ & { \stackrel { * } { \ell ( \theta ^ { * } ) } - \hat { \ell } ( \widehat { \theta } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \widehat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta }. } \end{array}
+\begin{array} { r l } & { \ell ( \widehat { \theta } ) - \ell ( \theta ^ { * } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \hat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta } } \\ & { \widehat { \ell } ( \theta ^ { * } ) - \widehat { \ell } ( \widehat { \theta } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \hat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta }. } \\ & { \qquad }\end{array}
 \end{equation}
 
 
-The theorem shows that the L2-norm of the difference between the maximum likelihood parameter 0 and the true parameter 0* concentrates with rate O(n-1/2) while the likelihood and its expectation\&concentrate with faster rate
-O(n-1). Note that the result assumes that the empirical FIM
-F(0) has a strictly positive eigenvalue  min > O. This condition can be enforced as long as the true Fisher matrix F(0)
-has a positive minimum eigenvalue Xmin, i.e. under identifiability assumption (Lemma) and given a sufficiently large
+The theorem shows that the$L ^ { 2 }$norm of the difference between the maximum likelihood parameter  and the true pa-$\theta$
+rameter$\theta ^ { * }$concentrates with rate $\mathcal { O } ( \mathfrak { n } ^ { - 1 / 2 } )$ while the likelihood and its expectation concentrate with faster rate$\hat { \ell }$ $\varepsilon$
+${ \mathcal { O } } ( n ^ { - 1 } ).$ Note that the result assumes that the empirical FIM
+$\hat { \mathcal { F } } ( \theta )$ has a strictly positive eigenvalue $\hat { \lambda } . { \operatorname* { m i n } } > 0$ This condition can be enforced as long as the true Fisher matrix $\mathcal { F } ( \theta )$
+has a positive minimum eigenvalue $\lambda . { \mathbf { m i u } }$ i.e. under identifiability assumption (Lemma) and given a sufficiently large
 number of samples. Proposition of Appendix provides the
-minimumnumber ofsamplessuchthatwithprobability at
-least 1it holds that  min > 0.
+minimum number of samples such that with probability at
+least$1 - \phi$ it holds that $\dot { \lambda } . { \mathrm { m i n } } > 0$
 
 
-Identification Rule AnalysisThe goal of the analysis of
-the identification rule is to find the critical value c(1) so that
+Identification Rule Analysis The goal of the analysis of
+the identification rule is to find the critical value${ \mathfrak { c l } } ( 1 )$so that
 the following probabilistic requirement is enforced.
 
 
-Let    [O,1]. An identification rule producing I iscorrect if: Pr (I   I*) 8.
-pected fraction of parameters that the agent does not control
-I*:i  I\}|] the expected fraction of parameters that the
-agent does control not selected by theidentification rule.We
+Let$\delta ~ \in ~ [ 0, 1 ]$ An identification rule producing$I$iS $\delta -$
+correct if: $\operatorname* { P r } \big ( \widehat { I } \neq I ^ { * } \big ) \leqslant \delta$
+We denote with$\begin{array} { r } { \alpha = \frac { 1 } { dd ^ { * } } \mathbb { E } \big [ \big | \big \{ i \notin I ^ { + } : i \in \tilde { I } . { c } \big \} \big | \big ] } \end{array}$ the expected fraction of parameters that the agent does not control
+selected by the identification rule and with. $\begin{array} { r } { \vec { \beta } ~ = ~ \frac { 1 } { d ^ { \sharp } } \mathbb { E } [ \big | \{ i \in ~ } \end{array}}$
+$I ^ { * } : i \not \in \left. \hat { I } . { c } \right \ | ]$the expected fraction of parameters that the
+agent aoes control not selected by the identification rule. We.
 
 \switchcolumn
 \RaggedRight
 
-now provide a result that bounds Q and   and employs them
-to derive 8-correctness.
+now provide a result that boundss and and employs them$\boldsymbol { \Omega }$ $\beta$
+to derive-correctness.$\delta$
 
 
-Let Ic be the set of parameter indexes selected by the
-Identification Rule obtained using n >0 i.i.d.samples
-collected with To*,with o*   O. Then,under Assumption and Assumption, let 0* = arg minoeo;\&(0) for all
-i e \{1,,d\} and v = min\{1,  \}. If  min  2 2pue
-(0* -l(0*)  c(1),it holds that:
+Let $I . { s }.$ be the set of parameter indexes selected by tthe
+Identification Rule obtained using$n \geq 0$ i.i.d. samples
+collected with$\pi { \pmb { \theta } } *$with $\theta ^ { * } ~ \in ~ \Theta$ Then, under Assumption and Assumption, let $\theta . { i } ^ { * } ~ = ~ \mathbf { a r g } ~ m i n . { \theta \in \Theta, } \ell ( \theta )$ for all
+$i \in \{ 1,... ; d \}$and$\begin{array} { r } { \nu ~ = ~ \operatorname* { m i n } \big \{ 1, \frac { \lambda . { \mathrm { s a i n } } } { \sigma ^ { 2 } } \big \}. } \end{array}$ If$\begin{array} { r } { \dot { \lambda } . { \mathrm { m i t } } \geq \frac { \lambda . { \mathrm { m a l u } } } { 2 \sqrt { 2 } } } \end{array}$ and
+$\ell ( \theta . { i } ^ { * } ) - l ( \theta ^ { * } ) \geq c ( 1 )$ it holds that:
 
 
 \begin{equation}
-\begin{array} { r l } & { \mathrm { ~ " ~ a'~ }}\end{array}
+\begin{array} { r l } & { \mathrm { ~ ^ { s } u _ { 1 } ~'~ }}\end{array}
 \end{equation}
 
 
-Furthermore,the Identification Rule is ((d -d*)  + d* )-
+Furthermore, the Identification Rule is$( ( { \boldsymbol { d } } - { \boldsymbol { d } } ^ { * } ) { \boldsymbol { \alpha } } + { \boldsymbol { d } } ^ { * } { \mathcal { I } } ) -$
 correct.
-Since   and  are functions of c(1),we could,in principle,employ Theorem toenforce a value ,as inDefinition, and derive c(1). However, Theorem is not very attractive in practice as it holds under an assumption regarding the
-minimum eigenvalue of the FIM and the corresponding estimate,i.e. min  , that cannot be verified in practice
-2 /2
-since  min is unknown. Similarly, the constants d*,l(0*)
-and l(o*  are typically unknown. We will provide in Section
-a heuristic for setting c(1).
+Since$\textbf { \i }$ and$\beta$are functions of ${ \mathfrak { c } } ( 1 )$ we could, in principle, employ Theorem to enforce a value$\delta$.as in Definition, and derive$\epsilon : ( 1 )$ However, Theorem is not very attrac.
+tive in practice as it holds under an assumption regarding the
+minimum eigenvalue of the FIM and the corresponding estimate, i.e.$\begin{array} { r } { \hat { \lambda } . { \mathrm { m i n } } \geqslant \frac { \lambda . { \mathrm { m i n } } } { 2 \sqrt { 2 } } } \end{array}$ that cannot be verified in practice
+since$\lambda . { \mathbf { t }, \mathbf { t }, \mathbf { i n } }$1s unknown. Similarly, the constants $d ^ { * }$ $i ( \theta . { i } ^ { * } )$
+aud$l ( \theta ^ { * } )$are typically unknown. We will provide in Section
+a heuristic for setting$c ( 1 )$
 
 
 \subsection*{Policy Space Identification in a Configurable
@@ -106,30 +109,31 @@ Environment}
 
 
 The identification rules presented so far are unable to distinguish between a parameter set to zero because the agent
-cannot control it, or because zero is its optimal value.To
-overcome this issue, we employ the Conf-MDP properties
-toselect a configurationinwhichtheparameterswewant to
-examinehave an optimalvalue other thanzero.Intuitively,if
-wewanttotestwhether the agentcancontrolparameter 0,
-weshouldplace theagentinanenvironmentwE2where
-0 is maximally important for the optimal policy. This intuition is justified by Theorem, since to maximize the power
-of the test (1 - ), all other things being equal,we should
-ter 0 should be essential to justify the agent's behavior. Let
-Ie\{1,...,d\}be a set of parameter indexes we want to test,
-ouridealgoal is tofind theenvironment w1 such that:
+cannot control it, or because zero is its optimal value. To
+overcome this issue, we employ the ConfMDP properties
+to select a configuration in which the parameters we want to
+examine have an optimal value other than zero. Intuitively, if
+we want to test whether the agent can control parameter $\theta . { j }$
+we should place the agent in an environment$\omega . { i } \in \{ \Omega}$ where
+$\theta . { i }$ is maximally important for the optimal policy. This intuition is justified by Theorem, since to maximize the power
+of the test$\{ 1j \}$ all other things being equal, we should
+maximize the log-likelihood gap$i ( \theta . { i } ^ { * } ) - i ( \theta ^ { * } )$i.e. parameter$\theta . { i }$ should be essential to justity tne agent's behavior. Let
+$I \in \{ 1,..., d \}$be a set of parameter indexes we want to test,
+our ideal goal is to find the environment$\omega . { i }$such that:
 
 
-wI E arg maxwes \{l(0*(w))- l(0*(w))\} (2)
-where0*(w EargmacoeoJM(0)and0*(w  
-argmacoeOJMw(0)aretheparameters of theoptimal
-policies in the environment Mw in IIe and Io, respectively. Clearly, given the samples D collected with a single optimal policy  *(wo) in a single environment Mwo,
-solving problem (2) is hard as it requires performing an offdistribution optimization both on the space of policy parameters and configurations. For these reasons, we consider a
+$\omega . { I } \in a r g ~ m a x . { \omega \in \Omega } \left \{ l ( \theta . { I } ^ { * } ( \omega ) ) - l ( \theta ^ { * } ( \omega ) ) \right \},$ (2)
+where $\theta ^ { * } ( \omega ) \quad \in \quad \mathsf { a r g } ~ m a x . { \theta \in \bar { \Theta } } J . { \mathcal { M } . { \infin } } ( \theta )$ and $\theta . { i } ^ { * } ( \omega ) \quad \in$
+arg$\mathfrak { r u x } . { \theta \in \Theta . { l } }, J . { \mathcal { M } . { \omega } } ( \theta )$ are the parameters of the opumal
+policies in the environment $\mathcal { M } . { \omega }$ in $1 1 \epsilon$ and $1 \mathbf { l } . { \Theta . { i } }$ respectively. Clearly, given the samples $\mathcal { D }$ collected with a single optimal policy $\pi ^ { * } \{ \omega . { 0 } \}$ in a single environment $\mathcal { M } . { \omega . { 0 } }$
+solving problem (2) is hard as it requires performing an oft
+distribution optimization both on the space of policy parameters and configurations. For these reasons, we consider a
 surrogate objective that assumes that the optimal parameter
 in the new configuration can be reached by performing a single gradient step
 
 
-Let I e \{1, ., d\} and I = \{1, ..., d\}\I. For a vector v, we
-denotewithv|1thevectorobtainedbysettingtozerothe
+Let$I \in \{ 1,..., d \}$and$I = \{ 1,..., d \} \backslash I.$For a vector v, we
+denote with$\mathbf { v } | . { I }$the vector obtained by setting to zero the
 
 \end{paracol}
 

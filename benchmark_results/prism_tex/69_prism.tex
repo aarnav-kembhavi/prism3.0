@@ -11,55 +11,60 @@
 
 \noindent\hfill\includegraphics[height=1.8em]{assets/figure_header_logo.png}\par\noindent\hrule\vspace{4pt}
 
-LetXbeaRp-valuedrandomvariablewithdistributionfunctionF.For
-a point x E RP, we consider the statistical data depth of x with respect to
-F be d(x;F) such that d satisfies the four properties given in ? and ? and
-reportedinAppendixof theSupplementaryMaterial.Givenanindependent
-and identically distributed sample X1,...,Xn of size n, we denote Fn() its
-empirical distribution function and by d(x; Fn) the sample depth. We assume
-that, d(x; Fn) is a uniform consistent estimator of d(x; F), that is,
+Let$\mathbf { X }$ be a$\mathbb { R } ^ { p }$-valued random variable with distribution function $F$ For
+a point $\mathbf { x } \in \mathbb { R } ^ { \mathbf { p } }$ we consider the statistical data depth of $\mathbf { x }$ with respect to
+$F$be$d ( \mathbf { x } ; \mathbf { F } )$ such that satisfies the four properties given in ? and ? and$\boldsymbol { d }$
+reported in Appendix of the Supplementary Material. Given an independent
+and identically distributed sample $\mathbf { X } . { 1 }, \dots, \mathbf { X } . { 1 }$ of sizewe denote$. { n }$ $\hat { F } . { h } ( \cdot )$ its
+empirical distribution function and by$i l ( \mathbf { x } ; \hat \mathbf { F } . \mathbf { n } )$the sample depth. We assume
+that, $d ( \mathbf { x } ; \mathbf { \hat { F } . { n } } )$ is a uniform consistent estimator of $( l ( \mathbf { x } ; \mathbf { F } )$ that is,
 
 
 \begin{equation}
-\operatorname* { s u p } _ { \mathbf { x } } | d ( \mathbf { x } ; \hat { \mathbf { F } } _ { \mathbf { n } } ) - \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) | \stackrel { \mathrm { a. s. } } { \rightarrow } \mathbf { 0 } \qquad \mathbf { n } \rightarrow \infin,
+\operatorname* { s u p } _ { \mathbf { x } } | d ( \mathbf { x } ; \hat { \mathbf { F } } _ { \mathbf { n } } ) - \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) | \stackrel { \mathrm { a. s. } } { \rightarrow } 0 \qquad \mathbf { n } \rightarrow \infin,
 \end{equation}
 
 
 a property enjoined by many statistical data depth functions, e.g., among
 others simplicial depth (?), half-space depth (?). One important feature of
-the depth functions is the  -depth trimmed region given by Ra(F) = \{x E
-RP : d(x;F)    \}; for any     [0,1], we will denote R(F) the smallest
-region Ra(F) that has probability larger that or equal to   according to F.
+the depth functions is the -depth trimmed region given by.$\alpha$ $R . { \mathbf { a } } ( F ) = \{ \mathbf { x } \in}$
+$\mathbb { R } ^ { \mathbf { p } } ~ : ~ \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) ~ \geq ~ \alpha \$: for any $\beta ~ \in ~ [ 0, 1 ]$.we will denote $R ^ { i } ( F )$ the smallest
+region $R . { \mathfrak { c } } ( F )$ that has probability larger that or equal to according to$\beta$ $F$
 Throughout, subscripts and superscripts for depth regions are used for depth
-levels and probability contents, respectively. Let C3(F) be the complement
-in Rp of the set R(F).Let m = maxx d(x;F),be the maximum of the
-high order quantile  , we define a filter of dimension p based on
+levels and probability contents, respectively. Let. $C ^ { s } ( F )$ be the complement
+in of the set$\mathbb { R } ^ { \nu }$ $R ^ { s } ( F )$ Let $m ~ = ~ \operatorname* { m a x } . { \mathbf { x } } d ( \mathbf { x } : \mathbf { F } )$be the maximum of the
+depth, for simplicial depth. $m \leq 2 ^ { - p }$ for half-space depth $m \leq 1 / 2$ Given a
+high order quantile . we define a filter of dimension.$\beta$ 1based on$\mu$
 
 
 \begin{equation}
-d _ { n } = \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { \beta } ( \mathbf { F } ) } \{ d ( \mathbf { x } ; \hat { \mathbf { F } } _ { \mathbf { n } } ) - \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) \} ^ { + }, ~
+d _ { n } = \operatorname* { s u p } _ { \mathbf { x } \in \mathbf { C } ^ { g } ( \mathbf { F } ) } \{ d ( \mathbf { x } ; \hat { \mathbf { F } } _ { \mathbf { n } } ) - \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) \} ^ { + }, \qquad ( 1 )
 \end{equation}
 
 
-where \{a\}+ represents the positive part of a, and we mark as outliers all
-the [ndn/m  observations with the smallest population depth (where [a]
-is the largest integer less then or equal to a). This define a filter in the
-general dimension p. We have the following result, with obvious proof. If
-supx Id(x; Fn) -d(x;F)I = o(n) (a.s.) then ndn   0 as n  > 0o. If the above
-result holds,then the filter would be consistent.In the next subsection we
+where $\{ a \} ^ { + }$ represents the positive part of  and we mark as outliers all$e r$
+the $\lfloor n. d . { n } / m \rfloor$ observations with the smallest population depth (where $\lfloor a \rfloor$
+is the largest integer less then or equal to ). This define a filter in the$^ { t t }$
+general dimension  . We have the following result, with obvious proof. If$I ^ { t }$
+$\mathrm { s u p } . { \mathbf { x } } | d ( \mathbf { x } ; \tilde { \mathbf { F } } . { \mathbf { n } } ) - \mathbf { d } ( \mathbf { x } ; \mathbf { F } ) | = \mathbf { o } ( \mathbf { n } )$ a.s.) then$n d . { n } \rightarrow 0$ as$n \rightarrow \infin$ If the above
+result holds, then the filter would be consistent. In the next subsection we
 are going to illustrate this approach using the half-space depth.
 
 
-\subsection*{0.1  Filters based on Half-space Depth}
+\subsection*{0.1 Filters based on Half-space Depth}
 
 
-Let X be a RP-valued random variable with distribution function F.For a
-point x E RP, the half-space depth of x with respect to F is defined as the
+Let$\mathcal { X }$be a$\mathbb { R } ^ { p }$-valued random variable with distribution function$\boldsymbol { \mu }$.For a
+point$\mathbf { x } \in \mathbb { k } \mathbb { E } ^ { \mathbf { p } }$ the half-space depth of  with respect to  is defined as the$\mathbf { x }$ $F$
 minimum probability of all closed half-spaces including x:
 
 
-where H(x) indicates the set of all half-spaces in Rp containing x E RP.A
-random vector X   RP is said elliptically symmetric distributed, denoted by
+\begin{equation}
+d _ { H S } ( \mathbf { x : F } ) = \operatorname* { m i n } _ { \mathbf { H \in \mathcal { H } ( \mathbf { x } ) } } \mathbf { P } _ { \mathbf { F } } ( \mathbf { X \in H } ).
+\end{equation}
 
-% [footer: 1]
+
+where${ \pmb \mathcal H } ( \mathbf x )$ indicates the set of all half-spaces in.$\mathbb { R } ^ { p }$containing $\mathbf { x } \in \mathbb { M } ^ { \mathbf { p } }$
+random vector$\mathbf { X } \in \mathbb { R } ^ { \mathbf { P } }$ is said elliptically symmetric distributed, denoted by
+
 \end{document}
