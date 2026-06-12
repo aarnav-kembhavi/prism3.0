@@ -1,0 +1,37 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+since \(I_{0}\) is \(O\left(z^{6}\right)\) and hence vanishes in the \(\epsilon \rightarrow 0\) limit. However, some of the one-point functions will depend on \(\Omega\). It may be the case that only certain choices of \(\Omega\) correspond to supersymmetric schemes, but since the final free energy will be independent of \(\Omega\) we will not worry about this choice. While in principle gives us the free energy, its evaluation on our numerical solutions is complicated by the integration over \(u\) in \(S_{6 D}\). As such, we will take a slightly roundabout approach to the calculation of the free energy, first calculating its derivative \(d F / d \alpha\) and then integrating over the UV parameter \(\alpha\). This will allow us to circumvent the integration over \(u\). In order to get \(d F / d \alpha\), it will first be necessary to calculate the one-point functions of the dual field theory operators. This is the topic of the following subsection.
+\subsection*{0.0.1 One-point functions}
+By the usual AdS/CFT dictionary, the one-point functions of the operators dual to the three scalar fields and the metric are given by
+\[
+\begin{array}{ll}
+\left\langle \mathcal{O}_{\sigma}\right\rangle=\lim _{\epsilon \rightarrow 0} \frac{1}{\epsilon^{3}} \frac{1}{\sqrt{\gamma}} \frac{\delta S_{r e n}}{\delta \sigma} & \left\langle \mathcal{O}_{\phi^{0}}\right\rangle=\lim _{\epsilon \rightarrow 0} \frac{1}{\left.\epsilon^{5} \sqrt{\gamma}} \frac{\delta S_{r e n}}{\delta \gamma^{3}} \\
+\left\langle \mathcal{O}_{\phi^{3}}\right\rangle=\lim _{\epsilon \rightarrow 0} \frac{1}{{ }_{\epsilon}^{3}} \frac{1}{\delta \gamma_{r e n}} \frac{\delta S_{r e n}}{\delta \phi^{3}} & \left\langle T^{i}\right\rangle=\lim _{\epsilon \rightarrow 0} \frac{1}{e^{5}} \frac{1}{\sqrt{\gamma}} \frac{\delta S_{r e m}}{\delta \gamma_{i k}}
+\end{array}
+\]
+We may obtain the explicit values of these vacuum expectation values by varying the on-shell action . The variation of the counterterm action \(S_{c t}\) is straightforward. The variation of \(S_{6 D}\) gives rise to one piece which vanishes on the equations of motion, as well as a boundary term which must be accounted for. We find
+\[
+\begin{array}{l}
+\left\langle \mathcal{O}_{\sigma}\right\rangle=\lim \limits _{\epsilon \rightarrow 0} \frac{1}{\epsilon^{5}}\left[-2 z \partial_{z} \sigma+6 \sigma-\frac{3}{4}\left(\varphi^{0}\right)^{2}+\Omega\left(10 \sigma-\frac{15}{4}\left(\phi^{0}\right)^{2}\right)\right] \\
+\left\langle \mathcal{O}_{\phi^{0}}\right\rangle=\left.\lim _{\epsilon \rightarrow 0} \frac{1}{\epsilon^{4}}\left[-\frac{1}{2} \cos ^{2} \phi^{3} z \partial_{z} \phi^{0}+\frac{1}{2} \varphi^{0}+\frac{1}{12}\left(\varphi^{0}\right)^{3}-\frac{3}{2} \phi^{0} \sigma-\frac{1}{16} R \phi^{0}\right. \\
+\left.\quad+\Omega\left(\frac{45}{16}\left(\varphi^{0}\right)^{3}-\frac{1}{2} \delta^{0} \sigma\right)\right] \\
+\left\langle \mathcal{O}_{\phi^{3}}\right\rbrack=\left.\lim _{\epsilon \rightarrow 0} \frac{1}{\epsilon^{\alpha 3}}\left[\frac{1}{2} z \partial_{z} \phi^{3}-\phi^{3}\right]\right. \\
+\left.\quad\left\langle T^{i}\right\rangle=\left.\lim _{\epsilon \rightarrow 0} \frac{1}{{ }_{\epsilon^{\beta}}} \left[\frac{1}{2}\left(\mathcal{K} \gamma\right)^{i}-\mathcal{K}^{\prime}\right]\right)+\frac{2}{\sqrt{\gamma}} \frac{\delta S_{c t}}{\delta \gamma_{i j}}\right]
+\end{array}
+\]
+Evaluating the limits, we get the following one-point functions
+\[
+\begin{array}{c}
+\left\langle \mathcal{O}_{\sigma}\right\rangle=\frac{5}{2} e^{f_{k}} \alpha \beta \Omega \\
+\left\langle \mathcal{O}_{\phi^{3}}\right\rbrace=\frac{1}{2} \beta
+\end{array}
+\]
+\[
+\left\langle \mathcal{O}_{\phi^{0}}\right\rangle =\frac{3}{2} e^{-f_{k}} \beta-\frac{15}{8} e^{f_{k}} \alpha^{2} \beta \Omega
+\]
+\end{document}

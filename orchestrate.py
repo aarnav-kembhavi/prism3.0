@@ -3,26 +3,27 @@ orchestrate.py
 --------------
 CLI entry point for the Screen2LaTeX orchestration pipeline.
 
-Restored to Initial Methodology (v3.9):
-  1. Detailed LaTeX Wrappers (Detailed Titles, resizebox Tables).
-  2. Sequential Specialist Routing (Robust Table Handling).
-  3. RapidOCR Unified Backend (RAM Safe).
-  4. YOLO ONNX + Unloading (Speed Optimized).
-
-v3.10 fixes:
-  - Math fallback counter threaded through route_and_extract to avoid
-    filename collisions in two-column mode.
-  - image_norm/image_fidelity freed after all crops extracted (RAM saving).
-  - Deduplicated _adjust_paths helper (was defined twice in main()).
+v3.11 performance optimizations:
+  1. Background worker startup — workers load in a thread while YOLO runs,
+     overlapping ~3s Texo load with normalization+YOLO inference.
+  2. Parallel math+text dispatch — math and text workers run concurrently
+     via ThreadPoolExecutor, cutting per-page extraction by up to 1s.
+  3. Multi-image / daemon mode — pass multiple images as positional args;
+     workers start once and stay alive for all images (saves 3.3s per image
+     after the first).
 """
 
 import sys
 import os
+
+os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
+
 import time
 import argparse
 import gc
-import torch
+import threading
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from PIL import Image
 
@@ -30,14 +31,21 @@ from normalization import normalize_image_pil
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
     run_page_got,
-    run_table_extraction, get_yolo_model,
-    unload_texo, unload_got,
+    run_table_extraction, run_table_extraction_batched, get_yolo_model,
+    unload_yolo, unload_texo, unload_got, unload_rapidocr,
     get_math_latencies, get_math_batch_latencies,
     get_text_latencies, get_table_latencies, get_text_batch_latencies,
 )
+from text_worker import TextOCRWorker
+from math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
+
+# Subprocess workers — populated by main(); None means in-process fallback.
+_ocr_worker:  "TextOCRWorker | None" = None
+_math_worker: "MathOCRWorker | None" = None
 from layout_utils import (
     apply_semantic_reading_order, sort_detections_geometric,
     xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
+    split_detections_n_columns,
 )
 from latex_builder import wrap_content, assemble_document, save_tex
 from detection_postprocess import postprocess_detections
@@ -127,22 +135,66 @@ def route_and_extract(
     figure_counter = figure_start
     math_counter   = [math_start]
 
-    text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
-    math_indices = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
+    text_indices  = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
+    math_indices  = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
+    table_indices = [i for i, d in enumerate(detections) if d["class_name"] in TABLE_CLASSES]
 
-    if math_indices:
-        crops = [detections[i]["crop"] for i in math_indices]
-        results = run_math_recognition_batched(crops, figures_dir, math_counter)
-        for idx, raw in zip(math_indices, results):
+    # Optimization 2: dispatch math and text to their workers in parallel.
+    # Each worker has its own independent Pipe connection so concurrent calls
+    # are safe. Table must wait for the text worker to be free first.
+    use_workers = (_math_worker is not None and _ocr_worker is not None)
+
+    if use_workers and math_indices and text_indices:
+        math_crops = [detections[i]["crop"] for i in math_indices]
+        text_crops = [detections[i]["crop"] for i in text_indices]
+        with ThreadPoolExecutor(max_workers=2) as exe:
+            math_fut = exe.submit(
+                _math_worker.run_math_batch,
+                math_crops, figures_dir, math_counter[0],
+            )
+            text_fut = exe.submit(
+                _ocr_worker.run_text_batch, text_crops, is_screenshot,
+            )
+            math_results, math_counter[0] = math_fut.result()
+            texts = text_fut.result()
+        for idx, raw in zip(math_indices, math_results):
             detections[idx]["raw_content"] = raw
-
-    # ── Text → RapidOCR ───────────────────────────────────────────
-    if text_indices:
-        texts = run_text_ocr_batched(
-            [detections[i]["crop"] for i in text_indices], is_screenshot=is_screenshot
-        )
         for idx, txt in zip(text_indices, texts):
             detections[idx]["raw_content"] = txt
+    else:
+        if math_indices:
+            crops = [detections[i]["crop"] for i in math_indices]
+            if _math_worker is not None:
+                results, math_counter[0] = _math_worker.run_math_batch(
+                    crops, figures_dir, math_counter[0]
+                )
+            else:
+                results = run_math_recognition_batched(crops, figures_dir, math_counter)
+                unload_texo()
+            for idx, raw in zip(math_indices, results):
+                detections[idx]["raw_content"] = raw
+
+        if text_indices:
+            crops = [detections[i]["crop"] for i in text_indices]
+            if _ocr_worker is not None:
+                texts = _ocr_worker.run_text_batch(crops, is_screenshot=is_screenshot)
+            else:
+                texts = run_text_ocr_batched(crops, is_screenshot=is_screenshot)
+            for idx, txt in zip(text_indices, texts):
+                detections[idx]["raw_content"] = txt
+
+    if table_indices:
+        table_crops = [detections[i]["crop"] for i in table_indices]
+        if _ocr_worker is not None:
+            table_results = _ocr_worker.run_table_batch(table_crops)
+        else:
+            table_results = run_table_extraction_batched(table_crops)
+        for idx, raw in zip(table_indices, table_results):
+            detections[idx]["raw_content"] = raw
+
+    # Change E: when not using subprocess, free RapidOCR sessions after all OCR
+    if _ocr_worker is None:
+        unload_rapidocr()
 
     for i, det in enumerate(detections):
         class_name = det["class_name"]
@@ -156,8 +208,7 @@ def route_and_extract(
             body_parts.append(wrapped)
 
         elif class_name in TABLE_CLASSES:
-            print("  [table] Extracting table structure...")
-            raw = run_table_extraction(crop)
+            raw = det.get("raw_content", "")
             if raw:
                 body_parts.append(wrap_content(class_name, raw))
             else:
@@ -172,15 +223,48 @@ def route_and_extract(
     return body_parts, list_indices, figure_counter, math_counter[0]
 
 
+def _launch_workers():
+    """Start both subprocess workers (called in a background thread)."""
+    global _ocr_worker, _math_worker
+    _ocr_worker = TextOCRWorker()
+    _ocr_worker.start()
+    _math_worker = MathOCRWorker()
+    _math_worker.start()
+
+
 def main():
+    global _ocr_worker, _math_worker
     parser = argparse.ArgumentParser(description="Screen2LaTeX Orchestrator")
-    parser.add_argument("image_path", type=str)
-    parser.add_argument("--profile",       action="store_true")
-    parser.add_argument("--high-quality",  action="store_true",
+    parser.add_argument("image_paths", type=str, nargs="+",
+                        help="One or more images to process (workers shared across all)")
+    parser.add_argument("--profile",          action="store_true")
+    parser.add_argument("--high-quality",     action="store_true",
                         help="Use GOT-OCR2 for full-page LaTeX (slower, higher quality)")
+    parser.add_argument("--no-ocr-worker",    action="store_true",
+                        help="Run RapidOCR in-process instead of a subprocess worker")
     args = parser.parse_args()
 
-    image_stem = Path(args.image_path).stem
+    # Optimization 1: start workers in a background thread so Texo loads
+    # concurrently with normalization and YOLO inference (~3s saved per run).
+    _worker_thread = None
+    if not args.no_ocr_worker and not args.high_quality:
+        _worker_thread = threading.Thread(target=_launch_workers, daemon=True)
+        _worker_thread.start()
+
+    # Process each image with the shared worker set.
+    for image_path_str in args.image_paths:
+        _process_one(image_path_str, args, _worker_thread)
+        _worker_thread = None  # already joined on first image; workers stay alive
+
+    if _ocr_worker is not None:
+        _ocr_worker.stop()
+    if _math_worker is not None:
+        _math_worker.stop()
+
+
+def _process_one(image_path_str: str, args, worker_thread):
+    """Run the full pipeline on a single image, joining worker thread if needed."""
+    image_stem = Path(image_path_str).stem
     output_dir = Path(f"{image_stem}_output")
     if output_dir.exists():
         import shutil
@@ -206,8 +290,7 @@ def main():
     if args.high_quality:
         print("[*] High-quality mode: GOT-OCR2 full-page OCR")
         t0 = time.perf_counter()
-        # Normalise first so GOT gets a clean image
-        image_norm, _, _ = normalize_image_pil(args.image_path)
+        image_norm, _, _ = normalize_image_pil(image_path_str)
         norm_path = str(assets_dir / "normalized.png")
         image_norm.save(norm_path)
         del image_norm
@@ -215,7 +298,6 @@ def main():
         raw_latex = run_page_got(norm_path)
         unload_got()
 
-        # Wrap in a minimal document if GOT returned bare content
         if not raw_latex.strip().startswith("\\documentclass"):
             document = assemble_document([raw_latex], set(), False)
         else:
@@ -232,7 +314,7 @@ def main():
     # ── Stage 1: Normalization ───────────────────────────────────
     t_stage1_start = time.perf_counter()
     print("[*] Stage 1: Image Normalization")
-    image_norm, image_fidelity, modality_result = normalize_image_pil(args.image_path)
+    image_norm, image_fidelity, modality_result = normalize_image_pil(image_path_str)
     from normalization.modality import CaptureModality
     is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT)
     print(f"[*] Modality: {'screenshot' if is_screenshot else 'phone_photo'}")
@@ -305,11 +387,18 @@ def main():
     # Free full-resolution images — all crops are now extracted into det['crop']
     del image_norm, image_fidelity
     gc.collect()
+    # Change A: YOLO not needed again for this image; free its session (~520 MB)
+    unload_yolo()
 
     t_stage15_end  = time.perf_counter()
     mem_stage15_end = process.memory_info().rss / 1024 / 1024
 
     # ── Stage 3: Content Extraction ──────────────────────────────
+    # Optimization 1: join the background worker thread before we need workers.
+    # By now normalization + YOLO + prep have run (~3s), Texo should be loaded.
+    if worker_thread is not None:
+        worker_thread.join()
+
     print("\n[*] Stage 3: Content Extraction")
     t_stage3_start = time.perf_counter()
 
@@ -343,6 +432,24 @@ def main():
             left_parts, left_idx, right_parts, right_idx,
             header_logo_fname,
         )
+    elif col_count >= 3:
+        print(f"    [layout] N-column layout detected: {col_count} columns")
+        full_dets, col_lists = split_detections_n_columns(
+            body_detections, img_width, img_height, use_dag=True
+        )
+        all_parts: list = []
+        all_list_idx: set = set()
+        offset = 0
+        f_cnt, m_cnt = 0, 0
+        for group in [full_dets] + col_lists:
+            parts, list_idx, f_cnt, m_cnt = route_and_extract(
+                group, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt
+            )
+            parts = _adjust_figure_paths(parts)
+            all_parts.extend(parts)
+            all_list_idx.update(i + offset for i in list_idx)
+            offset += len(parts)
+        document = assemble_document(all_parts, all_list_idx, False, header_logo=header_logo_fname)
     else:
         body_sorted = apply_semantic_reading_order(body_detections, img_width, img_height)
         body_parts, list_idx, _, _ = route_and_extract(
@@ -351,7 +458,8 @@ def main():
         body_parts = _adjust_figure_paths(body_parts)
         document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
 
-    unload_texo()
+    if _math_worker is None:
+        unload_texo()
 
     t_stage3_end  = time.perf_counter()
     mem_stage3_end = process.memory_info().rss / 1024 / 1024
@@ -365,9 +473,8 @@ def main():
     if profiler:
         metrics = profiler.stop()
 
-        ocr_empirical   = sum(get_text_batch_latencies()) / 1000.0
-        math_empirical  = sum(get_math_batch_latencies()) / 1000.0
-        table_empirical = sum(get_table_latencies()) / 1000.0
+        # Wall-clock extraction time (includes parallel math+text IPC roundtrip)
+        t_extraction = t_stage3_end - t_stage3_start
 
         summary = [
             f"\n[*] Component Profiling ({image_stem}):",
@@ -376,9 +483,7 @@ def main():
             f"    {'Normalization':<15} | {t_stage1_end  - t_stage1_start:6.2f}s | {mem_stage1_end:7.1f} MB",
             f"    {'YOLO (ONNX)':<15} | {t_stage2_end  - t_stage2_start:6.2f}s | {mem_stage2_end:7.1f} MB",
             f"    {'Adaptive Prep':<15} | {t_stage15_end - t_stage15_start:6.2f}s | {mem_stage15_end:7.1f} MB",
-            f"    {'OCR (Rapid)':<15} | {ocr_empirical:6.2f}s | {mem_stage3_end:7.1f} MB",
-            f"    {'Math (Texo)':<15} | {math_empirical:6.2f}s | {mem_stage3_end:7.1f} MB",
-            f"    {'Table (Solver)':<15} | {table_empirical:6.2f}s | {mem_stage3_end:7.1f} MB",
+            f"    {'Extraction':<15} | {t_extraction:6.2f}s | {mem_stage3_end:7.1f} MB",
             f"    {'Assembly':<15} | {t_stage4_end  - t_stage4_start:6.2f}s | {mem_stage4_end:7.1f} MB",
             f"    {'-'*40}",
             f"    {'TOTAL':<15} | {metrics['latency_sec']:6.2f}s | {metrics['mem_peak_mb']:7.1f} MB",
@@ -388,7 +493,7 @@ def main():
         with open(logs_dir / "profiling.txt", "w") as f:
             f.write("\n".join(summary))
 
-    print("\n[OK] Done.")
+    print(f"\n[OK] Done — {image_stem}.")
 
 
 if __name__ == "__main__":

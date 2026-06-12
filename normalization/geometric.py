@@ -269,6 +269,103 @@ def _strategy_canny_contour(gray, img_area):
 
 
 # ----------------------------------------------------------------
+# Skew detection and correction (projection profile method)
+# ----------------------------------------------------------------
+
+def detect_skew_angle(gray, max_angle: float = 15.0, angle_step: float = 0.5) -> float:
+    """
+    Estimate in-plane rotation angle using the projection profile method.
+
+    Rotates a downsampled binary image across candidate angles and picks
+    the angle whose horizontal row-sum histogram has the highest variance
+    (text lines are sharpest when perfectly horizontal).
+
+    Handles dark-border padding (from augmentation) by cropping to the
+    bright document region before thresholding, so border pixels don't
+    swamp the text signal.
+
+    Returns the detected skew angle in degrees (positive = CCW in OpenCV).
+    Returns 0.0 if the image appears straight or detection is unreliable.
+    """
+    # Downsample for speed — 600px on the longer side is plenty
+    h, w = gray.shape[:2]
+    scale = min(1.0, 600.0 / max(h, w))
+    small = cv2.resize(gray, (int(w * scale), int(h * scale)),
+                       interpolation=cv2.INTER_AREA) if scale < 1.0 else gray.copy()
+
+    # Crop to the bright document area to exclude dark border padding.
+    # Padding like (40,40,40) would swamp Otsu; the document background is > 150.
+    bright = (small > 150).astype(np.uint8)
+    ys, xs = np.where(bright)
+    if len(ys) < 500:
+        return 0.0
+    margin = 5
+    y1 = max(int(ys.min()) + margin, 0)
+    y2 = min(int(ys.max()) - margin, small.shape[0] - 1)
+    x1 = max(int(xs.min()) + margin, 0)
+    x2 = min(int(xs.max()) - margin, small.shape[1] - 1)
+    crop = small[y1:y2 + 1, x1:x2 + 1]
+    if crop.size < 1000:
+        return 0.0
+
+    # Otsu on the clean document region: text → 255, white background → 0
+    _, binary = cv2.threshold(crop, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    if binary.astype(bool).mean() > 0.5:
+        # Inverted image (dark background): flip so text = 255
+        binary = cv2.bitwise_not(binary)
+
+    sh, sw = binary.shape[:2]
+    center = (sw // 2, sh // 2)
+    best_angle, best_var = 0.0, -1.0
+
+    for angle in np.arange(-max_angle, max_angle + angle_step, angle_step):
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        rotated = cv2.warpAffine(binary, M, (sw, sh),
+                                 flags=cv2.INTER_NEAREST, borderValue=0)
+        row_sums = rotated.sum(axis=1).astype(np.float64)
+        # Derivative variance: measures sharpness of text-line transitions.
+        # More robust than raw row-sum variance which is dominated by margins.
+        var = float(np.diff(row_sums).var())
+        if var > best_var:
+            best_var, best_angle = var, float(angle)
+
+    return best_angle
+
+
+def deskew(img: np.ndarray, max_angle: float = 15.0, angle_step: float = 0.5,
+           min_correction: float = 0.5) -> np.ndarray:
+    """
+    Detect and correct document skew using projection profile analysis.
+
+    Corrects in-plane rotation up to `max_angle` degrees.
+    Skips correction if the detected angle is below `min_correction`.
+    Fills the background with white (255) — appropriate for scanned documents.
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    angle = detect_skew_angle(gray, max_angle=max_angle, angle_step=angle_step)
+
+    if abs(angle) < min_correction:
+        return img
+
+    print(f"  [norm] Deskew: detected {angle:+.1f}° skew, correcting")
+    h, w = img.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+    # Expand canvas so corners aren't clipped
+    cos, sin = abs(M[0, 0]), abs(M[0, 1])
+    new_w = int(h * sin + w * cos)
+    new_h = int(h * cos + w * sin)
+    M[0, 2] += (new_w / 2) - center[0]
+    M[1, 2] += (new_h / 2) - center[1]
+
+    corrected = cv2.warpAffine(img, M, (new_w, new_h),
+                               flags=cv2.INTER_LINEAR,
+                               borderValue=(255, 255, 255))
+    return corrected
+
+
+# ----------------------------------------------------------------
 # Public API
 # ----------------------------------------------------------------
 

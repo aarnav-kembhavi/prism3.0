@@ -21,7 +21,7 @@ from normalization import normalize_image_pil
 from normalization.modality import CaptureModality
 from models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
-    run_table_extraction, get_yolo_model, unload_texo,
+    run_table_extraction_batched, get_yolo_model, unload_texo,
     get_math_batch_latencies, get_text_batch_latencies, get_table_latencies,
 )
 from layout_utils import (
@@ -85,8 +85,9 @@ def route_and_extract(detections, figures_dir, figure_start=0, is_screenshot=Fal
     body_parts, list_indices = [], set()
     figure_counter = figure_start
     math_counter   = [math_start]
-    text_indices = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
-    math_indices = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
+    text_indices  = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
+    math_indices  = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
+    table_indices = [i for i, d in enumerate(detections) if d["class_name"] in TABLE_CLASSES]
     if math_indices:
         crops = [detections[i]["crop"] for i in math_indices]
         results = run_math_recognition_batched(crops, figures_dir, math_counter)
@@ -97,6 +98,10 @@ def route_and_extract(detections, figures_dir, figure_start=0, is_screenshot=Fal
             [detections[i]["crop"] for i in text_indices], is_screenshot=is_screenshot)
         for idx, txt in zip(text_indices, texts):
             detections[idx]["raw_content"] = txt
+    if table_indices:
+        table_results = run_table_extraction_batched([detections[i]["crop"] for i in table_indices])
+        for idx, raw in zip(table_indices, table_results):
+            detections[idx]["raw_content"] = raw
     for i, det in enumerate(detections):
         cn, crop = det["class_name"], det["crop"]
         if cn in TEXT_CLASSES or cn in MATH_CLASSES:
@@ -106,7 +111,7 @@ def route_and_extract(detections, figures_dir, figure_start=0, is_screenshot=Fal
                 list_indices.add(len(body_parts))
             body_parts.append(wrapped)
         elif cn in TABLE_CLASSES:
-            raw = run_table_extraction(crop)
+            raw = det.get("raw_content", "")
             if raw: body_parts.append(wrap_content(cn, raw))
         elif cn in IMAGE_CLASSES:
             figure_counter += 1

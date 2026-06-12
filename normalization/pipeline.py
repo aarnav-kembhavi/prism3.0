@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from .geometric import detect_and_rectify
+from .geometric import detect_and_rectify, deskew
 from .frequency_filter import (
     white_balance_gray_world,
     remove_shadows,
@@ -78,6 +78,8 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
     h, w = img.shape[:2]
     print(f"  [norm] Input size: {w}x{h}")
 
+    img = deskew(img)
+
     modality_result = detect_capture_modality(img)
     is_screenshot = modality_result.modality == CaptureModality.SCREENSHOT
     print(f"  [norm] Capture modality: {modality_result}")
@@ -113,7 +115,9 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         print("  [norm] Step 2: Geometric rectification")
         img = detect_and_rectify(input_path, img_override=img)
 
-        # Fidelity copy: post-rectification, pre-destructive corrections
+        # Fidelity copy: post-rectification, pre-destructive corrections.
+        # GC here frees any intermediate arrays from steps 1-2 before we hold two copies.
+        import gc as _gc; _gc.collect()
         fidelity_img = img.copy()
 
         print("  [norm] Step 3: Shadow removal (DoG)")
@@ -124,6 +128,7 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
 
         print("  [norm] Step 5: Moire removal (FFT)")
         img = remove_moire(img)
+        import gc as _gc; _gc.collect()  # free the float64 FFT buffers before next step
 
         print("  [norm] Step 6: Contrast normalization (CLAHE)")
         img = normalize_contrast(img)
@@ -132,19 +137,13 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         img = _smart_dpi_resize(img, target_dpi, source_dpi)
         fidelity_img = _smart_dpi_resize(fidelity_img, target_dpi, source_dpi)
 
-    color = img.copy()
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
     final_h, final_w = img.shape[:2]
     print(f"  [norm] Done. Output: {final_w}x{final_h}")
-    return color, gray, binary, fidelity_img, modality_result
+    return img, fidelity_img, modality_result
 
 
 def normalize_image_pil(input_path, target_dpi=250, source_dpi=96):
-    color, _, _, fidelity, modality_result = normalize_image(
-        input_path, target_dpi, source_dpi
-    )
+    color, fidelity, modality_result = normalize_image(input_path, target_dpi, source_dpi)
     rgb_color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
     rgb_fidelity = cv2.cvtColor(fidelity, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb_color), Image.fromarray(rgb_fidelity), modality_result

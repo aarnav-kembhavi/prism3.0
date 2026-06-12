@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+The expectation values of the operator \(\mathcal{O}_{\phi^{3}}\) and the trace of the energy-momentum tensor are independent of \(\Omega\). As a check, we note that the four one-point functions satisfy the following operator relation, which is associated to the violation of conformal invariance by non-zero classical beta functions,
+\[
+\left\langle T_{i}^{i}\right\rangle =-\sum_{\mathcal{O}}\left(d-\Delta_{\mathcal{O}}\right)\phi_{\mathcal{O}}\left\langle\mathcal{O}\right\rangle
+\]
+\subsection*{0.0.1 Derivative of the free energy}
+Following , we may now compute the derivative of \(F\) with respect to \(\alpha\) as follows. First we note that
+\[
+\left.\frac{d F}{d \alpha}=\frac{d S_{\text {ren }}}{d \alpha}=\lim _{\epsilon \rightarrow 0} \int d^{5} x \sum_{\text {fields } \Phi} \frac{\delta\left(\sqrt{\gamma} \mathcal{L}_{\text {ren }}\right)}{\delta \Phi} \left.\frac{d \Phi}{d \alpha}\right|_{z=\epsilon}
+\]
+In our case, the terms appearing in the sum over fields are
+\[
+\begin{array}{l}
+\frac{\delta\left(\sqrt{\gamma} \mathcal{L}_{\text { ren }}\right)}{\delta \sigma}=\sqrt{\gamma}\left\langle O_{\sigma}\right\rangle \epsilon^{3}+\ldots \quad \frac{\delta\left(\sqrt{\gamma} \mathcal{L}_{\text{ren }}\right)}{\delta \delta \phi^{0}}=\sqrt{\gamma}\left\langle O_{\theta}^{0}\right\rangle \epsilon^{4}+\ldots \\
+\frac{\delta\left(\sqrt{\gamma} \mathcal{L}_{\text {\ren }}}\right)}{\delta \phi^{3}}=\sqrt{\gamma}\left\langle O_{\phi}^{3}\right\rangle \epsilon^{3}+\ldots \quad \frac{\delta\big(\sqrt{\gamma} \mathcal{L}_{\text {ren }}}{\delta \gamma^{i j}}=\frac{1}{2} \sqrt{\gamma}\left\langle T_{i j}\right\rangle \epsilon^{5}+\ldots
+\end{array}
+\]
+The dots represent terms of strictly lower order in \(\epsilon\). Furthermore, from the form of the UV asymptotic expansions, we have
+\[
+\begin{array}{l}
+\frac{d \sigma}{d \alpha}=\frac{3}{4} \alpha \epsilon^{2}+O\left(\epsilon^{3}\right) \quad \frac{d \phi^{0}}{d \alpha}=\epsilon+O\left(\epsilon^{3}\right) \\
+\frac{d \phi^{3}}{d \alpha}=\left(1-\alpha \frac{d f_{k}}{d \alpha}\right) e^{-f_{k}} \epsilon^{2}+O\left(\epsilon^{3}\right) \quad \quad \frac{d \gamma^{i j}}{d \alpha}=-2 \frac{d f_{k}}{d \alpha} e^{-2 f_{k}} \epsilon^{2}+O\left(\epsilon^{2}\right)
+\end{array}
+\]
+Combining the pieces, with the results for the one-point functions in, we find that the contribution of the metric in is suppressed by \(\epsilon^{2}\) compared to other terms. The derivative of the free energy is then
+\[
+\begin{array}{l}
+\frac{d F}{d \alpha}=\lim _{\epsilon \rightarrow 0} \int d^{5}
+x \sqrt{\gamma} \, \epsilon^{5} \, \left[ \frac{3}{2} \beta
+\mathrm{e}^{-f_{k}} + \frac{1}{2} \beta
+\mathrm{e}^{-f_{k}} \, \left(1-\alpha \frac{d f_{k}}{d \alpha}\right)
++ O(\epsilon) \right] \\
+\quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad
+\quad \quad \quad \quad \quad \quad \quad \quad \quad \; \quad \quad \quad \quad \quad \quad \quad \quad \quad \; = \mathrm{vol}_{0} \, \left( S^{5}\right) \, \frac{1}{2} \beta
+\, e^{4 f_{k}} \, \left(4-\alpha \frac{d f_{k}}{d \alpha}\right)
+\end{array}
+\]
+where \(\operatorname{vol}_{0}\left(S^{5}\right)=\pi^{3}\) is the volume of a unit \(S^{5}\). The \(\Omega\) dependence in the one-point functions cancels out, consistent with the fact that \(F\) itself is independent of \(\Omega\). We thus obtain the final result
+\[
+\frac{d F}{d \alpha}=\frac{\pi^{2}}{8 G_{6}} \beta \, e^{4 f_{k}} \, \left(4-\alpha \frac{df_{k}}{d \alpha}\right)
+\]
+\end{document}

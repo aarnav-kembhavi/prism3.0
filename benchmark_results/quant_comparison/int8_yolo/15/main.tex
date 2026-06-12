@@ -1,0 +1,78 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+The non-zero components of the Ricci tensor are.
+
+
+\begin{equation}
+\begin{array} { c c c } { R _ { u u } = - 5 \left ( f ^ { \prime \prime } + ( f ^ { \prime } ) ^ { 2 } \right ) ~ R _ { m n } = - g _ { m n } \left ( f ^ { \prime \prime } + 5 ( f ^ { \prime } ) ^ { 2 } \right ) ~ }\end{array}
+\end{equation}
+
+
+while the Ricci scalar is given by.
+
+
+\begin{equation}
+R = - 1 0 f ^ { \prime \prime } - 3 0 ( f ^ { \prime } ) ^ { 2 } \qquad ( 2 )
+\end{equation}
+
+
+Furthermore, we have that G = e5f g, where g is the determinant of the unit S metric.
+Hawking term to give the following simple expression.
+
+
+\begin{equation}
+S = \int d u \int d ^ { 5 } x \sqrt { g } ~ e ^ { 5 f } \left [ - 5 \left ( ( f ^ { \prime } ) ^ { 2 } + 4 W ^ { 2 } \right ) + 2 \mathcal { L } _ \mathbf { h i n } \right ] ~
+\end{equation}
+
+
+The restriction to the flat case was not strictly necessary so far, but it will be crucial in the
+next step. The gradient flow equations, together with the chain-rule, allows us to rewrite
+
+
+\begin{equation}
+\mathcal { L } _ \mathsf { k i n } = - 2 ~ W ^ { \prime } \qquad ( 4 )
+\end{equation}
+
+
+Plugging this into and using the BPS equation of the warp factor, we find
+
+
+\begin{equation}
+S = - 4 \int d ^ { 6 } \! x \sqrt { g } ~ e ^ { 5 f } W \Big | _ { 6 } ^ { \Lambda } \qquad ( 5 )
+\end{equation}
+
+
+where A is the UV cutoff. Only the A part of the action contributes, since efW|o vanishes
+due to the close-off of the geometry. Removing the UV cutoff A -> oo is equivalent to
+removing the cutoff e on our asymptotic coordinate z, i.e.  -> 0. From the UV asymptotics
+we find that in this limit the factor e5f diverges like.
+
+
+\begin{equation}
+e ^ { 5 f } \sim \frac { 1 } { \varepsilon ^ { 5 } } \qquad ( 6 )
+\end{equation}
+
+
+tial are relevant for obtaining counterterms. All the higher-order terms vanish as the cutoff
+is removed. We may thus legitimately insert the approximate superpotential into to get the
+counterterms,
+
+
+\begin{equation}
+\begin{array} { c c } { S _ { \mathrm { d e } } ^ { ( W ) } = 4 \int d ^ { 6 } x \sqrt { \gamma } \left [ \frac { 1 } { 2 } + \frac { 3 } { 4 } \sigma ^ { 2 } + \frac { 1 } { 1 6 } ( \phi ^ { 0 } ) ^ { 2 } - \frac { 3 } { 1 6 } ( \phi ^ { 3 } ) ^ { 2 } + \frac { 1 } { 1 9 2 } ( \phi ^ { 0 } ) ^ { 4 } - \frac { 3 } { 1 6 } ( \phi ^ { 0 } ) ^ { 2 } \sigma \right ] \qquad } & { ( 7 ) } \\\end{array}
+\end{equation}
+
+
+where  is the induced metric on the z = e boundary. All fields are evaluated at z = e. This
+gives all finite and infinite counterterms for the flat domain wall solutions.
+
+\end{document}

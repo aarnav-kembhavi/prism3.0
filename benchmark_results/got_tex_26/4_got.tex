@@ -1,0 +1,46 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+In both the Lorentzian and Euclidean cases, a convenient way of formulating the coset space non-linear sigma model is to have the scalars \(\phi^{\alpha I}\) parameterize an element \(L\) of \(G\). The so-called coset representative \(L\) is an \((n+4) \times(n+4)\) matrix with matrix elements \(L_{\alpha}^{\lambda}\), for \(\Lambda, \Sigma=1, \ldots n+4\). Using this representative, one may construct a left-invariant 1-form,
+\[
+L^{-1} d L \in \mathfrak{g}
+\]
+where \(\mathfrak{g}=\operatorname{Lie}(G)\). To build a \(K\)-invariant kinetic term from the above, we decompose
+\[
+L^{-1} d L=Q+P
+\]
+where \(Q \in \mathfrak{t}=\operatorname{Lie}(K)\) and \(P\) lies in the complement of \(\mathfrak{t}\) in \(\mathfrak{g}\). Explicitly, the coset vielbein forms are given by,
+\[
+P^{I}{ }_{\alpha}=\left(L^{-1}\right)^{I}{ }_{\Lambda}\left(d L^{\Lambda}{ }_{\alpha}+f^{\Lambda}{ }_{\Pi I} A^{\Gamma} L^{\Pi}{ }_{\alpha}\right)
+\]
+where the \(f_{\mathrm{A} \Sigma}{ }^{\Gamma}\) are structure constants of the gauge algebra, i.e.
+\[
+\left[T_{\Lambda}, T_{\Sigma}\right]=f_{\Lambda \Sigma}{ }^{\Gamma} T_{\Gamma}
+\]
+We may then use \(P\) to build the kinetic term for the vector multiplet scalars as,
+\[
+\mathcal{L}_{\mathrm{coset}}=-\frac{1}{4}eP_{I \alpha \mu}P^{I \alpha \mu}
+\]
+where \(e=\sqrt{|\det g|}\) and we've defined \(P^{I \alpha}{ }_{\alpha}=P^{I_{\alpha}}_{i} \partial_{\mu} \phi^{i}\), for \(i=0, \ldots, 4 n-1\). With this formulation for the coset space non-linear sigma model, we may now write down the full bosonic Lagrangian of the theory. We will be interested in the case in which only the metric and the scalars are non-vanishing. In this case the Lorentzian theory is given by
+\[
+e^{-1} \mathcal{L}=-\frac{1}{4} R+\partial_{\mu} \sigma \partial^{\mu} \sigma-\frac{1}{4} P_{I \alpha \mu} P^{I \alpha \mu}-V
+\]
+with the scalar potential \(V\) given by
+\[
+\begin{aligned}
+V= & -e^{2 \sigma}\left[\frac{1}{36} A^{2}+\frac{1}{4} B^{i} B_{i}+\frac{1}{4}\left(C_{t}^{I} C_{I t}+4 D_{t}^{I} D_{I t}\right)\right]+m^{2} e^{-6 \sigma} \mathcal{N}_{00} \\
+& -m e^{-2 \sigma}\left[\frac{2}{3} A L_{00}-2 B^{i} L_{0 i}\right]
+\end{aligned}
+\]
+The scalar potential features the following quantities,
+\[
+\begin{array}{ll}
+A=\epsilon^{r s t} K_{r s t} & B^{r}=\epsilon^{r s t} K_{s t 0} \\
+C_{I}^{t}=\epsilon^{t r s} K_{r I s} & D_{I t}=K_{0 I t}
+\end{array}
+\]
+\end{document}

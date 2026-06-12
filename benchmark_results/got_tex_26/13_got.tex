@@ -1,0 +1,28 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+(located at some cutoff distance \(u=\Lambda\) ), while \(\mathcal{K}\) is the trace of the extrinsic curvature \(\mathcal{K}_{i j}\) of the radial \(S^{5}\) slices. The latter is defined as
+\[
+\mathcal{K}_{i}=\frac{d}{d u} \gamma_{i}
+\]
+In general, the on-shell action is divergent and requires renormalization. The addition of infinite counterterms is standard in holographic renormalization, but in the current case we must also add finite counterterms in order to preserve supersymmetry. We will begin our exploration of counterterms in this section by first considering the finite counterterms in the limit of a flat domain wall, after which we move onto infinite counterterms in the more general case of a curved domain wall. Finally, appropriate curved space finite counterterms will be fixed by demanding finiteness of the one-point functions of the dual operators.
+\subsection*{0.1 Finite counterterms}
+In order to obtain finite counterterms, we will make use of the Bogomolnyi trick. To do so, we will first need to identify a superpotential \(W\). Though we will find that no exact superpotential can be found for our solutions - in the sense that there is no superpotential which can recast all of the BPS equations in gradient flow form - we will be able to identify an approximate superpotential. By "approximate" here, we mean that it does yield gradient flow equations up to terms of order \(O\left(z^{5}\right)\), where the asymptotic coordinate \(z\) was defined earlier as \(z=e^{-u}\). This is useful since, as we will see later, we will only need terms up to \(O\left(z^{5}\right)\) to obtain all divergent and finite counterterms. Terms of higher order will all vanish in the \(\epsilon \rightarrow 0\) limit, i.e. when the UV cutoff is removed. Thus the approximate superpotential will yield all finite counterterms.
+\subsection*{0.1.1 Approximate superpotential}
+In order to identify a candidate superpotential, we begin by recalling the form of the scalar potential \(V\). With the choice of coset representative and consistent truncation outlined in Section , one finds that
+\[
+V\left(\sigma, \phi^{i}\right)=-9 m^{2} e^{2 \sigma}-12 m^{2} e^{-2 \sigma} \cosh \phi^{0} \cos \phi^{3}+m^{2} e^{-6 \sigma} \cosh ^{2} \phi^{0}+m^{2} e^{-6 \sigma} \cos 2 \phi^{3} \sinh ^{2} \phi^{0}
+\]
+This scalar potential can in fact be rewritten as
+\[
+V=4\left(N_{0}^{2}+N_{3}^{2}\right)+\frac{1}{4}\left(M_{0}^{2}+M_{3}^{2}\right)-20\left(S_{0}^{2}+S_{3}^{2}\right)
+\]
+Then for BPS solutions, implies that
+\[
+V=\left(\sigma^{\prime}\right)^{2}+\frac{1}{4}\left(-\left(\phi^{3 \prime}\right)^{2}+\cos ^{2} \phi^{3}\left(\phi^{0 \prime}\right)^{2}\right)-20\left(S_{0}^{2}+S_{3 }^{2}\right)
+\]
+\end{document}

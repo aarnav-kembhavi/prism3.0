@@ -18,10 +18,37 @@ import os
 import re
 import time
 import statistics
-import torch
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 from concurrent.futures import ThreadPoolExecutor
+
+# ── Change B: disable ONNX Runtime CPU memory arena globally ──────────────────
+# The default arena pre-allocates memory in large power-of-two chunks and never
+# releases it, causing YOLO + RapidOCR sessions to hold ~520 MB even between
+# inferences. Disabling the arena lets the OS reclaim memory immediately after
+# each session's work is done, at the cost of slightly more malloc/free calls
+# (unmeasurable on our workload sizes).  Must be applied before any session is
+# created — patching here covers both lazy-loaded YOLO and RapidOCR.
+try:
+    import onnxruntime as _ort_module
+    _ort_orig_session = _ort_module.InferenceSession
+    _ort_SessionOptions = _ort_module.SessionOptions
+
+    def _no_arena_session(path_or_bytes, sess_options=None, providers=None, **kw):
+        if sess_options is None:
+            sess_options = _ort_SessionOptions()
+        sess_options.enable_cpu_mem_arena = False
+        # Enable OS-level memory mapping for model weights so pages can be
+        # evicted under pressure without copying the full model into heap.
+        try:
+            sess_options.add_session_config_entry("session.use_memory_mapped_if_possible", "1")
+        except Exception:
+            pass
+        return _ort_orig_session(path_or_bytes, sess_options=sess_options, providers=providers, **kw)
+
+    _ort_module.InferenceSession = _no_arena_session
+except Exception:
+    pass
 
 # ----------------------------------------------------------------
 # Path handling and Windows DLL fix
@@ -30,9 +57,13 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(ROOT_DIR, 'Texo', 'src'))
 sys.path.append(os.path.join(ROOT_DIR, 'text-table-latex'))
 
-if sys.platform == 'win32':
+def _ensure_torch_dlls():
+    """Add PyTorch's DLL directory on Windows so CUDA DLLs resolve correctly."""
+    if sys.platform != 'win32':
+        return
     try:
-        lib_path = os.path.join(os.path.dirname(torch.__file__), 'lib')
+        import torch as _t
+        lib_path = os.path.join(os.path.dirname(_t.__file__), 'lib')
         if os.path.exists(lib_path) and hasattr(os, 'add_dll_directory'):
             os.add_dll_directory(lib_path)
     except Exception:
@@ -54,10 +85,11 @@ def escape_latex_chars(text: str) -> str:
 
 
 def _filter_nonascii(text: str) -> str:
-    """Replace non-ASCII characters with a space; they are OCR hallucinations in LaTeX context."""
+    """Strip non-ASCII characters (OCR hallucinations) and normalize spaces."""
     if all(ord(c) < 128 for c in text):
         return text
-    return ''.join(c if ord(c) < 128 else ' ' for c in text)
+    filtered = ''.join(c for c in text if ord(c) < 128)
+    return ' '.join(filtered.split())
 
 
 # ----------------------------------------------------------------
@@ -72,14 +104,16 @@ _got_tokenizer   = None
 _table_solver    = None
 _yolo_model      = None
 _yolo_model_path = None
-_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# Texo runs on CPU — avoids a 400-500 MB CUDA context for a 76 MB model.
+# GOT-OCR2 still uses the GPU when available (it's 1.4 GB; CPU would be impractical).
+_texo_device = None  # set on first Texo load (always CPU)
+_got_device  = None  # set on first GOT load (GPU if available)
 
 
 def _get_rapidocr():
     global _rapid_ocr
     if _rapid_ocr is None:
         from rapidocr_onnxruntime import RapidOCR
-        import importlib.util
 
         kwargs = dict(
             det_limit_type='max',
@@ -89,20 +123,26 @@ def _get_rapidocr():
         # Use English PP-OCRv4 rec model if available — smaller char set,
         # better accuracy on English-only academic text than the default
         # Chinese-dominant model.
+        # en_dict.txt (190 bytes) is shipped locally to avoid `import paddleocr`
+        # which costs ~211 MB of RAM just to resolve the file path.
         en_rec  = os.path.join(ROOT_DIR, 'en_PP-OCRv4_rec.onnx')
-        paddle_spec = importlib.util.find_spec('paddleocr')
-        if os.path.exists(en_rec) and paddle_spec is not None:
-            import paddleocr as _poc
-            en_dict = os.path.join(
-                os.path.dirname(_poc.__file__), 'ppocr', 'utils', 'en_dict.txt'
-            )
-            if os.path.exists(en_dict):
-                kwargs['rec_model_path'] = en_rec
-                kwargs['rec_keys_path']  = en_dict
-                print('[*] RapidOCR: using English PP-OCRv4 rec model')
+        en_dict = os.path.join(ROOT_DIR, 'en_dict.txt')
+        if os.path.exists(en_rec) and os.path.exists(en_dict):
+            kwargs['rec_model_path'] = en_rec
+            kwargs['rec_keys_path']  = en_dict
+            print('[*] RapidOCR: using English PP-OCRv4 rec model (local dict)')
 
         _rapid_ocr = RapidOCR(**kwargs)
     return _rapid_ocr
+
+
+def unload_rapidocr():
+    global _rapid_ocr
+    if _rapid_ocr is not None:
+        del _rapid_ocr
+        _rapid_ocr = None
+        import gc as _gc; _gc.collect()
+        print("[*] RapidOCR unloaded")
 
 
 # Profiling stores
@@ -120,17 +160,21 @@ def get_text_batch_latencies(): return text_batch_latencies
 
 
 def _get_texo():
-    global _texo_model, _texo_tokenizer, _texo_processor
+    global _texo_model, _texo_tokenizer, _texo_processor, _texo_device
     if _texo_model is None:
+        import torch
+        _ensure_torch_dlls()
         from texo.data.processor import EvalMERImageProcessor
         from texo.model.formulanet import FormulaNet
         import texo.utils.config  # registers 'my_hgnetv2'
         from transformers import AutoTokenizer
+        _texo_device = torch.device('cpu')
         MODEL_PATH = os.path.join(ROOT_DIR, "Texo", "model")
         _texo_tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
         _texo_model = FormulaNet.from_pretrained(MODEL_PATH)
-        _texo_model.eval().to(_device)
+        _texo_model.eval().to(_texo_device)
         _texo_processor = EvalMERImageProcessor(image_size={'width': 384, 'height': 384})
+        print(f'[*] Texo loaded on {_texo_device}')
     return _texo_model, _texo_tokenizer, _texo_processor
 
 
@@ -148,6 +192,16 @@ def get_yolo_model(model_path: str):
     return _yolo_model
 
 
+def unload_yolo():
+    global _yolo_model, _yolo_model_path
+    if _yolo_model is not None:
+        del _yolo_model
+        _yolo_model      = None
+        _yolo_model_path = None
+        import gc as _gc; _gc.collect()
+        print("[*] YOLO unloaded")
+
+
 def unload_texo():
     global _texo_model, _texo_tokenizer, _texo_processor
     if _texo_model is not None:
@@ -157,15 +211,16 @@ def unload_texo():
         _texo_processor = None
         import gc as _gc
         _gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         print("[*] Texo unloaded")
 
 
 def _get_got():
-    global _got_model, _got_tokenizer
+    global _got_model, _got_tokenizer, _got_device
     if _got_model is None:
+        import torch
+        _ensure_torch_dlls()
         from transformers import AutoTokenizer, AutoModelForCausalLM
+        _got_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         GOT_PATH = os.path.join(ROOT_DIR, 'GOT-OCR2')
         print(f"[*] Loading GOT-OCR2 from {GOT_PATH} ...")
         _got_tokenizer = AutoTokenizer.from_pretrained(
@@ -177,14 +232,15 @@ def _get_got():
             torch_dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
         )
-        _got_model = _got_model.to(_device).eval()
-        print(f"[*] GOT-OCR2 loaded on {_device}")
+        _got_model = _got_model.to(_got_device).eval()
+        print(f"[*] GOT-OCR2 loaded on {_got_device}")
     return _got_model, _got_tokenizer
 
 
 def unload_got():
     global _got_model, _got_tokenizer
     if _got_model is not None:
+        import torch
         del _got_model, _got_tokenizer
         _got_model     = None
         _got_tokenizer = None
@@ -707,11 +763,12 @@ def run_math_recognition_batched(
     if not crops:
         return []
     try:
+        import torch
         model, tokenizer, processor = _get_texo()
         preprocessed   = [_preprocess_formula_crop(c) for c in crops]
         pixel_tensors  = torch.cat(
             [processor(p).unsqueeze(0) for p in preprocessed], dim=0
-        ).to(_device)
+        ).to(_texo_device)
 
         t_start = time.perf_counter()
         with torch.no_grad():
@@ -767,44 +824,43 @@ def run_math_recognition(
     return run_math_recognition_batched([crop], fallback_figures_dir, fallback_counter)[0]
 
 
-def run_table_extraction(crop: Image.Image) -> str:
-    """Extract table structure using RapidOCR (already-warm) + coordinate heuristic.
+def _tokens_from_ocr_result(result, img_w: int) -> list:
+    tokens = []
+    if not result:
+        return tokens
+    for entry in result:
+        try:
+            bbox_poly, text, _conf = entry[0], entry[1], entry[2]
+            text = text.strip()
+            if not text or re.match(r'^[\-\_\=\.]+$', text):
+                continue
+            xs = [pt[0] for pt in bbox_poly]
+            ys = [pt[1] for pt in bbox_poly]
+            x1, x2 = min(xs), max(xs)
+            y1, y2 = min(ys), max(ys)
+            if (x2 - x1) > 0.8 * img_w:
+                continue
+            tokens.append({
+                'text': text,
+                'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2,
+                'cx': (x1 + x2) / 2, 'cy': (y1 + y2) / 2,
+                'h': y2 - y1, 'w': x2 - x1,
+            })
+        except (TypeError, IndexError, ValueError):
+            continue
+    return tokens
 
-    Replaces EasyOCR + PaddleOCR TextAndTableSolver — eliminates 20-40s cold load.
-    Same heuristic grid logic, zero extra model weight.
-    """
+
+def run_table_extraction(crop: Image.Image) -> str:
+    """Extract table structure using RapidOCR (already-warm) + coordinate heuristic."""
     global table_latencies
     try:
         t_start = time.perf_counter()
         engine  = _get_rapidocr()
         img_np  = np.array(crop.convert("RGB"))
         img_w   = img_np.shape[1]
-
         result, _ = engine(img_np)
-
-        tokens = []
-        if result:
-            for entry in result:
-                try:
-                    bbox_poly, text, _conf = entry[0], entry[1], entry[2]
-                    text = text.strip()
-                    if not text or re.match(r'^[\-\_\=\.]+$', text):
-                        continue
-                    xs = [pt[0] for pt in bbox_poly]
-                    ys = [pt[1] for pt in bbox_poly]
-                    x1, x2 = min(xs), max(xs)
-                    y1, y2 = min(ys), max(ys)
-                    if (x2 - x1) > 0.8 * img_w:
-                        continue
-                    tokens.append({
-                        'text': text,
-                        'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2,
-                        'cx': (x1 + x2) / 2, 'cy': (y1 + y2) / 2,
-                        'h': y2 - y1, 'w': x2 - x1,
-                    })
-                except (TypeError, IndexError, ValueError):
-                    continue
-
+        tokens = _tokens_from_ocr_result(result, img_w)
         latex = _table_heuristic(tokens, img_w) if tokens else ""
         latency_ms = (time.perf_counter() - t_start) * 1000
         table_latencies.append(latency_ms)
@@ -813,3 +869,32 @@ def run_table_extraction(crop: Image.Image) -> str:
     except Exception as e:
         print(f"    [table] Table extraction failed: {e}")
         return ""
+
+
+def run_table_extraction_batched(crops: list[Image.Image]) -> list[str]:
+    """Run one RapidOCR pass across all table crops stitched together.
+
+    One DBNet inference instead of N separate calls — saves per-call ONNX
+    working-buffer allocations and is faster when multiple tables are present.
+    """
+    global table_latencies
+    if not crops:
+        return []
+    try:
+        t_start = time.perf_counter()
+        engine = _get_rapidocr()
+        nps = [np.array(c.convert("RGB")) for c in crops]
+        per_crop = _stitch_and_run(engine, nps)
+        latency_ms = (time.perf_counter() - t_start) * 1000
+        table_latencies.append(latency_ms)
+        print(f"    [table] Table batch ({len(crops)} table(s), RapidOCR): {latency_ms:.2f} ms")
+
+        results = []
+        for np_img, crop_result in zip(nps, per_crop):
+            img_w = np_img.shape[1]
+            tokens = _tokens_from_ocr_result(crop_result, img_w)
+            results.append(_table_heuristic(tokens, img_w) if tokens else "")
+        return results
+    except Exception as e:
+        print(f"    [table] Table batch failed ({e}), falling back to per-crop")
+        return [run_table_extraction(c) for c in crops]

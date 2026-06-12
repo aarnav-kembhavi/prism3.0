@@ -7,6 +7,7 @@ line-clustering and gutter detection.
 """
 
 from typing import List, Dict, Any
+import numpy as np
 
 
 def apply_semantic_reading_order(
@@ -161,39 +162,106 @@ def xyxy_to_pil_crop(image, bbox):
     return image.crop((x1, y1, x2, y2))
 
 
+def _find_gutters(detections: List[Dict[str, Any]], image_width: int):
+    """
+    Build a horizontal coverage histogram and return (non_full, gutter_list).
+
+    A gutter is a contiguous run of completely-empty bins (zero detections
+    cover that x-slice) that is at least 1.5% of the page width wide and
+    lies within the inner 90% of the page (5% margin each side).
+
+    Returns (non_full_dets, [(g_start_bin, g_end_bin), ...]) where bin
+    coordinates are in [0, BIN_COUNT).
+    """
+    BIN_COUNT = 200  # 0.5% resolution
+    full_width_threshold = image_width * 0.70
+
+    non_full = [d for d in detections if (d['bbox'][2] - d['bbox'][0]) < full_width_threshold]
+    if not non_full:
+        return non_full, []
+
+    coverage = np.zeros(BIN_COUNT, dtype=int)
+    for d in non_full:
+        x1, _, x2, _ = d['bbox']
+        l = max(0, int(x1 / image_width * BIN_COUNT))
+        r = min(BIN_COUNT - 1, int(x2 / image_width * BIN_COUNT))
+        if l <= r:
+            coverage[l:r + 1] += 1
+
+    margin = int(BIN_COUNT * 0.05)
+    is_gutter = np.zeros(BIN_COUNT, dtype=bool)
+    is_gutter[margin:BIN_COUNT - margin] = (coverage[margin:BIN_COUNT - margin] == 0)
+
+    gutters = []
+    in_gutter = False
+    g_start = 0
+    for i in range(BIN_COUNT):
+        if is_gutter[i] and not in_gutter:
+            in_gutter = True
+            g_start = i
+        elif not is_gutter[i] and in_gutter:
+            in_gutter = False
+            if (i - g_start) / BIN_COUNT >= 0.015:  # min 1.5% width
+                gutters.append((g_start, i - 1))
+    if in_gutter and (BIN_COUNT - g_start) / BIN_COUNT >= 0.015:
+        gutters.append((g_start, BIN_COUNT - 1))
+
+    return non_full, gutters
+
+
 def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> int:
     """
-    Heuristic: detect if page is single or double column using Gutter Detection.
+    Detect the number of columns on the page (1–8).
 
-    Changes vs original:
-    - full_width_threshold raised 0.60 → 0.70: items that span 60–70% of
-      the page are typically wide single-column elements, not full-width spans.
-      Using 0.60 caused left-column figures (~45% wide) that YOLO over-expanded
-      to be counted as full-width, reducing non_full_spans and masking the
-      two-column signal.
-    - Gutter zone widened from ±5% to ±8% of image width (16% total):
-      phone photos with slight perspective warp produce YOLO bboxes that
-      don't align perfectly to the optical center. The narrow ±5% zone caused
-      gutter-adjacent items to be counted as "crosses_gutter" instead of
-      left_items / right_items, suppressing the two-column detection.
+    Strategy:
+    1. Try N ≥ 3 via horizontal coverage histogram: find completely-empty
+       vertical slices (gutters).  Each gutter meeting min-width and
+       each resulting column having ≥ 2 detections → return N.
+    2. Fall back to the existing 2-column gutter heuristic (tuned for
+       phone photos of academic papers with YOLO bbox expansion).
+
+    Why two strategies:
+    - The histogram approach is conservative (requires ZERO coverage in a
+      bin) and would miss 2-column academic papers where sharpened YOLO
+      bboxes slightly overlap the gutter.  The original ±8% tolerance
+      heuristic handles that better.
+    - Newspapers/magazines have much wider, cleaner gutters (3–8 columns)
+      so the histogram finds them reliably without the ±8% fudge.
     """
     if image_width == 0 or not detections:
         return 1
 
-    full_width_threshold = image_width * 0.70   # raised from 0.60
-
-    non_full_spans = []
-    for d in detections:
-        x1, _, x2, _ = d['bbox']
-        if (x2 - x1) < full_width_threshold:
-            non_full_spans.append((x1, x2))
-
-    if not non_full_spans:
+    non_full, gutters = _find_gutters(detections, image_width)
+    if not non_full:
         return 1
 
+    BIN_COUNT = 200
+    full_width_threshold = image_width * 0.70
+
+    # --- Try N ≥ 3 ---
+    n_potential = len(gutters) + 1
+    if n_potential >= 3 and gutters:
+        boundaries = [0] + [g[1] + 1 for g in gutters] + [BIN_COUNT]
+        valid = True
+        for i in range(n_potential):
+            col_min_x = boundaries[i] / BIN_COUNT * image_width
+            col_max_x = boundaries[i + 1] / BIN_COUNT * image_width
+            in_col = [
+                d for d in non_full
+                if col_min_x <= (d['bbox'][0] + d['bbox'][2]) / 2 < col_max_x
+            ]
+            if len(in_col) < 2:
+                valid = False
+                break
+        if valid:
+            return min(n_potential, 8)
+
+    # --- Fall back to 2-column heuristic (original logic) ---
+    non_full_spans = [(d['bbox'][0], d['bbox'][2]) for d in non_full]
+
     gutter_center = image_width / 2
-    gutter_min = gutter_center - (image_width * 0.08)  # widened from 0.05
-    gutter_max = gutter_center + (image_width * 0.08)  # widened from 0.05
+    gutter_min = gutter_center - image_width * 0.08
+    gutter_max = gutter_center + image_width * 0.08
 
     crosses_gutter_count = 0
     left_items = 0
@@ -291,3 +359,64 @@ def split_detections_by_column(
     right_col  = _sort(right_col)
 
     return full_width, left_col, right_col
+
+
+def split_detections_n_columns(
+    detections: List[Dict[str, Any]],
+    image_width: int,
+    image_height: int = 0,
+    use_dag: bool = True,
+) -> tuple:
+    """
+    Split detections for N ≥ 3 column layouts (newspapers / magazines).
+    Returns (full_width_list, [col0_list, col1_list, ..., col{N-1}_list]).
+
+    Uses the same coverage histogram as detect_column_count() to find the
+    gutter centers, then assigns each non-full-width detection to the
+    column whose x-range contains its centroid.
+    """
+    full_width_threshold = image_width * 0.70
+    full_dets = [d for d in detections if (d['bbox'][2] - d['bbox'][0]) >= full_width_threshold]
+    non_full,  gutters   = _find_gutters(detections, image_width)
+
+    BIN_COUNT = 200
+
+    if not gutters:
+        # No gutters found — fall back to single column
+        def _sort(group):
+            if not group:
+                return group
+            if not use_dag:
+                return sort_detections_geometric(group)
+            dag_sorted = apply_semantic_reading_order(group, image_width, image_height)
+            return dag_sorted if _is_y_monotonic(dag_sorted) else sort_detections_geometric(group)
+        return _sort(full_dets), [_sort(non_full)]
+
+    # Gutter center → pixel boundary between columns
+    boundaries_px = [
+        (g[0] + g[1]) / 2 / BIN_COUNT * image_width
+        for g in gutters
+    ]
+    N = len(boundaries_px) + 1
+    columns: List[List[Dict]] = [[] for _ in range(N)]
+
+    for d in non_full:
+        x_ctr = (d['bbox'][0] + d['bbox'][2]) / 2
+        col_idx = sum(1 for b in boundaries_px if x_ctr > b)
+        col_idx = min(col_idx, N - 1)
+        columns[col_idx].append(d)
+
+    def _sort(group):
+        if not group:
+            return group
+        if not use_dag:
+            return sort_detections_geometric(group)
+        dag_sorted = apply_semantic_reading_order(group, image_width, image_height)
+        if _is_y_monotonic(dag_sorted):
+            return dag_sorted
+        print("    [layout] DAG order non-monotonic in N-col; falling back to geometric sort")
+        return sort_detections_geometric(group)
+
+    full_dets = _sort(full_dets)
+    columns   = [_sort(c) for c in columns]
+    return full_dets, columns

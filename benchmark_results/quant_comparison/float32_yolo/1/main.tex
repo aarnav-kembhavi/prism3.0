@@ -1,0 +1,135 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\usepackage{paracol}
+\begin{document}
+\sloppy
+
+\begin{paracol}{2}
+\RaggedRight
+
+Proposition of Appendix shows that a sufficient condition
+for the identifiability in the case of Gaussian and Boltzmann
+linear policies is that the second moment matrix of the feature vector Es\textasciitilde{}dz* [(s)(s)] is non-singular along with
+the fact that the policy  plays each action with positive
+probability for the Boltzmann policy.
+
+
+Concentration ResultWe are now ready to present a concentration result, of independent interest, for the parameters
+and the negative log-likelihood that represents the central
+tool of our analysis (details and derivation in Appendix).
+Under Assumption and Assumption, let D
+\{siai)\}=1 be a dataset of n > O independent samples, where s\textasciitilde{} d* and a\textasciitilde{}Tg+((s;). Let
+0 = argminoeel(0) and 0* = argmineeel(0) . If
+the empirical FIM:
+
+
+\begin{equation}
+\begin{array} { r l } { \hat { \mathcal { F } } ( \theta ) = \frac { 1 } { n } \sum _ { i = 1 } ^ { n } \mathbb { E } _ { a \sim \pi _ { \theta } ( \cdot | s ) } \left [ \overline { \mathbf { t } } ( s, a, \theta ) \overline { \mathbf { t } } ( s, a, \theta ) ^ { T } \right ] \quad ( 1 ) } & { ( 1 ) } \\ & { \qquad }\end{array}
+\end{equation}
+
+
+has a positive minimum eigenvalue Amin > 0 for all 0 e O,
+then, for any  = [0, 1], with probability at least 1  :
+
+
+\begin{equation}
+\begin{array} { r l } & { \cdot } \\ & { \qquad }\end{array}
+\end{equation}
+
+
+Furthermore, with probability at least 1  , individually:
+
+
+\begin{equation}
+\begin{array} { r l } & { \ell ( \widehat { \theta } ) - \ell ( \theta ^ { * } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \hat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta } } \\ & { \widehat { \ell } ( \theta ^ { * } ) - \widehat { \ell } ( \widehat { \theta } ) \leqslant \frac { d ^ { 2 } \sigma ^ { 4 } } { \hat { \lambda } _ { \operatorname* { m i n } } ^ { 2 } n } \log \frac { 2 d } { \delta }. } \\ & { \qquad }\end{array}
+\end{equation}
+
+
+The theorem shows that the L2norm of the difference between the maximum likelihood parameter 0 and the true parameter 0* concentrates with rate O(n-1/2) while the likelihood  and its expectation  concentrate with faster rate
+O(n1). Note that the result assumes that the empirical FIM
+F(0) has a strictly positive eigenvalue Amin > 0. This condition can be enforced as long as the true Fisher matrix F(0)
+has a positive minimum eigenvalue Amin, i.e. under identifiability assumption (Lemma) and given a sufficiently large
+number of samples. Proposition of Appendix provides the
+least 1   it holds that Amin > 0.
+
+
+Identification Rule Analysis The goal of the analysis of
+the identification rule is to find the critical value c(1) so that
+the following probabilistic requirement is enforced.
+
+
+Let 8 e [0, 1]. An identification rule producing I iscorrect if: Pr (I = I*)  8.
+pected fraction of parameters that the agent does not control
+selected by the identification rule and with  = *E\{ 
+I* : i  Ic\}] the expected fraction of parameters that the
+agent does control not selected by the identification rule. We
+
+\switchcolumn
+\RaggedRight
+
+now provide a result that bounds  and  and employs them
+to derive correctness.
+
+
+Let Ic be the set of parameter indexes selected by the
+Identification Rule obtained using n > 0 i.i.d. samples
+collected with g*, with 0* e O. Then, under Assumption and Assumption, let 0+ = arg minoco,l(0) for all
+22
+e0)- 10*)  c(1) it holds that:
+
+
+\begin{equation}
+\begin{array} { r l } & { \mathrm { ~ ^ { s } u _ { 1 } ~'~ }}\end{array}
+\end{equation}
+
+
+Furthermore, the Identification Rule is (d  d*) + d*)
+correct.
+Since  and  are functions of c(1), we could, in principle, employ Theorem to enforce a value , as in Definition, and derive c(1). However, Theorem is not very attractive in practice as it holds under an assumption regarding the
+minimum eigenvalue of the FIM and the corresponding estimate, i.e. Amin 2w/2, that cannot be verified in practice
+22
+since Amin is unknown. Similarly, the constants d*, 1(0*)
+and 1(0*) are typically unknown. We will provide in Section
+a heuristic for setting c(1).
+
+
+\subsection*{Policy Space Identification in a Configurable
+Environment}
+
+
+The identification rules presented so far are unable to distinguish between a parameter set to zero because the agent
+cannot control it, or because zero is its optimal value. To
+overcome this issue, we employ the ConfMDP properties
+to select a configuration in which the parameters we want to
+examine have an optimal value other than zero. Intuitively, if
+we want to test whether the agent can control parameter 0,
+we should place the agent in an environment w, E  where
+0, is maximally important for the optimal policy. This intuition is justified by Theorem, since to maximize the power
+of the test (1  ), all other things being equal, we should
+maximize the log-likelihood gap 1(0) - 1(0*), i.e. parameter 0, should be essential to justify the agent's behavior. Let.
+I e \{1, ..., d\} be a set of parameter indexes we want to test,
+our ideal goal is to find the environment w1 such that:
+
+
+wEargmaxwen\{l0w-l0*w\}2
+where 0*(w) e argmaxoeJM(0) and 0(w) E
+arg maxeeeJM(0) are the parameters of the optimal
+policies in the environment M in IIe and IIe, respectively. Clearly, given the samples D collected with a single optimal policy *(wo) in a single environment Mwo,
+solving problem (2) is hard as it requires performing an off
+distribution optimization both on the space of policy parameters and configurations. For these reasons, we consider a
+surrogate objective that assumes that the optimal parameter
+in the new configuration can be reached by performing a single gradient step
+
+
+Let I e \{1, .., d\} and I = \{1, .., d\}\I. For a vector v, we
+denote with v| the vector obtained by setting to zero the
+
+\end{paracol}
+
+\end{document}

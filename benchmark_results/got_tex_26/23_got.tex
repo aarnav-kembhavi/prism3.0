@@ -1,0 +1,35 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+result given by
+\[
+\begin{array}{l}
+Z=\frac{1}{|\mathcal{W}|} \int_{\text {Cartan }}[d \sigma] \quad e^{-\frac{8 \pi^{3} r}{g_{Y}^{3} M} \operatorname{Tr}(\sigma^{2})} \det_{\mathrm{Ad}}\left(\sin \left(\mathrm{i} \pi \sigma\right) \mathrm{e}^{\frac{1}{2} \mathrm{f}\left(\mathrm{i} \sigma\right)}\right) \\
+\quad \times \prod \det_{\mathrm{RI}}\left((\cos (\mathrm{i} \pi \sigma))^{\frac{1}{4}} \mathrm{e}^{-\frac{1}{4} \mathrm{f}\left(\frac{1}{2}-i \sigma\right)-\frac{1}{4} \mathrm{f}\left(\frac{1}{2}+i \sigma\right)}\right)+\mathrm{O}\left(\mathrm{e}^{-\frac{1 / 6 \pi^{3} r}{6^{2} M}}\right)
+\end{array}
+\]
+where \(r\) is the radius of \(S^{5}, \sigma\) is a dimensionless matrix, and \(f\) is defined as
+\[
+f(y)=\frac{i \pi y^{3}}{3}+y^{2} \log \left(1-e^{-2 \pi i y}\right)+\frac{i y}{\pi} \mathrm{Li}_{2}\left(e^{-2 \pi i y}\right)+\frac{1}{2 \pi^{2}} \mathrm{Li}_{3}\left(e^{-2 \pi i y}\right)-\frac{\zeta(3)}{2 \pi^{2}}
+\]
+The quotient by the Weyl group in amounts to division by a simple numerical factor \(|\mathcal{W}|=\) \(2^{N} N\) ! The integral over \(\sigma\) is not restricted to a Weyl chamber. Though this localization result was obtained in the IR theory, it is expected to hold in the UV due to the assumed \(Q\)-exactness of the irrelevant UV completion terms. One may rewrite the partition function in terms of the free energy as
+\[
+Z=\frac{1}{|\mathcal{W}|} \int_{\text {Cartan }}{[d \sigma] e^{-F(\sigma)}+O\left(e^{-\frac{1+g_{X}^{2} r}{g_{Y}^{2} M}}\right)}
+\]
+\[
+F(\sigma)=\frac{4 \pi^{3} r}{g_{Y}^{2} M} \mathrm{Tr} \sigma^{2}+\mathrm{Tr}_{\mathrm{Ad}} F_{V}(\sigma)+\sum_{I} \mathrm{Tr}_{R_{I}} F_{H}(\sigma)
+\]
+The definitions of \(F_{V}(\sigma)\) and \(F_{H}(\sigma)\) follow simply from, and using one may obtain the following large argument expansions
+\[
+F_{V}(\sigma) \approx \frac{\pi}{6}|\sigma|^{3}-\pi|\sigma| \quad F_{H}(\sigma) \approx-\frac{\pi}{6}|\sigma|^{3}-\frac{\pi}{8}|\sigma|
+\]
+It was argued in that in the large \(N\) limit, the perturbative Yang-Mills term - i.e. the first term in the expression for \(F(\sigma)\) in - can be neglected, as can be the instanton contributions. Thus in our evaluation of the free energy, we will only concern ourselves with the contributions coming from \(F_{V}(\sigma)\) and \(F_{H}(\sigma)\). The first step in the evaluation of is recasting the matrix integral in a simpler form. The integral over \(\sigma\) in is an integration over the Coulomb branch, which is parameterized by the non-zero vevs of \(\sigma\). One may write
+\[
+\sigma=\operatorname{diag}\left\{\lambda_{1}, \ldots, \lambda_{N},-\lambda_{1}, \ldots,-\lambda_{N}\right\}
+\]
+since \(\operatorname{USp}(2 N)\) has \(N\) elements in its Cartan. The integration variables are these \(N \lambda_{i}\). Normalizing the weights of the fundamental representation of \(\operatorname{USp}(2 N)\) to be \(\pm e_{i}\) with \(e_{i}\) forming a basis of unit vectors for \(\mathbb{R}^{N}\), it follows that the adjoint representation has weights \(\pm 2 e_{i}\) and \(e_{i} \pm e_{j}\) for all \(i \neq j\), whereas the anti-symmetric representation has only weights
+\end{document}

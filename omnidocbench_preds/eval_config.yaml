@@ -1,0 +1,28 @@
+end2end_eval:
+  dataset:
+    dataset_name: end2end_dataset
+    ground_truth:
+      data_path: C:\PROJECTS\s2l2\testprism\omnidocbench_eval\demo_data\omnidocbench_demo\OmniDocBench_demo.json
+    match_method: quick_match
+    match_timeout_sec: 180
+    match_workers: 4
+    prediction:
+      data_path: C:\PROJECTS\s2l2\testprism\omnidocbench_preds
+    quick_match_truncated_timeout_sec: 120
+    timeout_fallback_max_chunk_span: 10
+    timeout_fallback_order_penalty: 0.1
+  metrics:
+    display_formula:
+      cdm_workers: 1
+      metric:
+      - Edit_dist
+    reading_order:
+      metric:
+      - Edit_dist
+    table:
+      metric:
+      - Edit_dist
+      teds_workers: 1
+    text_block:
+      metric:
+      - Edit_dist

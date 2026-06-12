@@ -1,0 +1,79 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{ragged2e}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+\sloppy
+
+This motivates us to define a superpotential W as
+
+
+\begin{equation}
+W = \sqrt { S _ { 0 } ^ { 2 } + S _ { 3 } ^ { 2 } } \qquad ( 1 )
+\end{equation}
+
+
+Unfortunately, this superpotential does not allow one to write the BPS equations for both
+\$o and \$3 as gradient flow equations. The reason for this failure is that the integrability
+condition required to convert the BPS equation into a gradient flow form is not satisfied;
+see e.g. Appendix C.2.1 of . We thus follow the strategy of to construct an approximate
+superpotential. Our model consists of two consistent truncations that admit flat domain walls
+and an exact superpotential. These are the \$3 = 0, \$o  0 truncation and the \$o = 0, \$3  0
+truncation. The corresponding flow equations are (we set n = 1 henceforth)
+
+
+\begin{equation}
+\phi ^ { 0 ^ { \prime } } = - 8 ~ \partial _ { \phi ^ { 0 } } W | _ { \phi ^ { 3 } = 0 } \qquad \qquad \qquad \phi ^ { J ^ { \prime } } = 8 ~ \partial _ { \phi ^ { 1 } } W | _ { \phi ^ { 0 } = 0 } \qquad ( 2 )
+\end{equation}
+
+
+respectively. In either truncation, the BPS equations for the warp factor and dilaton o can.
+be put in the following form,
+
+
+\begin{equation}
+\begin{array} { r l r l r l r l r l r l } { f ^ { \prime } = 2 ~ W } & { } & { } & { } & { } & { } & { \sigma ^ { \prime } = 2 ~ \partial _ { \sigma } W } & { } & { } & { } & { } & { } & { } & { 3 ) } \\ {. } & {. } & {.. } & {.. } & {.. } & {.. } & {.. } & {.. } & {.. } & { } & {.. } & {.. } \end{array}
+\end{equation}
+
+
+An important fact is that, though the gradient flow equations of do not hold exactly in the
+full model with   0, 3  0, they do hold up to and including O(z). Looking at the form
+of the UV asymptotics of the scalar fields, one may expand the superpotential of keeping.
+only terms contributing up to this order. This gives.
+
+
+\begin{equation}
+W = { \frac { 1 } { 2 } } + { \frac { 3 } { 4 } } \sigma ^ { 2 } + { \frac { 1 } { 1 6 } } ( \phi ^ { 9 } ) ^ { 2 } - { \frac { 3 } { 1 6 } } ( \phi ^ { 5 } ) ^ { 2 } + { \frac { 1 } { 1 9 2 } } ( \phi ^ { 6 } ) ^ { 4 } - { \frac { 3 } { 1 6 } } ( \phi ^ { 9 } ) ^ { 2 } \sigma + \dots \qquad ( 4 ) ~
+\end{equation}
+
+
+where the dots represent terms of order O(z). This is the approximate superpotential we
+will use in what follows.
+
+
+\subsection*{0.0.1Bogomolnyi trick}
+
+
+We now use the Bogomolnyi trick to get the finite counterterms needed to preserve supersymmetry in the case of a flat domain wall. The central idea of the Bogomolnyi trick is that
+for a BPS solution, the renormalized on-shell action must vanish. In order to make use of.
+this fact, we will first want to recast the on-shell action in a simpler form. To do so, we.
+begin by inserting. We find that
+
+
+\begin{equation}
+\mathcal { L } = - \frac { 1 } { 4 } R - 2 0 W ^ { 2 } + 2 \mathcal { L } _ \mathbf { k i n } \qquad ( 5 )
+\end{equation}
+
+
+where we've defined
+
+
+\begin{equation}
+{ \mathcal { L } } _ { \mathrm { k i n } } = ( \sigma ^ { \prime } ) ^ { 2 } + { \frac { 1 } { 4 } } \left [ - ( { \phi ^ { 3 ^ { \prime } } } ) ^ { 2 } + \cos ^ { 2 } \phi ^ { 3 } ( { \phi ^ { 0 ^ { \prime } } } ) ^ { 2 } \right ] \qquad ( 6 )
+\end{equation}
+
+\end{document}

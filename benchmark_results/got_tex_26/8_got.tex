@@ -1,0 +1,34 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[utf8]{inputenc}
+\begin{document}
+which for the coset representative is given by
+\[
+G_{i j}=\mathrm{diag}\left(\cosh ^{2} \phi ^{1} \cosh ^{2} \phi ^{2} \cosh ^{2} \phi ^{3}, \cosh ^{2} \phi ^{2} \cosh ^{2}\phi ^{3}, \cosh ^{2} \phi ^{3}, 1\right)
+\]
+In addition to performing the above Wick rotation, we also perform a Wick rotation on the sigma model
+\[
+\frac{S O(4,1)}{S O(4)} \rightarrow \frac{S O(4,1)}{S O(3,1)} \simeq d S_{4}
+\]
+The metric on the sigma model is now that of \(\mathrm{d} S_{4}\), as opposed to the \(\mathbb{H}_{4}\) that we had in the Lorentzian case. This can be obtained by making the following change to the \(\mathbb{H}_{4}\) coset,
+\[
+\phi_{r} \rightarrow i \phi_{r} \quad r=1,2,3
+\]
+It would be interesting to understand this analytic continuation from first principles and its relation to Euclidean supersymmetry, possibly along the lines of . For now, we just note that such a Wick rotated model seems necessary to obtain regular, supersymmetric solutions.
+\subsection*{0.1 Euclidean supersymmetry}
+The next task is to identify the form of the Euclidean supersymmetry variations. Motivation for the form of these variations may be obtained by analysis of the free differential algebra (FDA) of the \(F(4)\) gauged supergravity theory with \(\mathbb{H}_{6}\) vacuum, as discussed in Appendix . The final result for this FDA is given in, and is noted to be of the same form as the FDA for the theory with \(\mathrm{d} S_{6}\) background (identified in), with two differences. The first obvious difference is that the metrics differ - the space considered in was \(\mathrm{d} S_{6}\) with mostly minus signature, whereas we are currently focused on positive definite \(\mathbb{H}_{6}\). However, both of these spaces have \(R_{\mu \nu}=-20 m^{2} \varrho_{\mu \nu}\). The second difference is in the definition of Dirac conjugate spinors. However, once the difference in definition of the gamma matrices is accounted for, the only difference is a factor of \(i\), i.e.
+\[
+\bar{\psi}_{A}^{(\mathbb{H}_{6})}=i \bar{\psi}_{A}^{(d S_{6})}
+\]
+Because of these similarities, the supersymmetry variations in the current case are expected to be of a similar form to that of . In particular, the variations of the fermions are expected to be of the form
+\[
+\begin{array}{c}
+\delta \chi_{A}=-\frac{1}{2} \gamma^{\mu} \partial_{\mu} \sigma \varepsilon_{A}+N_{A B} \varepsilon^{B}+\ldots \\
+\delta \psi_{A \mu}=\mathcal{D}_{\mu} \varepsilon_{A}+i S_{A B} \gamma_{\mu} \varepsilon^{B}+\ldots \\
+\delta \lambda_{A}^{I}=-\hat{P}_{r_{1}}^{I} \sigma_{A B}^{r} \partial_{\mu} \phi^{i} \gamma^{\mu} \varepsilon^{B}+\hat{P}_{01}^{I} \epsilon_{A B} \partial_{\mu} \phi^{i} \gamma^{7} \gamma^{\mu} \varepsilon^{B}+M_{A B}^{I} \varepsilon^{B}+\ldots
+\end{array}
+\]
+\end{document}
