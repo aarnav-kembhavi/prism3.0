@@ -95,12 +95,51 @@ def _convert_array_blocks(text: str) -> str:
     return text
 
 
+def _table_content_to_html(content: str) -> str:
+    """Convert &-separated LaTeX table rows to HTML <table>."""
+    content = re.sub(r'\\hline\b', '', content)
+    content = re.sub(r'\\cline\{[^}]*\}', '', content)
+    rows_raw = re.split(r'\\\\', content)
+    rows = []
+    for row in rows_raw:
+        row = row.strip().strip('%').strip()
+        if not row:
+            continue
+        cells = [c.strip() for c in row.split('&')]
+        # Strip remaining LaTeX from each cell
+        cells = [re.sub(r'\\[a-zA-Z]+\s*(\{[^}]*\})*', lambda m: m.group(0).split('{', 1)[-1].rstrip('}') if '{' in m.group(0) else '', c).strip() for c in cells]
+        cells = [re.sub(r'[${}]', '', c).strip() for c in cells]
+        if not any(cells):
+            continue
+        rows.append(cells)
+    if not rows:
+        return ''
+    tds = ''.join(
+        '<tr>' + ''.join(f'<td>{c}</td>' for c in row) + '</tr>'
+        for row in rows
+    )
+    return f'<table border="1">{tds}</table>'
+
+
+def _convert_tabular(text: str) -> str:
+    """\\begin{tabular}{...}...\\end{tabular} → HTML table."""
+    def repl(m):
+        return '\n' + _table_content_to_html(m.group(1)) + '\n'
+    return re.sub(r'\\begin\{tabular\}\{[^}]*\}(.*?)\\end\{tabular\}', repl, text, flags=re.DOTALL)
+
+
 def _convert_center(text: str) -> str:
-    """\\begin{center}...\\end{center} → content (stripped)."""
+    """\\begin{center}...\\end{center} → content (stripped), tables → HTML."""
     def repl(m):
         inner = m.group(1).strip()
-        # If it's \\resizebox wrapping a tabular, keep the tabular
-        inner = re.sub(r'\\resizebox\{[^}]*\}\{[^}]*\}\{(.*?)\}', r'\1', inner, flags=re.DOTALL)
+        # Extract content from \resizebox{\columnwidth}{!}{...}
+        def resizebox_repl(rm):
+            content = rm.group(1)
+            if '&' in content or '\\\\' in content:
+                html = _table_content_to_html(content)
+                return html if html else content
+            return content
+        inner = re.sub(r'\\resizebox\{[^}]*\}\{[^}]*\}\{(.*?)\}', resizebox_repl, inner, flags=re.DOTALL)
         return '\n' + inner + '\n'
     return re.sub(r'\\begin\{center\}(.*?)\\end\{center\}', repl, text, flags=re.DOTALL)
 
@@ -160,8 +199,13 @@ def _strip_formatting(text: str) -> str:
     text = re.sub(r'\\hrule\b', '', text)
     text = re.sub(r'\\hfill\b', '', text)
     text = re.sub(r'\\centering\b', '', text)
-    # Comments
-    text = re.sub(r'%.*', '', text)
+    # Comments — only strip unescaped % (LaTeX comments); leave \% alone
+    text = re.sub(r'(?<!\\)%.*', '', text)
+    # Unescape LaTeX special chars that _escape_latex() introduced
+    for esc, ch in [(r'\%', '%'), (r'\$', '$'), (r'\&', '&'), (r'\#', '#'),
+                    (r'\_', '_'), (r'\{', '{'), (r'\}', '}'),
+                    (r'\textasciitilde{}', '~'), (r'\textasciicircum{}', '^')]:
+        text = text.replace(esc, ch)
     return text
 
 
@@ -185,6 +229,7 @@ def tex_to_omnidocbench_md(tex_content: str) -> str:
     text = _convert_equations(text)
     text = _convert_sections(text)
     text = _convert_itemize(text)
+    text = _convert_tabular(text)
     text = _convert_center(text)
     text = _strip_formatting(text)
     text = _clean_whitespace(text)

@@ -27,7 +27,7 @@ ROOT = Path(__file__).parent
 EVAL_DIR = ROOT / 'omnidocbench_eval'
 DEMO_IMAGES = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'images'
 DEMO_GT = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'OmniDocBench_demo.json'
-DEFAULT_PRED = ROOT / 'omnidocbench_preds'
+DEFAULT_PRED = ROOT / 'preds' / 'omnidocbench'
 
 YOLO_MODEL_PATH = str(ROOT / 'yolov11n-doclaynet.onnx')
 
@@ -45,7 +45,7 @@ def parse_args():
 
 # ── PRISM pipeline (adapted from orchestrate.py) ──────────────────────────────
 
-def _run_prism_on_images(image_paths: list[str], pred_dir: str) -> dict[str, str]:
+def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set = None, mixed_pages: set = None) -> dict[str, str]:
     """
     Run PRISM on a list of image files.  Workers are shared across all images.
     Returns {image_stem: markdown_text} dict.
@@ -165,6 +165,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str) -> dict[str, str
             # Stage 3: extraction
             col_count = detect_column_count(detections, img_width)
             body_detections = detections
+            is_cjk  = stem in (cjk_pages  or set())
+            is_mixed = stem in (mixed_pages or set())
 
             def _route(dets, f_start=0, m_start=0):
                 text_idx  = [i for i, d in enumerate(dets) if d['class_name'] in TEXT_CLASSES]
@@ -172,12 +174,19 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str) -> dict[str, str
                 table_idx = [i for i, d in enumerate(dets) if d['class_name'] in TABLE_CLASSES]
                 math_ctr  = [m_start]
 
+                if is_mixed:
+                    _run_text = ocr_worker.run_text_batch_mixed
+                elif is_cjk:
+                    _run_text = ocr_worker.run_text_batch_cjk
+                else:
+                    _run_text = ocr_worker.run_text_batch
+
                 if math_idx and text_idx:
                     math_crops = [dets[i]['crop'] for i in math_idx]
                     text_crops = [dets[i]['crop'] for i in text_idx]
                     with ThreadPoolExecutor(max_workers=2) as exe:
                         mf = exe.submit(math_worker.run_math_batch, math_crops, str(figures_dir), math_ctr[0])
-                        tf = exe.submit(ocr_worker.run_text_batch, text_crops, is_screenshot)
+                        tf = exe.submit(_run_text, text_crops, is_screenshot)
                         math_results, math_ctr[0] = mf.result()
                         texts = tf.result()
                     for idx, raw in zip(math_idx, math_results):
@@ -192,7 +201,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str) -> dict[str, str
                             dets[idx]['raw_content'] = raw
                     if text_idx:
                         crops = [dets[i]['crop'] for i in text_idx]
-                        texts = ocr_worker.run_text_batch(crops, is_screenshot=is_screenshot)
+                        texts = _run_text(crops, is_screenshot)
                         for idx, txt in zip(text_idx, texts):
                             dets[idx]['raw_content'] = txt
 
@@ -290,8 +299,8 @@ def _write_eval_config(gt_json: str, pred_dir: str, no_cdm: bool) -> str:
                     'cdm_workers': 1,
                 },
                 'table': {
-                    'metric': ['Edit_dist'],  # skip TEDS for now (needs latexmlc or lxml)
-                    'teds_workers': 1,
+                    'metric': ['Edit_dist', 'TEDS'],
+                    'teds_workers': 2,
                 },
                 'reading_order': {'metric': ['Edit_dist']},
             },
@@ -308,7 +317,10 @@ def _write_eval_config(gt_json: str, pred_dir: str, no_cdm: bool) -> str:
             },
         }
     }
-    config_path = str(Path(pred_dir) / 'eval_config.yaml')
+    # Use absolute paths so _run_evaluation's os.chdir() doesn't break resolution
+    config_path = str(Path(pred_dir).resolve() / 'eval_config.yaml')
+    cfg['end2end_eval']['dataset']['ground_truth']['data_path'] = str(Path(gt_json).resolve())
+    cfg['end2end_eval']['dataset']['prediction']['data_path'] = str(Path(pred_dir).resolve())
     with open(config_path, 'w') as f:
         yaml.dump(cfg, f, default_flow_style=False)
     return config_path
@@ -334,23 +346,28 @@ def main():
     pred_dir = args.pred_dir
     os.makedirs(pred_dir, exist_ok=True)
 
-    # Collect image paths from GT JSON
+    # Collect image paths from GT JSON, building language map
     with open(args.gt_json, encoding='utf-8') as f:
         gt_data = json.load(f)
     images_dir = Path(args.images_dir)
     image_paths = []
+    cjk_pages   = set()  # simplified_chinese pages → CJK engine
+    mixed_pages = set()  # en_ch_mixed pages → English-first + CJK fallback
     for page in gt_data:
         img_name = page['page_info']['image_path']
         img_path = images_dir / img_name
         if img_path.exists():
             image_paths.append(str(img_path))
+            lang = page['page_info']['page_attribute'].get('language', '')
+            if lang in ('simplified_chinese', 'en_ch_mixed'):
+                cjk_pages.add(Path(img_name).stem)
         else:
             print(f'[!] Image not found: {img_path}')
 
-    print(f'[*] Found {len(image_paths)} pages to process.')
+    print(f'[*] Found {len(image_paths)} pages to process ({len(cjk_pages)} CJK).')
 
     if not args.eval_only:
-        _run_prism_on_images(image_paths, pred_dir)
+        _run_prism_on_images(image_paths, pred_dir, cjk_pages=cjk_pages)
 
     if not args.skip_eval:
         print('\n[*] Running OmniDocBench evaluation...')

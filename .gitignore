@@ -11,6 +11,13 @@ Texo/model/
 *_output/
 profiling_report.csv
 
+# Benchmark datasets and predictions (large, local only)
+data/
+preds/
+
+# Large model weights
+models/
+
 # Local tooling
 .claude/
 .vscode/

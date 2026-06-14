@@ -260,6 +260,10 @@ def _worker_main(conn):
     # Screenshots: higher threshold + no CLS (text always horizontal in screenshots)
     engine_screenshot = RapidOCR(**base_kwargs, det_box_thresh=0.5, use_cls=False)
     engine_photo      = RapidOCR(**base_kwargs, det_box_thresh=0.3)
+    # CJK engine: bundled ch_PP-OCRv4 models (char dict embedded in model)
+    cjk_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
+    engine_cjk_screenshot = RapidOCR(**cjk_kwargs, det_box_thresh=0.5, use_cls=False)
+    engine_cjk_photo      = RapidOCR(**cjk_kwargs, det_box_thresh=0.3)
     conn.send('ready')
 
     while True:
@@ -287,6 +291,69 @@ def _worker_main(conn):
                         txt = _reconstruct_lines(matches)
                         results[start + ci] = _escape_latex(_filter_nonascii(txt))
             conn.send(results)
+
+        elif task == 'text_cjk':
+            crop_arrays, is_screenshot = payload
+            crops = [Image.fromarray(a) for a in crop_arrays]
+            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            results = [''] * len(crops)
+            chunk_size = 20
+            for start in range(0, len(crops), chunk_size):
+                chunk = processed[start:start + chunk_size]
+                per_crop = _stitch_and_run(engine, chunk)
+                for ci, matches in enumerate(per_crop):
+                    if matches:
+                        # CJK text flows continuously — strip intra-block newlines
+                        txt = _reconstruct_lines(matches).replace('\n', '')
+                        results[start + ci] = _escape_latex(txt)
+            conn.send(results)
+
+        elif task == 'text_mixed':
+            # English-first with per-block CJK fallback for mixed-language pages.
+            # Runs English engine on all blocks; any block returning < 3 chars
+            # is retried with the CJK engine (likely Chinese text).
+            crop_arrays, is_screenshot = payload
+            crops = [Image.fromarray(a) for a in crop_arrays]
+            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            en_engine  = engine_screenshot if is_screenshot else engine_photo
+            cjk_engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            results = [''] * len(crops)
+            chunk_size = 20
+            # English pass
+            for start in range(0, len(crops), chunk_size):
+                chunk = processed[start:start + chunk_size]
+                per_crop = _stitch_and_run(en_engine, chunk)
+                for ci, matches in enumerate(per_crop):
+                    if matches:
+                        txt = _reconstruct_lines(matches)
+                        results[start + ci] = _escape_latex(_filter_nonascii(txt))
+            # CJK fallback for blocks where English returned < 3 visible chars
+            cjk_indices = [i for i, r in enumerate(results) if len(r.strip()) < 3]
+            for start in range(0, len(cjk_indices), chunk_size):
+                batch_idx = cjk_indices[start:start + chunk_size]
+                chunk = [processed[i] for i in batch_idx]
+                per_crop = _stitch_and_run(cjk_engine, chunk)
+                for ci, matches in enumerate(per_crop):
+                    if matches:
+                        txt = _reconstruct_lines(matches).replace('\n', '')
+                        results[batch_idx[ci]] = _escape_latex(txt)
+            conn.send(results)
+
+        elif task == 'probe':
+            # Run English OCR on a small sample; return total output char count.
+            # If near-zero, caller should switch to CJK mode.
+            crop_arrays, is_screenshot = payload
+            crops = [Image.fromarray(a) for a in crop_arrays]
+            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            engine = engine_screenshot if is_screenshot else engine_photo
+            total_chars = 0
+            if processed:
+                per_crop = _stitch_and_run(engine, processed)
+                for matches in per_crop:
+                    if matches:
+                        total_chars += len(_reconstruct_lines(matches))
+            conn.send(total_chars)
 
         elif task == 'table':
             crop_arrays = payload
@@ -343,6 +410,28 @@ class TextOCRWorker:
         if not crops:
             return []
         self._conn.send(('text', (self._serialize(crops), is_screenshot)))
+        return self._conn.recv()
+
+    def run_text_batch_cjk(self, crops, is_screenshot=False):
+        if not crops:
+            return []
+        self._conn.send(('text_cjk', (self._serialize(crops), is_screenshot)))
+        return self._conn.recv()
+
+    def run_text_batch_mixed(self, crops, is_screenshot=False):
+        """English-first with per-block CJK fallback (for en_ch_mixed pages)."""
+        if not crops:
+            return []
+        self._conn.send(('text_mixed', (self._serialize(crops), is_screenshot)))
+        return self._conn.recv()
+
+    def run_language_probe(self, crops, is_screenshot=False):
+        """Run English OCR on a sample crop; returns total char count.
+        Near-zero → likely CJK page."""
+        if not crops:
+            return 0
+        sample = crops[:3]
+        self._conn.send(('probe', (self._serialize(sample), is_screenshot)))
         return self._conn.recv()
 
     def run_table_batch(self, crops):
