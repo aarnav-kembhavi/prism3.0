@@ -29,7 +29,25 @@ DEMO_IMAGES = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'images'
 DEMO_GT = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'OmniDocBench_demo.json'
 DEFAULT_PRED = ROOT / 'preds' / 'omnidocbench'
 
-YOLO_MODEL_PATH = str(ROOT / 'weights' / 'yolov11n-doclaynet.onnx')
+YOLO_MODEL_PATH      = str(ROOT / 'weights' / 'yolov11n-doclaynet.onnx')
+DOCLAYOUT_MODEL_PATH = str(ROOT / 'models' / 'doclayout_yolo_docstructbench_imgsz1024.onnx')
+
+# DocLayout YOLO singleton — loaded once, shared across all pages
+_doclayout_model = None
+
+def _get_doclayout_model():
+    global _doclayout_model
+    if _doclayout_model is None:
+        from ultralytics import YOLO as _YOLO
+        _doclayout_model = _YOLO(DOCLAYOUT_MODEL_PATH, task='detect')
+    return _doclayout_model
+
+
+def _iou(a, b):
+    ix1=max(a[0],b[0]); iy1=max(a[1],b[1]); ix2=min(a[2],b[2]); iy2=min(a[3],b[3])
+    iw=max(0,ix2-ix1); ih=max(0,iy2-iy1); inter=iw*ih
+    ua=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-inter
+    return inter/ua if ua>0 else 0.0
 
 
 def parse_args():
@@ -131,6 +149,36 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                 })
 
             detections = postprocess_detections(detections, img_width, img_height)
+
+            # DocLayout YOLO formula boost: run a second model specialized for
+            # isolate_formula to recover formulas the nano YOLO misses.
+            try:
+                dl_model = _get_doclayout_model()
+                dl_results = dl_model(norm_path, conf=0.25, verbose=False)
+                existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
+                n_added = 0
+                for r in dl_results:
+                    for box in r.boxes:
+                        if r.names[int(box.cls[0])] != 'isolate_formula':
+                            continue
+                        bbox = box.xyxy[0].tolist()
+                        # skip if heavily overlapping an already-detected formula
+                        if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
+                            continue
+                        crop = xyxy_to_pil_crop(image_norm, bbox)
+                        detections.append({
+                            'bbox': bbox,
+                            'class_id': -2,
+                            'class_name': 'Formula',
+                            'confidence': float(box.conf[0]),
+                            'crop': crop,
+                        })
+                        existing_fml.append(bbox)
+                        n_added += 1
+                if n_added:
+                    print(f'  [DL] added {n_added} formula(s)')
+            except Exception as _e:
+                print(f'  [DL] skipped: {_e}')
 
             # Header suppress
             HEADER_SUPPRESS_H_FRAC = 0.12

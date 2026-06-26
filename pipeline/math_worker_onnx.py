@@ -74,6 +74,10 @@ def _sanitize(text: str) -> str:
     return text.strip()
 
 
+# Variant-controlled thresholds (change these to run different variants)
+_TILDE_THRESHOLD = 10   # Var-B: lower to 6 to catch more hallucinations
+_COL_MIN_GAP     = 15   # Var-A: lower to 8 to capture tighter column gaps
+
 # Patterns that indicate Texo is looping / hallucinating
 _BAD_PATTERNS = [
     re.compile(r'(\\hline\s*){5,}'),                          # repeated \hline
@@ -101,7 +105,7 @@ def _quality_gate(text: str, crop_w: int, crop_h: int) -> bool:
 
     # Spaced-character hallucination: Texo renders text char-by-char with ~ separators.
     # Legitimate math formulas rarely exceed 8 tildes; 10+ is a near-certain hallucination.
-    if text.count('~') >= 10:
+    if text.count('~') >= _TILDE_THRESHOLD:
         return False
 
     # Extreme over-generation: only flag truly absurd cases
@@ -382,21 +386,37 @@ def _worker_main(conn):
             if clean and not _quality_gate(clean, crop.width, crop.height):
                 clean = ''
 
-            # Row-splitting fallback: if full image failed, try splitting into lines
+            def _run_texo(sub_crop):
+                """Run Texo on sub_crop; return clean LaTeX or '' on gate failure."""
+                px = _preprocess_to_tensor(sub_crop)
+                ids = _onnx_generate(enc_sess, dec_sess, px, tokenizer,
+                                     max_new_tokens=384, rep_penalty=1.15)
+                r = tokenizer.decode(ids).strip()
+                for d in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
+                    if r.startswith(d): r = r[len(d):]
+                    if r.endswith(d):   r = r[:-len(d)]
+                s = _sanitize(r.strip())
+                return s if (s and _quality_gate(s, sub_crop.width, sub_crop.height)) else ''
+
+            def _col_results(sub_crop):
+                """Run col-split (using _COL_MIN_GAP) and return joined pieces, or ''."""
+                cols = _split_cols(sub_crop, min_gap_w=_COL_MIN_GAP)
+                if len(cols) <= 1:
+                    return ''
+                pieces = [p for c in cols if (p := _run_texo(c))]
+                return ' '.join(pieces) if pieces else ''
+
+            # Row-splitting fallback: if full image failed, try splitting into lines.
+            # Each row that itself fails the quality gate also gets a col-split attempt.
             if not clean:
                 rows = _split_rows(crop)
                 if len(rows) > 1:
                     row_results = []
                     for row in rows:
-                        pixel_r = _preprocess_to_tensor(row)
-                        ids_r = _onnx_generate(enc_sess, dec_sess, pixel_r, tokenizer,
-                                               max_new_tokens=384, rep_penalty=1.15)
-                        raw_r = tokenizer.decode(ids_r).strip()
-                        for delim in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
-                            if raw_r.startswith(delim): raw_r = raw_r[len(delim):]
-                            if raw_r.endswith(delim):   raw_r = raw_r[:-len(delim)]
-                        row_clean = _sanitize(raw_r.strip())
-                        if row_clean and _quality_gate(row_clean, row.width, row.height):
+                        row_clean = _run_texo(row)
+                        if not row_clean:
+                            row_clean = _col_results(row)
+                        if row_clean:
                             row_results.append(row_clean)
                     if row_results:
                         clean = r' \\ '.join(row_results)
@@ -404,22 +424,7 @@ def _worker_main(conn):
             # Column-splitting fallback: if row-split also failed, try splitting wide
             # formulas into horizontal sub-expressions at large whitespace gaps
             if not clean:
-                cols = _split_cols(crop)
-                if len(cols) > 1:
-                    col_pieces = []
-                    for col in cols:
-                        pixel_c = _preprocess_to_tensor(col)
-                        ids_c = _onnx_generate(enc_sess, dec_sess, pixel_c, tokenizer,
-                                               max_new_tokens=384, rep_penalty=1.15)
-                        raw_c = tokenizer.decode(ids_c).strip()
-                        for delim in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
-                            if raw_c.startswith(delim): raw_c = raw_c[len(delim):]
-                            if raw_c.endswith(delim):   raw_c = raw_c[:-len(delim)]
-                        col_clean = _sanitize(raw_c.strip())
-                        if col_clean and _quality_gate(col_clean, col.width, col.height):
-                            col_pieces.append(col_clean)
-                    if col_pieces:
-                        clean = ' '.join(col_pieces)
+                clean = _col_results(crop)
 
             if clean:
                 results.append(clean)
