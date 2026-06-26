@@ -356,29 +356,37 @@ def _process_one(image_path_str: str, args, worker_thread):
     img_width, img_height = image_norm.width, image_norm.height
     detections = postprocess_detections(detections, img_width, img_height)
 
-    # DocLayout YOLO formula boost: recover formulas the nano model misses
+    # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
     if Path(DOCLAYOUT_MODEL_PATH).exists():
         try:
             dl_model = _get_doclayout_model()
-            dl_res = dl_model(yolo_input, conf=0.25, verbose=False)
+            dl_res = dl_model(yolo_input, conf=0.15, verbose=False)
             existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-            n_added = 0
+            existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
+            n_fml = n_tbl = 0
             for r in dl_res:
                 for box in r.boxes:
-                    if r.names[int(box.cls[0])] != 'isolate_formula':
-                        continue
-                    bbox = box.xyxy[0].tolist()
-                    if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
-                        continue
-                    detections.append({
-                        'bbox': bbox, 'class_id': -2,
-                        'class_name': 'Formula',
-                        'confidence': float(box.conf[0]),
-                    })
-                    existing_fml.append(bbox)
-                    n_added += 1
-            if n_added:
-                print(f'  [DL] added {n_added} formula(s)')
+                    cls   = r.names[int(box.cls[0])]
+                    conf_ = float(box.conf[0])
+                    bbox  = box.xyxy[0].tolist()
+                    if cls == 'isolate_formula':
+                        if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
+                            continue
+                        detections.append({
+                            'bbox': bbox, 'class_id': -2,
+                            'class_name': 'Formula', 'confidence': conf_,
+                        })
+                        existing_fml.append(bbox); n_fml += 1
+                    elif cls == 'table' and conf_ >= 0.30:
+                        if any(_iou(bbox, et) > 0.4 for et in existing_tbl):
+                            continue
+                        detections.append({
+                            'bbox': bbox, 'class_id': -3,
+                            'class_name': 'Table', 'confidence': conf_,
+                        })
+                        existing_tbl.append(bbox); n_tbl += 1
+            if n_fml or n_tbl:
+                print(f'  [DL] +{n_fml} formula(s), +{n_tbl} table(s)')
         except Exception as _e:
             print(f'  [DL] skipped: {_e}')
 

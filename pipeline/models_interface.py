@@ -861,7 +861,15 @@ def run_table_extraction(crop: Image.Image) -> str:
         img_w   = img_np.shape[1]
         result, _ = engine(img_np)
         tokens = _tokens_from_ocr_result(result, img_w)
-        latex = _table_heuristic(tokens, img_w) if tokens else ""
+        latex = ""
+        if tokens:
+            try:
+                from pipeline.tatr_worker import build_table_html
+                latex = build_table_html(crop, tokens, img_w) or ""
+            except Exception:
+                pass
+            if not latex:
+                latex = _table_heuristic(tokens, img_w)
         latency_ms = (time.perf_counter() - t_start) * 1000
         table_latencies.append(latency_ms)
         print(f"    [table] Table (RapidOCR): {latency_ms:.2f} ms")
@@ -890,10 +898,17 @@ def run_table_extraction_batched(crops: list[Image.Image]) -> list[str]:
         print(f"    [table] Table batch ({len(crops)} table(s), RapidOCR): {latency_ms:.2f} ms")
 
         results = []
-        for np_img, crop_result in zip(nps, per_crop):
-            img_w = np_img.shape[1]
+        for np_img, crop, crop_result in zip(nps, crops, per_crop):
+            img_w  = np_img.shape[1]
             tokens = _tokens_from_ocr_result(crop_result, img_w)
-            results.append(_table_heuristic(tokens, img_w) if tokens else "")
+            html   = None
+            if tokens:
+                try:
+                    from pipeline.tatr_worker import build_table_html
+                    html = build_table_html(crop, tokens, img_w)
+                except Exception:
+                    pass
+            results.append(html if html else (_table_heuristic(tokens, img_w) if tokens else ""))
         return results
     except Exception as e:
         print(f"    [table] Table batch failed ({e}), falling back to per-crop")

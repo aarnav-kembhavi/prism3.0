@@ -150,33 +150,39 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             detections = postprocess_detections(detections, img_width, img_height)
 
-            # DocLayout YOLO formula boost: run a second model specialized for
-            # isolate_formula to recover formulas the nano YOLO misses.
+            # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
+            # conf=0.15 for broader formula recall; tables use 0.30 (higher precision needed).
             try:
                 dl_model = _get_doclayout_model()
-                dl_results = dl_model(norm_path, conf=0.25, verbose=False)
+                dl_results = dl_model(norm_path, conf=0.15, verbose=False)
                 existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-                n_added = 0
+                existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
+                n_fml = n_tbl = 0
                 for r in dl_results:
                     for box in r.boxes:
-                        if r.names[int(box.cls[0])] != 'isolate_formula':
-                            continue
+                        cls = r.names[int(box.cls[0])]
+                        conf_ = float(box.conf[0])
                         bbox = box.xyxy[0].tolist()
-                        # skip if heavily overlapping an already-detected formula
-                        if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
-                            continue
-                        crop = xyxy_to_pil_crop(image_norm, bbox)
-                        detections.append({
-                            'bbox': bbox,
-                            'class_id': -2,
-                            'class_name': 'Formula',
-                            'confidence': float(box.conf[0]),
-                            'crop': crop,
-                        })
-                        existing_fml.append(bbox)
-                        n_added += 1
-                if n_added:
-                    print(f'  [DL] added {n_added} formula(s)')
+                        if cls == 'isolate_formula':
+                            if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
+                                continue
+                            crop = xyxy_to_pil_crop(image_norm, bbox)
+                            detections.append({
+                                'bbox': bbox, 'class_id': -2,
+                                'class_name': 'Formula', 'confidence': conf_, 'crop': crop,
+                            })
+                            existing_fml.append(bbox); n_fml += 1
+                        elif cls == 'table' and conf_ >= 0.30:
+                            if any(_iou(bbox, et) > 0.4 for et in existing_tbl):
+                                continue
+                            crop = xyxy_to_pil_crop(image_norm, bbox)
+                            detections.append({
+                                'bbox': bbox, 'class_id': -3,
+                                'class_name': 'Table', 'confidence': conf_, 'crop': crop,
+                            })
+                            existing_tbl.append(bbox); n_tbl += 1
+                if n_fml or n_tbl:
+                    print(f'  [DL] +{n_fml} formula(s), +{n_tbl} table(s)')
             except Exception as _e:
                 print(f'  [DL] skipped: {_e}')
 
