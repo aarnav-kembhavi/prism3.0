@@ -53,7 +53,7 @@ except Exception:
 # ----------------------------------------------------------------
 # Path handling and Windows DLL fix
 # ----------------------------------------------------------------
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT_DIR, 'Texo', 'src'))
 sys.path.append(os.path.join(ROOT_DIR, 'text-table-latex'))
 
@@ -125,8 +125,8 @@ def _get_rapidocr():
         # Chinese-dominant model.
         # en_dict.txt (190 bytes) is shipped locally to avoid `import paddleocr`
         # which costs ~211 MB of RAM just to resolve the file path.
-        en_rec  = os.path.join(ROOT_DIR, 'en_PP-OCRv4_rec.onnx')
-        en_dict = os.path.join(ROOT_DIR, 'en_dict.txt')
+        en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
+        en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
         if os.path.exists(en_rec) and os.path.exists(en_dict):
             kwargs['rec_model_path'] = en_rec
             kwargs['rec_keys_path']  = en_dict

@@ -12,7 +12,7 @@ import argparse, json, os, re, sys, time
 from pathlib import Path
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).parent.parent
 FOX  = ROOT / 'data' / 'fox' / 'focus_benchmark_test'
 
 
@@ -55,7 +55,7 @@ def _load_gt(json_path: Path) -> dict[str, str]:
 
 def run_prism(image_paths: list[str], pred_dir: Path, cjk_stems: set) -> None:
     sys.path.insert(0, str(ROOT))
-    from run_omnidocbench import _run_prism_on_images
+    from benchmarks.run_omnidocbench import _run_prism_on_images
     pred_dir.mkdir(parents=True, exist_ok=True)
     _run_prism_on_images(image_paths, str(pred_dir), cjk_pages=cjk_stems)
 

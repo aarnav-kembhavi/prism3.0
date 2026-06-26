@@ -57,14 +57,6 @@ def apply_semantic_reading_order(
             if best_parent is not None:
                 add_edge(best_parent, i)
 
-    # Rule C: Footnote Sinking
-    footnotes = [i for i, d in enumerate(sorted_dets) if d['class_name'] == 'Footnote']
-    non_footnotes = [i for i, d in enumerate(sorted_dets) if d['class_name'] != 'Footnote']
-
-    for fn in footnotes:
-        for nfn in non_footnotes:
-            add_edge(nfn, fn)
-
     # Topological Sort (Kahn's Algorithm)
     queue = [i for i in range(len(sorted_dets)) if in_degree[i] == 0]
     result_indices = []
@@ -82,6 +74,11 @@ def apply_semantic_reading_order(
     if len(result_indices) < len(sorted_dets):
         missing = [i for i in range(len(sorted_dets)) if i not in result_indices]
         result_indices.extend(missing)
+
+    # Move footnotes to end (O(n), preserving relative order within each group)
+    non_fn = [i for i in result_indices if sorted_dets[i]['class_name'] != 'Footnote']
+    fn_    = [i for i in result_indices if sorted_dets[i]['class_name'] == 'Footnote']
+    result_indices = non_fn + fn_
 
     return [sorted_dets[i] for i in result_indices]
 

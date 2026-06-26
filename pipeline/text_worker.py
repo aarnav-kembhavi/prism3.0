@@ -24,13 +24,19 @@ import os
 import sys
 import statistics
 import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
 
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Ensure child processes spawned by this module can import pipeline.*
+_pythonpath = os.environ.get('PYTHONPATH', '')
+if ROOT_DIR not in _pythonpath.split(os.pathsep):
+    os.environ['PYTHONPATH'] = ROOT_DIR + (os.pathsep + _pythonpath if _pythonpath else '')
 
 
 # ── helpers replicated from models_interface (no torch dependency) ────────────
@@ -252,8 +258,8 @@ def _worker_main(conn):
 
     from rapidocr_onnxruntime import RapidOCR
     base_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
-    en_rec  = os.path.join(ROOT_DIR, 'en_PP-OCRv4_rec.onnx')
-    en_dict = os.path.join(ROOT_DIR, 'en_dict.txt')
+    en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
+    en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
     if os.path.exists(en_rec) and os.path.exists(en_dict):
         base_kwargs['rec_model_path'] = en_rec
         base_kwargs['rec_keys_path']  = en_dict
@@ -279,7 +285,8 @@ def _worker_main(conn):
         if task == 'text':
             crop_arrays, is_screenshot = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
-            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
+                processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             engine = engine_screenshot if is_screenshot else engine_photo
             results = [''] * len(crops)
             chunk_size = 20
@@ -295,7 +302,8 @@ def _worker_main(conn):
         elif task == 'text_cjk':
             crop_arrays, is_screenshot = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
-            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
+                processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
             results = [''] * len(crops)
             chunk_size = 20
@@ -310,34 +318,39 @@ def _worker_main(conn):
             conn.send(results)
 
         elif task == 'text_mixed':
-            # English-first with per-block CJK fallback for mixed-language pages.
-            # Runs English engine on all blocks; any block returning < 3 chars
-            # is retried with the CJK engine (likely Chinese text).
+            # Run both EN and CJK engines on every block; keep whichever produces
+            # more visible characters. Better than EN-first fallback for pages where
+            # both scripts appear in the same block.
             crop_arrays, is_screenshot = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
-            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
+                processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             en_engine  = engine_screenshot if is_screenshot else engine_photo
             cjk_engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
-            results = [''] * len(crops)
+            en_results  = [''] * len(crops)
+            cjk_results = [''] * len(crops)
             chunk_size = 20
-            # English pass
+            # English pass on all blocks
             for start in range(0, len(crops), chunk_size):
                 chunk = processed[start:start + chunk_size]
                 per_crop = _stitch_and_run(en_engine, chunk)
                 for ci, matches in enumerate(per_crop):
                     if matches:
                         txt = _reconstruct_lines(matches)
-                        results[start + ci] = _escape_latex(_filter_nonascii(txt))
-            # CJK fallback for blocks where English returned < 3 visible chars
-            cjk_indices = [i for i, r in enumerate(results) if len(r.strip()) < 3]
-            for start in range(0, len(cjk_indices), chunk_size):
-                batch_idx = cjk_indices[start:start + chunk_size]
-                chunk = [processed[i] for i in batch_idx]
+                        en_results[start + ci] = _escape_latex(_filter_nonascii(txt))
+            # CJK pass on all blocks
+            for start in range(0, len(crops), chunk_size):
+                chunk = processed[start:start + chunk_size]
                 per_crop = _stitch_and_run(cjk_engine, chunk)
                 for ci, matches in enumerate(per_crop):
                     if matches:
                         txt = _reconstruct_lines(matches).replace('\n', '')
-                        results[batch_idx[ci]] = _escape_latex(txt)
+                        cjk_results[start + ci] = _escape_latex(txt)
+            # Per block: keep the engine that produced more visible characters
+            results = [
+                en if len(en) >= len(cjk) else cjk
+                for en, cjk in zip(en_results, cjk_results)
+            ]
             conn.send(results)
 
         elif task == 'probe':
@@ -345,7 +358,8 @@ def _worker_main(conn):
             # If near-zero, caller should switch to CJK mode.
             crop_arrays, is_screenshot = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
-            processed = [_preprocess_crop(c, is_screenshot) for c in crops]
+            with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
+                processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             engine = engine_screenshot if is_screenshot else engine_photo
             total_chars = 0
             if processed:
@@ -461,26 +475,26 @@ class TextOCRWorkerDual:
         self._w1.stop()
         self._w2.stop()
 
-    def run_text_batch(self, crops, is_screenshot=False):
+    def _split(self, crops, method1, method2, *args):
         if not crops:
             return []
         if len(crops) == 1:
-            return self._w1.run_text_batch(crops, is_screenshot)
+            return method1(crops, *args)
         from concurrent.futures import ThreadPoolExecutor
         mid = len(crops) // 2
         with ThreadPoolExecutor(max_workers=2) as exe:
-            f1 = exe.submit(self._w1.run_text_batch, crops[:mid], is_screenshot)
-            f2 = exe.submit(self._w2.run_text_batch, crops[mid:], is_screenshot)
+            f1 = exe.submit(method1, crops[:mid], *args)
+            f2 = exe.submit(method2, crops[mid:], *args)
             return f1.result() + f2.result()
 
+    def run_text_batch(self, crops, is_screenshot=False):
+        return self._split(crops, self._w1.run_text_batch, self._w2.run_text_batch, is_screenshot)
+
+    def run_text_batch_cjk(self, crops, is_screenshot=False):
+        return self._split(crops, self._w1.run_text_batch_cjk, self._w2.run_text_batch_cjk, is_screenshot)
+
+    def run_text_batch_mixed(self, crops, is_screenshot=False):
+        return self._split(crops, self._w1.run_text_batch_mixed, self._w2.run_text_batch_mixed, is_screenshot)
+
     def run_table_batch(self, crops):
-        if not crops:
-            return []
-        if len(crops) == 1:
-            return self._w1.run_table_batch(crops)
-        from concurrent.futures import ThreadPoolExecutor
-        mid = len(crops) // 2
-        with ThreadPoolExecutor(max_workers=2) as exe:
-            f1 = exe.submit(self._w1.run_table_batch, crops[:mid])
-            f2 = exe.submit(self._w2.run_table_batch, crops[mid:])
-            return f1.result() + f2.result()
+        return self._split(crops, self._w1.run_table_batch, self._w2.run_table_batch)

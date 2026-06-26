@@ -17,10 +17,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from PIL import Image
+sys.path.insert(0, str(Path(__file__).parent))
 from qa_extract import extract_answer, anls as compute_anls
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
-ROOT    = Path(__file__).parent
+ROOT    = Path(__file__).parent.parent
 PARQUET = ROOT / 'data' / 'ocrbench' / 'data' / 'test-00000-of-00001.parquet'
 
 # Question types to evaluate (skip scene-text-only tasks that PRISM isn't for)
@@ -38,7 +39,7 @@ pass  # helpers moved to qa_extract.py
 def run_prism_ocrbench(df: pd.DataFrame, pred_dir: Path) -> None:
     """Run PRISM on each unique image in the benchmark."""
     sys.path.insert(0, str(ROOT))
-    from run_omnidocbench import _run_prism_on_images
+    from benchmarks.run_omnidocbench import _run_prism_on_images
 
     pred_dir.mkdir(parents=True, exist_ok=True)
     seen, image_paths = set(), []

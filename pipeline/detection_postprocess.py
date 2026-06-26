@@ -232,7 +232,7 @@ def _clip_box(
     clipped['bbox'] = best
     # Re-crop the image if crop exists
     if 'crop' in clipped and hasattr(clipped['crop'], 'crop'):
-        from layout_utils import xyxy_to_pil_crop
+        from pipeline.layout_utils import xyxy_to_pil_crop
         # We need the original image to re-crop — skip if not available
         # The crop will be slightly inaccurate but acceptable
     return clipped

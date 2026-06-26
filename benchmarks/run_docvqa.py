@@ -22,7 +22,7 @@ import pandas as pd
 from PIL import Image
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
-ROOT    = Path(__file__).parent
+ROOT    = Path(__file__).parent.parent
 VAL_DIR = ROOT / 'data' / 'docvqa' / 'data'
 
 
@@ -35,7 +35,7 @@ def _load_validation() -> pd.DataFrame:
 
 def run_prism(df: pd.DataFrame, pred_dir: Path) -> None:
     sys.path.insert(0, str(ROOT))
-    from run_omnidocbench import _run_prism_on_images
+    from benchmarks.run_omnidocbench import _run_prism_on_images
 
     pred_dir.mkdir(parents=True, exist_ok=True)
     img_dir = pred_dir / '_imgs'

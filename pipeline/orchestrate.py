@@ -18,17 +18,26 @@ import os
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
 
+from pathlib import Path
+
+# Add repo root to path so pipeline.* and normalization are importable
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+_pypath = os.environ.get('PYTHONPATH', '')
+if _ROOT not in _pypath.split(os.pathsep):
+    os.environ['PYTHONPATH'] = _ROOT + (os.pathsep + _pypath if _pypath else '')
+
 import time
 import argparse
 import gc
 import threading
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from PIL import Image
 
 from normalization import normalize_image_pil
-from models_interface import (
+from pipeline.models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
     run_page_got,
     run_table_extraction, run_table_extraction_batched, get_yolo_model,
@@ -36,19 +45,19 @@ from models_interface import (
     get_math_latencies, get_math_batch_latencies,
     get_text_latencies, get_table_latencies, get_text_batch_latencies,
 )
-from text_worker import TextOCRWorker
-from math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
+from pipeline.text_worker import TextOCRWorker
+from pipeline.math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
 
 # Subprocess workers — populated by main(); None means in-process fallback.
 _ocr_worker:  "TextOCRWorker | None" = None
 _math_worker: "MathOCRWorker | None" = None
-from layout_utils import (
+from pipeline.layout_utils import (
     apply_semantic_reading_order, sort_detections_geometric,
     xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
     split_detections_n_columns,
 )
-from latex_builder import wrap_content, assemble_document, save_tex
-from detection_postprocess import postprocess_detections
+from pipeline.latex_builder import wrap_content, assemble_document, save_tex
+from pipeline.detection_postprocess import postprocess_detections
 
 try:
     from evaluation.profiler import BackgroundProfiler
@@ -57,7 +66,7 @@ except ImportError:
     HAS_PROFILER = False
 
 
-YOLO_MODEL_PATH = "yolov11n-doclaynet.onnx"
+YOLO_MODEL_PATH = str(Path(__file__).resolve().parent.parent / 'weights' / 'yolov11n-doclaynet.onnx')
 
 TEXT_CLASSES   = {"Text", "Title", "Section-header", "Caption",
                   "Footnote", "Page-footer", "Page-header", "List-item"}

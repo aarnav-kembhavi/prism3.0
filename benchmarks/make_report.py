@@ -15,7 +15,8 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-RESULT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("omnidocbench_eval/result")
+_ROOT = Path(__file__).parent.parent
+RESULT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else _ROOT / "omnidocbench_eval" / "result"
 
 
 def load_metric_result(result_dir: Path):

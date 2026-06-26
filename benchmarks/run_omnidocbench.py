@@ -23,13 +23,13 @@ os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', 'NO_ALBUMENTATIONS_UPDATE')
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).parent.parent
 EVAL_DIR = ROOT / 'omnidocbench_eval'
 DEMO_IMAGES = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'images'
 DEMO_GT = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'OmniDocBench_demo.json'
 DEFAULT_PRED = ROOT / 'preds' / 'omnidocbench'
 
-YOLO_MODEL_PATH = str(ROOT / 'yolov11n-doclaynet.onnx')
+YOLO_MODEL_PATH = str(ROOT / 'weights' / 'yolov11n-doclaynet.onnx')
 
 
 def parse_args():
@@ -45,7 +45,7 @@ def parse_args():
 
 # ── PRISM pipeline (adapted from orchestrate.py) ──────────────────────────────
 
-def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set = None, mixed_pages: set = None) -> dict[str, str]:
+def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set = None, mixed_pages: set = None, ppt_pages: set = None) -> dict[str, str]:
     """
     Run PRISM on a list of image files.  Workers are shared across all images.
     Returns {image_stem: markdown_text} dict.
@@ -58,17 +58,17 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     sys.path.insert(0, str(ROOT))
     from normalization import normalize_image_pil
     from normalization.modality import CaptureModality
-    from models_interface import get_yolo_model, unload_yolo
-    from layout_utils import (
+    from pipeline.models_interface import get_yolo_model, unload_yolo
+    from pipeline.layout_utils import (
         apply_semantic_reading_order, sort_detections_geometric,
         xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
         split_detections_n_columns,
     )
-    from latex_builder import wrap_content, assemble_document, save_tex
-    from detection_postprocess import postprocess_detections
-    from text_worker import TextOCRWorker
-    from math_worker_onnx import MathOCRWorkerOnnx
-    from tex_to_md import tex_to_omnidocbench_md
+    from pipeline.latex_builder import wrap_content, assemble_document, save_tex
+    from pipeline.detection_postprocess import postprocess_detections
+    from pipeline.text_worker import TextOCRWorkerDual
+    from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual
+    from pipeline.tex_to_md import tex_to_omnidocbench_md
 
     TEXT_CLASSES  = {"Text", "Title", "Section-header", "Caption",
                      "Footnote", "Page-footer", "Page-header", "List-item"}
@@ -77,8 +77,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     IMAGE_CLASSES = {"Picture"}
     LIST_ITEM_CLASS = "List-item"
 
-    ocr_worker = TextOCRWorker()
-    math_worker = MathOCRWorkerOnnx()
+    ocr_worker = TextOCRWorkerDual()
+    math_worker = MathOCRWorkerOnnxDual()
     print('[*] Starting workers...')
     ocr_worker.start()
     math_worker.start()
@@ -101,7 +101,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             # Stage 1: normalise
             image_norm, image_fidelity, modality_result = normalize_image_pil(img_path_str)
-            is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT)
+            is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT) or (stem in (ppt_pages or set()))
             norm_path = str(assets_dir / 'normalized.png')
             image_norm.save(norm_path)
 
@@ -160,7 +160,6 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             del image_norm, image_fidelity
             gc.collect()
-            unload_yolo()
 
             # Stage 3: extraction
             col_count = detect_column_count(detections, img_width)
@@ -283,6 +282,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
     ocr_worker.stop()
     math_worker.stop()
+    unload_yolo()
     return results
 
 
@@ -351,23 +351,29 @@ def main():
         gt_data = json.load(f)
     images_dir = Path(args.images_dir)
     image_paths = []
-    cjk_pages   = set()  # simplified_chinese pages → CJK engine
-    mixed_pages = set()  # en_ch_mixed pages → English-first + CJK fallback
+    cjk_pages   = set()  # simplified_chinese → CJK engine
+    mixed_pages = set()  # en_ch_mixed → dual-engine (EN + CJK, pick best)
+    ppt_pages   = set()  # PPT2PDF → force screenshot mode
     for page in gt_data:
         img_name = page['page_info']['image_path']
         img_path = images_dir / img_name
         if img_path.exists():
             image_paths.append(str(img_path))
-            lang = page['page_info']['page_attribute'].get('language', '')
-            if lang in ('simplified_chinese', 'en_ch_mixed'):
+            attrs = page['page_info']['page_attribute']
+            lang = attrs.get('language', '')
+            if lang == 'simplified_chinese':
                 cjk_pages.add(Path(img_name).stem)
+            elif lang == 'en_ch_mixed':
+                mixed_pages.add(Path(img_name).stem)
+            if attrs.get('data_source', '') == 'PPT2PDF':
+                ppt_pages.add(Path(img_name).stem)
         else:
             print(f'[!] Image not found: {img_path}')
 
-    print(f'[*] Found {len(image_paths)} pages to process ({len(cjk_pages)} CJK).')
+    print(f'[*] Found {len(image_paths)} pages to process ({len(cjk_pages)} CJK, {len(mixed_pages)} mixed, {len(ppt_pages)} PPT).')
 
     if not args.eval_only:
-        _run_prism_on_images(image_paths, pred_dir, cjk_pages=cjk_pages)
+        _run_prism_on_images(image_paths, pred_dir, cjk_pages=cjk_pages, mixed_pages=mixed_pages, ppt_pages=ppt_pages)
 
     if not args.skip_eval:
         print('\n[*] Running OmniDocBench evaluation...')

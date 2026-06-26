@@ -29,7 +29,12 @@ os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
 import numpy as np
 from PIL import Image, ImageOps
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Ensure child processes spawned by this module can import pipeline.*
+_pythonpath = os.environ.get('PYTHONPATH', '')
+if ROOT_DIR not in _pythonpath.split(os.pathsep):
+    os.environ['PYTHONPATH'] = ROOT_DIR + (os.pathsep + _pythonpath if _pythonpath else '')
 
 # ── sanitize helpers (no torch) ───────────────────────────────────────────────
 
@@ -107,6 +112,35 @@ def _quality_gate(text: str, crop_w: int, crop_h: int) -> bool:
         return False
 
     return True
+
+
+# ── row-splitting fallback ────────────────────────────────────────────────────
+
+def _split_rows(img: Image.Image, min_content_h: int = 8, density_frac: float = 0.05) -> list:
+    """Split a formula image at horizontal whitespace gaps between lines.
+
+    Returns a list of sub-crop PIL Images. If no meaningful split is found,
+    returns a list with just the original image.
+    """
+    arr = np.array(img.convert('L'))
+    row_density = (arr < 200).sum(axis=1)
+    thresh = max(1, row_density.max() * density_frac)
+    is_gap = row_density < thresh
+
+    regions, in_content, start = [], False, 0
+    for r, gap in enumerate(is_gap):
+        if not gap and not in_content:
+            in_content, start = True, r
+        elif gap and in_content:
+            in_content = False
+            if r - start >= min_content_h:
+                regions.append((start, r))
+    if in_content and len(arr) - start >= min_content_h:
+        regions.append((start, len(arr)))
+
+    if len(regions) <= 1:
+        return [img]
+    return [img.crop((0, s, img.width, e)) for s, e in regions]
 
 
 # ── preprocessing ─────────────────────────────────────────────────────────────
@@ -294,7 +328,7 @@ def _worker_main(conn):
         for i, crop in enumerate(crops):
             pixel = _preprocess_to_tensor(crop)
             token_ids = _onnx_generate(enc_sess, dec_sess, pixel, tokenizer,
-                                       max_new_tokens=256, rep_penalty=1.15)
+                                       max_new_tokens=384, rep_penalty=1.15)
             raw = tokenizer.decode(token_ids).strip()   # tokenizers skips specials by default
 
             # strip outer delimiters
@@ -306,6 +340,25 @@ def _worker_main(conn):
             # Quality gate: discard over-generated or repetitive output
             if clean and not _quality_gate(clean, crop.width, crop.height):
                 clean = ''
+
+            # Row-splitting fallback: if full image failed, try splitting into lines
+            if not clean:
+                rows = _split_rows(crop)
+                if len(rows) > 1:
+                    row_results = []
+                    for row in rows:
+                        pixel_r = _preprocess_to_tensor(row)
+                        ids_r = _onnx_generate(enc_sess, dec_sess, pixel_r, tokenizer,
+                                               max_new_tokens=384, rep_penalty=1.15)
+                        raw_r = tokenizer.decode(ids_r).strip()
+                        for delim in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
+                            if raw_r.startswith(delim): raw_r = raw_r[len(delim):]
+                            if raw_r.endswith(delim):   raw_r = raw_r[:-len(delim)]
+                        row_clean = _sanitize(raw_r.strip())
+                        if row_clean and _quality_gate(row_clean, row.width, row.height):
+                            row_results.append(row_clean)
+                    if row_results:
+                        clean = r' \\ '.join(row_results)
 
             if clean:
                 results.append(clean)
@@ -372,3 +425,43 @@ class MathOCRWorkerOnnx:
         arrays = [np.array(c.convert('RGB')) for c in crops]
         self._conn.send((arrays, figures_dir, math_counter_val))
         return self._conn.recv()
+
+
+class MathOCRWorkerOnnxDual:
+    """Two MathOCRWorkerOnnx subprocesses that split crops in parallel.
+
+    Halves math OCR latency on formula-heavy pages.
+    API-compatible with MathOCRWorkerOnnx.
+    """
+
+    def __init__(self):
+        self._w1 = MathOCRWorkerOnnx()
+        self._w2 = MathOCRWorkerOnnx()
+
+    def start(self):
+        self._w1.start()
+        self._w2.start()
+
+    def stop(self):
+        self._w1.stop()
+        self._w2.stop()
+
+    def run_math_batch(
+        self,
+        crops: list,
+        figures_dir: str,
+        math_counter_val: int,
+    ) -> tuple[list[str], int]:
+        if not crops:
+            return [], math_counter_val
+        if len(crops) == 1:
+            return self._w1.run_math_batch(crops, figures_dir, math_counter_val)
+        from concurrent.futures import ThreadPoolExecutor
+        mid = len(crops) // 2
+        # Give w2 a counter offset of mid to prevent formula image filename collisions
+        with ThreadPoolExecutor(max_workers=2) as exe:
+            f1 = exe.submit(self._w1.run_math_batch, crops[:mid], figures_dir, math_counter_val)
+            f2 = exe.submit(self._w2.run_math_batch, crops[mid:], figures_dir, math_counter_val + mid)
+            r1, _c1 = f1.result()
+            r2, _c2 = f2.result()
+        return r1 + r2, math_counter_val + len(crops)
