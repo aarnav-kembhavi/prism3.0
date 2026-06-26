@@ -159,13 +159,18 @@ def xyxy_to_pil_crop(image, bbox):
     return image.crop((x1, y1, x2, y2))
 
 
-def _find_gutters(detections: List[Dict[str, Any]], image_width: int):
+def _find_gutters(detections: List[Dict[str, Any]], image_width: int,
+                  max_coverage: int = 0):
     """
     Build a horizontal coverage histogram and return (non_full, gutter_list).
 
-    A gutter is a contiguous run of completely-empty bins (zero detections
-    cover that x-slice) that is at least 1.5% of the page width wide and
-    lies within the inner 90% of the page (5% margin each side).
+    A gutter is a contiguous run of bins with coverage <= max_coverage that is
+    at least 1.5% of the page width wide and lies within the inner 90% of the
+    page (5% margin each side).
+
+    max_coverage=0 (default): strict zero-coverage gutters only.
+    max_coverage=1: allows one stray detection per bin — catches 3-column
+    pages where a single YOLO bbox slightly overhangs the column gutter.
 
     Returns (non_full_dets, [(g_start_bin, g_end_bin), ...]) where bin
     coordinates are in [0, BIN_COUNT).
@@ -187,7 +192,7 @@ def _find_gutters(detections: List[Dict[str, Any]], image_width: int):
 
     margin = int(BIN_COUNT * 0.05)
     is_gutter = np.zeros(BIN_COUNT, dtype=bool)
-    is_gutter[margin:BIN_COUNT - margin] = (coverage[margin:BIN_COUNT - margin] == 0)
+    is_gutter[margin:BIN_COUNT - margin] = (coverage[margin:BIN_COUNT - margin] <= max_coverage)
 
     gutters = []
     in_gutter = False
@@ -204,6 +209,51 @@ def _find_gutters(detections: List[Dict[str, Any]], image_width: int):
         gutters.append((g_start, BIN_COUNT - 1))
 
     return non_full, gutters
+
+
+def _centroid_gaps(non_full, image_width, min_gap_frac=0.15, min_per_col=2):
+    """
+    Detect column boundaries via X-centroid gap detection.
+
+    Useful for dense-text layouts (newspapers) where column text blocks cover
+    the narrow inter-column gutter, so the coverage histogram only finds
+    margin gutters. This approach works on *where elements are* rather than
+    *where whitespace is*.
+
+    Uses the top-(N-1) largest inter-centroid gaps as column boundaries, so a
+    single cross-column headline element does not break 3-column detection by
+    splitting one large gap into two smaller ones.
+
+    Returns (n_cols, boundaries_px) if ≥ 3 valid columns found, else (0, []).
+    boundaries_px = pixel x-positions of column separators (sorted).
+    """
+    if len(non_full) < 3 * min_per_col:
+        return 0, []
+
+    centroids = sorted((d['bbox'][0] + d['bbox'][2]) / (2 * image_width) for d in non_full)
+    if len(centroids) < 6:
+        return 0, []
+
+    all_gaps = [(centroids[i + 1] - centroids[i], i) for i in range(len(centroids) - 1)]
+
+    for n_cols in range(3, min(9, len(centroids))):
+        # Take the n_cols-1 largest gaps as column boundaries
+        top = sorted(all_gaps, key=lambda x: -x[0])[:n_cols - 1]
+        if min(g for g, _ in top) < min_gap_frac:
+            break  # remaining gaps are too small for any reasonable column count
+
+        gap_indices = sorted(i for _, i in top)
+        splits = [0] + [i + 1 for i in gap_indices] + [len(centroids)]
+        col_sizes = [splits[j + 1] - splits[j] for j in range(n_cols)]
+
+        if all(s >= min_per_col for s in col_sizes):
+            boundaries_px = [
+                (centroids[i] + centroids[i + 1]) / 2 * image_width
+                for i in gap_indices
+            ]
+            return min(n_cols, 8), boundaries_px
+
+    return 0, []
 
 
 def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> int:
@@ -235,23 +285,58 @@ def detect_column_count(detections: List[Dict[str, Any]], image_width: int) -> i
     BIN_COUNT = 200
     full_width_threshold = image_width * 0.70
 
-    # --- Try N ≥ 3 ---
-    n_potential = len(gutters) + 1
-    if n_potential >= 3 and gutters:
-        boundaries = [0] + [g[1] + 1 for g in gutters] + [BIN_COUNT]
-        valid = True
+    def _validate_n_columns(n_potential, gutters_list, nf):
+        """
+        Count effective content columns, trimming empty edge columns (page margins).
+        Returns the effective column count if ≥3 real columns all have ≥2 dets, else 0.
+        """
+        if not gutters_list:
+            return 0
+        boundaries = [0] + [g[1] + 1 for g in gutters_list] + [BIN_COUNT]
+        counts = []
         for i in range(n_potential):
             col_min_x = boundaries[i] / BIN_COUNT * image_width
             col_max_x = boundaries[i + 1] / BIN_COUNT * image_width
-            in_col = [
-                d for d in non_full
-                if col_min_x <= (d['bbox'][0] + d['bbox'][2]) / 2 < col_max_x
-            ]
-            if len(in_col) < 2:
-                valid = False
-                break
-        if valid:
-            return min(n_potential, 8)
+            in_col = [d for d in nf
+                      if col_min_x <= (d['bbox'][0] + d['bbox'][2]) / 2 < col_max_x]
+            counts.append(len(in_col))
+
+        # Trim empty edge columns — these are page margins, not real content columns.
+        # A single YOLO bbox whose left/right edge slightly overshoots the text area
+        # creates a phantom gutter at the margin, splitting off a zero-detection
+        # "column" that breaks the ≥2-detection requirement for real columns.
+        first = next((i for i, c in enumerate(counts) if c >= 1), None)
+        last  = next((i for i, c in enumerate(reversed(counts)) if c >= 1), None)
+        if first is None:
+            return 0
+        last = n_potential - 1 - last
+        effective_n = last - first + 1
+        if effective_n < 3:
+            return 0
+        if all(c >= 2 for c in counts[first:last + 1]):
+            return min(effective_n, 8)
+        return 0
+
+    # --- Try N ≥ 3 (strict: zero-coverage gutters) ---
+    n = _validate_n_columns(len(gutters) + 1, gutters, non_full)
+    if n:
+        return n
+
+    # --- Retry with relaxed gutters (≤1 stray detection per bin) ---
+    # Catches 3-column pages where a single YOLO bbox slightly overhangs the gutter.
+    _, gutters_relaxed = _find_gutters(detections, image_width, max_coverage=1)
+    n = _validate_n_columns(len(gutters_relaxed) + 1, gutters_relaxed, non_full)
+    if n:
+        return n
+
+    # --- Centroid gap fallback (catches dense-text newspapers) ---
+    # When every column's text blocks cover the narrow inter-column gutter,
+    # coverage-histogram gutters only appear at the page margins.  In that
+    # case, look for large gaps (≥20% of page width) between sorted X-centroids
+    # of non-full-width elements — newspaper columns produce gaps of ~25-30%.
+    n, _ = _centroid_gaps(non_full, image_width)
+    if n >= 3:
+        return n
 
     # --- Fall back to 2-column heuristic (original logic) ---
     non_full_spans = [(d['bbox'][0], d['bbox'][2]) for d in non_full]
@@ -402,6 +487,21 @@ def split_detections_n_columns(
         col_idx = sum(1 for b in boundaries_px if x_ctr > b)
         col_idx = min(col_idx, N - 1)
         columns[col_idx].append(d)
+
+    # If gutters were only margin gutters (≥2 consecutive empty edge columns), the
+    # gutter-based split collapses to a single effective column.  Fall back to
+    # centroid gap detection which works on element positions instead of whitespace.
+    non_empty = sum(1 for col in columns if col)
+    if non_empty < 3:
+        _, centroid_bpx = _centroid_gaps(non_full, image_width)
+        if centroid_bpx:
+            boundaries_px = centroid_bpx
+            N = len(boundaries_px) + 1
+            columns = [[] for _ in range(N)]
+            for d in non_full:
+                x_ctr = (d['bbox'][0] + d['bbox'][2]) / 2
+                col_idx = sum(1 for b in boundaries_px if x_ctr > b)
+                columns[min(col_idx, N - 1)].append(d)
 
     def _sort(group):
         if not group:
