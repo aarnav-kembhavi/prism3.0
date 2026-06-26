@@ -143,6 +143,47 @@ def _split_rows(img: Image.Image, min_content_h: int = 8, density_frac: float = 
     return [img.crop((0, s, img.width, e)) for s, e in regions]
 
 
+def _split_cols(img: Image.Image, min_gap_w: int = 15, min_content_w: int = 10,
+                density_frac: float = 0.05) -> list:
+    """Split a formula image at large vertical whitespace gaps between sub-expressions.
+
+    Finds contiguous content regions, merges those separated by gaps < min_gap_w,
+    and splits at gaps >= min_gap_w. Returns a list with the original image when
+    no meaningful split exists.
+    """
+    arr = np.array(img.convert('L'))
+    col_density = (arr < 200).sum(axis=0)
+    thresh = max(1, col_density.max() * density_frac)
+    is_content = col_density >= thresh
+
+    regions, in_c, start = [], False, 0
+    for c, content in enumerate(is_content):
+        if content and not in_c:
+            in_c, start = True, c
+        elif not content and in_c:
+            in_c = False
+            regions.append([start, c])
+    if in_c:
+        regions.append([start, len(is_content)])
+
+    if not regions:
+        return [img]
+
+    # merge regions whose separating gap is narrower than min_gap_w
+    merged = [regions[0]]
+    for s, e in regions[1:]:
+        if s - merged[-1][1] < min_gap_w:
+            merged[-1][1] = e
+        else:
+            merged.append([s, e])
+
+    merged = [(s, e) for s, e in merged if e - s >= min_content_w]
+
+    if len(merged) <= 1:
+        return [img]
+    return [img.crop((s, 0, e, img.height)) for s, e in merged]
+
+
 # ── preprocessing ─────────────────────────────────────────────────────────────
 
 _UNIMERNET_MEAN = 0.7931
@@ -359,6 +400,26 @@ def _worker_main(conn):
                             row_results.append(row_clean)
                     if row_results:
                         clean = r' \\ '.join(row_results)
+
+            # Column-splitting fallback: if row-split also failed, try splitting wide
+            # formulas into horizontal sub-expressions at large whitespace gaps
+            if not clean:
+                cols = _split_cols(crop)
+                if len(cols) > 1:
+                    col_pieces = []
+                    for col in cols:
+                        pixel_c = _preprocess_to_tensor(col)
+                        ids_c = _onnx_generate(enc_sess, dec_sess, pixel_c, tokenizer,
+                                               max_new_tokens=384, rep_penalty=1.15)
+                        raw_c = tokenizer.decode(ids_c).strip()
+                        for delim in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
+                            if raw_c.startswith(delim): raw_c = raw_c[len(delim):]
+                            if raw_c.endswith(delim):   raw_c = raw_c[:-len(delim)]
+                        col_clean = _sanitize(raw_c.strip())
+                        if col_clean and _quality_gate(col_clean, col.width, col.height):
+                            col_pieces.append(col_clean)
+                    if col_pieces:
+                        clean = ' '.join(col_pieces)
 
             if clean:
                 results.append(clean)
