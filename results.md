@@ -154,15 +154,15 @@ Fox pages are single-column screenshots; layout improvements have minimal impact
 **Metric:** ANLS via Llama 3.1 8B (Groq) reader  
 **Note:** OCRBench is designed for end-to-end VLMs (image → answer directly). PRISM is an extraction pipeline, so these scores are not directly comparable to published OCRBench leaderboard numbers. Included for completeness only.
 
-| Task Type | n | Score |
-|-----------|---|-------|
-| Key Information Extraction | 200 | 17.6% |
-| Doc-oriented VQA | 200 | 10.7% |
-| Handwriting Recognition | 50 | 0.0% |
-| Handwritten Math Recognition | 100 | 0.0% |
-| **Overall (4 types)** | **550** | **10.3%** |
+| Task Type | n | Score | vs Jun-14 |
+|-----------|---|-------|-----------|
+| Key Information Extraction | 200 | 24.2% | +6.6pp |
+| Doc-oriented VQA | 200 | 10.5% | −0.2pp |
+| Handwriting Recognition | 50 | 0.0% | = |
+| Handwritten Math Recognition | 100 | 0.0% | = |
+| **Overall (4 types)** | **550** | **12.6%** | +2.3pp |
 
-> Results from Jun-14 run (v2 run in progress). Handwriting scores 0% by design — PRISM uses printed-text OCR only.
+> Handwriting scores 0% by design — PRISM uses printed-text OCR only. Key Information Extraction gain (+6.6pp) from better table and formula extraction via TATR + DocLayout.
 
 ---
 
@@ -172,11 +172,11 @@ Fox pages are single-column screenshots; layout improvements have minimal impact
 **Metric:** ANLS via sliding-window fuzzy substring search (no LLM)  
 **Note:** Standard DocVQA uses a reader model (BERT or LLM). Here we use direct fuzzy substring matching — tests whether the answer is recoverable from PRISM's output but may under-report for inference-requiring questions. Treat as a lower bound.
 
-| Split | n | ANLS |
-|-------|---|------|
-| Validation (all) | 5,349 | **45.7%** |
+| Split | n | ANLS | vs Jun-14 |
+|-------|---|------|-----------|
+| Validation (all) | 5,349 | **49.4%** | +3.7pp |
 
-> Results from Jun-14 run (v2 run in progress). State-of-the-art end-to-end models score 80–92% ANLS; OCR pipeline baselines score 30–60%.
+> State-of-the-art end-to-end models score 80–92% ANLS; OCR pipeline baselines score 30–60%.
 
 ---
 
@@ -193,8 +193,8 @@ Fox pages are single-column screenshots; layout improvements have minimal impact
 | OmniDocBench (3-col) | Text accuracy | 52.6% | **85.2%** | **+32.6pp** |
 | OmniDocBench (newspaper) | Text accuracy | 35.5% | **52.9%** | **+17.4pp** |
 | Fox | OCR accuracy | 89.0% | **89.3%** | +0.3pp |
-| OCRBench | ANLS (ref) | 10.3% | pending | — |
-| DocVQA | ANLS (ref) | 45.7% | pending | — |
+| OCRBench | ANLS (ref) | 10.3% | **12.6%** | +2.3pp |
+| DocVQA | ANLS (ref) | 45.7% | **49.4%** | +3.7pp |
 
 **Key improvements in this round:**
 - **+32.6pp three-column text accuracy** via centroid-gap + margin-trim column detection (23/30 three-column pages now correctly detected vs 0 before)
