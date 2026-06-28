@@ -197,8 +197,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                 )
             ]
 
-            # Formula pad + re-crop
-            FORMULA_PAD = 12
+            # Formula pad + re-crop (4px optimal per sweep on 224 EN crops)
+            FORMULA_PAD = 4
             for det in detections:
                 bbox = det['bbox']
                 if det['class_name'] in MATH_CLASSES:

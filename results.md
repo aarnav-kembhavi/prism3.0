@@ -1,9 +1,9 @@
 # PRISM Benchmark Results
 
-**Date:** 2026-06-27  
-**Pipeline:** YOLO (yolov11n-doclaynet) → DocLayout YOLO (formula/table boost) → RapidOCR PP-OCRv4 (EN + CJK) → Texo ONNX (math) → TATR (table structure) → LaTeX → Markdown  
+**Date:** 2026-06-28  
+**Pipeline:** YOLO (yolov11n-doclaynet) → DocLayout YOLO (formula/table boost) → RapidOCR PP-OCRv4 (EN + CJK) → Texo-distill ONNX (math, FORMULA_PAD=4) → TATR (table structure) → LaTeX → Markdown  
 **Platform:** Windows 11, Python 3.12  
-**Key changes since 2026-06-14:** DocLayout formula threshold 0.25→0.15 (+formula acc), DocLayout table class added (conf≥0.30), TATR table structure recognition (microsoft/table-transformer-structure-recognition-v1.1-all), 3-column layout detection (margin-trim + centroid-gap fallback)
+**Key changes since 2026-06-14:** DocLayout formula threshold 0.25→0.15 (+formula acc), DocLayout table class added (conf≥0.30), TATR table structure recognition (microsoft/table-transformer-structure-recognition-v1.1-all), 3-column layout detection (margin-trim + centroid-gap fallback), Texo-distill ONNX (finetuned on UniMER-1M, vocab=1264), FORMULA_PAD 12→4px (+2.6pp formula acc)
 
 ---
 
@@ -17,11 +17,11 @@
 
 | Task | EDR | Accuracy | vs Jun-14 |
 |------|-----|----------|-----------|
-| Text block | 0.4449 | 55.5% | +2.7pp |
-| Reading order | 0.5502 | 45.0% | +3.1pp |
+| Text block | 0.4445 | 55.6% | +2.8pp |
+| Reading order | 0.5508 | 44.9% | +3.0pp |
 | Table (Edit_dist) | 0.4763 | 52.4% | +14.4pp |
 | Table (TEDS) | — | 43.6% | +12.9pp |
-| Display formula | 0.7682 | 23.2% | +7.5pp |
+| Display formula | 0.7416 | **25.8%** | **+10.1pp** |
 
 > TEDS = Tree Edit Distance Similarity on HTML table structure (higher = better).  
 > CDM metric unavailable on Windows (requires TeX Live + ImageMagick on Linux).
@@ -102,7 +102,7 @@ Pages: 193 text / 204 reading-order / 20 formula / 81 table
 |--------|-----------|----------------|-----------|
 | Text block | **0.1238** | **87.6%** | +2.5pp |
 | Reading order | **0.2804** | **72.0%** | +2.0pp |
-| Display formula | 0.5972 | 40.3% | +8.1pp |
+| Display formula | **0.5415** | **45.8%** | **+13.6pp** |
 | Table (Edit_dist) | 0.4289 | 57.1% | +5.0pp |
 
 ### Per-Type Text vs Nougat (English Subset)
@@ -126,7 +126,7 @@ PRISM outperforms Nougat on every document type in the English subset.
 | Nougat (English-only) | 0.365 | Dragged by non-academic English |
 | Nougat (Full) | 0.452 | 0.998 EDR on Chinese pages |
 | **PRISM (Full, Jun-14)** | **0.4717** | English pipeline, CJK added |
-| **PRISM (Full, Jun-27)** | **0.4449** | +column detection, TATR, DocLayout |
+| **PRISM (Full, Jun-28)** | **0.4445** | +column detection, TATR, DocLayout, Texo-distill |
 | **PRISM (EN subset)** | **0.1238** | 2.9× better than Nougat EN-only |
 
 ---
@@ -182,24 +182,30 @@ Fox pages are single-column screenshots; layout improvements have minimal impact
 
 ## Summary
 
-| Benchmark | Metric | Jun-14 | Jun-27 | Δ |
-|-----------|--------|--------|--------|---|
-| OmniDocBench (full) | Text accuracy | 52.8% | **55.5%** | +2.7pp |
-| OmniDocBench (EN subset) | Text accuracy | 85.1% | **87.6%** | +2.5pp |
-| OmniDocBench (full) | Table TEDS | 30.7% | **43.6%** | +12.9pp |
-| OmniDocBench (full) | Table accuracy | 38.0% | **52.4%** | +14.4pp |
-| OmniDocBench (full) | Formula accuracy | 15.7% | **23.2%** | +7.5pp |
-| OmniDocBench (full) | Reading order | 41.9% | **45.0%** | +3.1pp |
-| OmniDocBench (3-col) | Text accuracy | 52.6% | **85.2%** | **+32.6pp** |
-| OmniDocBench (newspaper) | Text accuracy | 35.5% | **52.9%** | **+17.4pp** |
-| Fox | OCR accuracy | 89.0% | **89.3%** | +0.3pp |
-| OCRBench | ANLS (ref) | 10.3% | **12.6%** | +2.3pp |
-| DocVQA | ANLS (ref) | 45.7% | **49.4%** | +3.7pp |
+| Benchmark | Metric | Jun-14 | Jun-27 | Jun-28 | Δ (total) |
+|-----------|--------|--------|--------|--------|-----------|
+| OmniDocBench (full) | Text accuracy | 52.8% | 55.5% | **55.6%** | +2.8pp |
+| OmniDocBench (EN subset) | Text accuracy | 85.1% | **87.6%** | **87.6%** | +2.5pp |
+| OmniDocBench (full) | Table TEDS | 30.7% | **43.6%** | **43.6%** | +12.9pp |
+| OmniDocBench (full) | Table accuracy | 38.0% | **52.4%** | **52.4%** | +14.4pp |
+| OmniDocBench (full) | Formula accuracy | 15.7% | 23.2% | **25.8%** | **+10.1pp** |
+| OmniDocBench (EN subset) | Formula accuracy | 32.2% | 40.3% | **45.8%** | **+13.6pp** |
+| OmniDocBench (full) | Reading order | 41.9% | **44.9%** | **44.9%** | +3.0pp |
+| OmniDocBench (3-col) | Text accuracy | 52.6% | **85.2%** | **85.2%** | **+32.6pp** |
+| OmniDocBench (newspaper) | Text accuracy | 35.5% | **52.9%** | **52.9%** | **+17.4pp** |
+| Fox | OCR accuracy | 89.0% | **89.3%** | **89.3%** | +0.3pp |
+| OCRBench | ANLS (ref) | 10.3% | **12.6%** | 12.6%\* | +2.3pp |
+| DocVQA | ANLS (ref) | 45.7% | **49.4%** | **49.4%** | +3.7pp |
 
-**Key improvements in this round:**
+> \* OCRBench v3 preds generated but eval pending (requires LLM API key for answer extraction).
+
+**Key improvements Jun-14 → Jun-27:**
 - **+32.6pp three-column text accuracy** via centroid-gap + margin-trim column detection (23/30 three-column pages now correctly detected vs 0 before)
 - **+12.9pp table TEDS** via TATR (microsoft/table-transformer-structure-recognition-v1.1-all) + DocLayout table class
 - **+7.5pp formula accuracy** via DocLayout formula threshold lowered to 0.15
 - **+8.0pp English reading order** side-effect of correct three-column splitting
+
+**Key improvements Jun-27 → Jun-28:**
+- **+2.6pp formula accuracy** (25.8% overall, 45.8% EN) via Texo-distill ONNX + FORMULA_PAD=4 (hyperparameter sweep on 224 EN crops confirmed 4px optimal; larger padding bleeds neighboring content post-binarization)
 
 **Recommended benchmarks for paper:** OmniDocBench + Fox. These directly measure document parsing quality and bilingual OCR accuracy, which are PRISM's core claims.

@@ -427,9 +427,9 @@ def _process_one(image_path_str: str, args, worker_thread):
             })
 
     # Re-crop all regions using final refined bboxes.
-    # Formula bboxes get a 12px expansion so crop_margin() has headroom to
-    # detect ink near the edge (YOLO tight-fits the formula region).
-    FORMULA_PAD = 12
+    # 4px is optimal per hyperparameter sweep on 224 EN formula crops;
+    # larger padding bleeds neighboring content into the crop and hurts accuracy.
+    FORMULA_PAD = 4
     for det in detections:
         bbox = det['bbox']
         if det["class_name"] in MATH_CLASSES:
