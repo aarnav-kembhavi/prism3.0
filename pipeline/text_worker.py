@@ -355,7 +355,6 @@ def _worker_main(conn):
 
         elif task == 'probe':
             # Run English OCR on a small sample; return total output char count.
-            # If near-zero, caller should switch to CJK mode.
             crop_arrays, is_screenshot = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
@@ -368,6 +367,28 @@ def _worker_main(conn):
                     if matches:
                         total_chars += len(_reconstruct_lines(matches))
             conn.send(total_chars)
+
+        elif task == 'probe_cjk':
+            # Run CJK engine on a small sample; return count of CJK Unicode chars.
+            # Non-zero means the page contains CJK script.
+            crop_arrays, is_screenshot = payload
+            crops = [Image.fromarray(a) for a in crop_arrays]
+            with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
+                processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
+            engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            cjk_count = 0
+            if processed:
+                per_crop = _stitch_and_run(engine, processed)
+                for matches in per_crop:
+                    if matches:
+                        txt = _reconstruct_lines(matches)
+                        cjk_count += sum(
+                            1 for c in txt
+                            if '一' <= c <= '鿿'
+                            or '㐀' <= c <= '䶿'
+                            or '豈' <= c <= '﫿'
+                        )
+            conn.send(cjk_count)
 
         elif task == 'table':
             crop_arrays = payload
@@ -440,12 +461,20 @@ class TextOCRWorker:
         return self._conn.recv()
 
     def run_language_probe(self, crops, is_screenshot=False):
-        """Run English OCR on a sample crop; returns total char count.
-        Near-zero → likely CJK page."""
+        """Run English OCR on a sample crop; returns total char count."""
         if not crops:
             return 0
         sample = crops[:3]
         self._conn.send(('probe', (self._serialize(sample), is_screenshot)))
+        return self._conn.recv()
+
+    def run_cjk_probe(self, crops, is_screenshot=False):
+        """Run CJK OCR on a sample; returns count of CJK Unicode codepoints.
+        Non-zero → page contains CJK script."""
+        if not crops:
+            return 0
+        sample = crops[:3]
+        self._conn.send(('probe_cjk', (self._serialize(sample), is_screenshot)))
         return self._conn.recv()
 
     def run_table_batch(self, crops):
@@ -495,6 +524,9 @@ class TextOCRWorkerDual:
 
     def run_text_batch_mixed(self, crops, is_screenshot=False):
         return self._split(crops, self._w1.run_text_batch_mixed, self._w2.run_text_batch_mixed, is_screenshot)
+
+    def run_cjk_probe(self, crops, is_screenshot=False):
+        return self._w1.run_cjk_probe(crops, is_screenshot)
 
     def run_table_batch(self, crops):
         return self._split(crops, self._w1.run_table_batch, self._w2.run_table_batch)

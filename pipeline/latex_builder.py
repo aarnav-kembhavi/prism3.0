@@ -244,17 +244,30 @@ def assemble_document(
     right_parts: List[str] = None,
     right_list_regions=None,
     header_logo: Optional[str] = None,
+    has_cjk: bool = False,
 ) -> str:
-    preamble = (
-        "\\documentclass{article}\n"
-        "\\usepackage[margin=2cm]{geometry}\n"
-        "\\usepackage{amsmath}\n"
-        "\\usepackage{graphicx}\n"
-        "\\usepackage{booktabs}\n"
-        "\\usepackage[utf8]{inputenc}\n"
-        "\\usepackage{ragged2e}\n"
-        "\\setlength{\\emergencystretch}{3em}\n"
-    )
+    if has_cjk:
+        preamble = (
+            "\\documentclass{article}\n"
+            "\\usepackage[margin=2cm]{geometry}\n"
+            "\\usepackage{amsmath}\n"
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{booktabs}\n"
+            "\\usepackage{xeCJK}\n"
+            "\\usepackage{ragged2e}\n"
+            "\\setlength{\\emergencystretch}{3em}\n"
+        )
+    else:
+        preamble = (
+            "\\documentclass{article}\n"
+            "\\usepackage[margin=2cm]{geometry}\n"
+            "\\usepackage{amsmath}\n"
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{booktabs}\n"
+            "\\usepackage[utf8]{inputenc}\n"
+            "\\usepackage{ragged2e}\n"
+            "\\setlength{\\emergencystretch}{3em}\n"
+        )
     if is_two_column:
         preamble += "\\usepackage{paracol}\n"
     preamble += "\\begin{document}\n\\sloppy\n"

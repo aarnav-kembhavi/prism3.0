@@ -66,7 +66,7 @@ def _process_job(job_id: str) -> None:
             timeout=300,
         )
 
-        output_dir = ROOT / f"{stem}_output"
+        output_dir = ROOT / "outputs" / f"{stem}_output"
         tex_path   = output_dir / "main.tex"
 
         if not tex_path.exists():
@@ -78,8 +78,9 @@ def _process_job(job_id: str) -> None:
 
         # ── Stage 2: LaTeX → PDF ───────────────────────────────────────────
         job["message"] = "Compiling PDF…"
+        compiler = "xelatex" if "\\usepackage{xeCJK}" in tex_path.read_text(encoding="utf-8") else "pdflatex"
         subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", "main.tex"],
+            [compiler, "-interaction=nonstopmode", "main.tex"],
             cwd=str(output_dir),
             capture_output=True,
             timeout=120,
@@ -173,7 +174,24 @@ def get_pdf(job_id: str):
     pdf = Path(job["pdf_path"])
     if not pdf.exists():
         raise HTTPException(404, "PDF file missing")
-    return FileResponse(pdf, media_type="application/pdf", filename="output.pdf")
+    from fastapi.responses import Response
+    return Response(
+        pdf.read_bytes(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="output.pdf"'},
+    )
+
+
+@app.get("/latex/{job_id}")
+def get_latex(job_id: str):
+    job = _jobs.get(job_id)
+    if not job or job["status"] != "done":
+        raise HTTPException(404, "LaTeX not ready")
+    tex = Path(job["output_dir"]) / "main.tex"
+    if not tex.exists():
+        raise HTTPException(404, "LaTeX file missing")
+    from fastapi.responses import Response
+    return Response(tex.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

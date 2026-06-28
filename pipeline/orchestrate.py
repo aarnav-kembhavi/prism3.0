@@ -150,6 +150,8 @@ def route_and_extract(
     figure_start: int = 0,
     is_screenshot: bool = False,
     math_start: int = 0,
+    is_cjk: bool = False,
+    is_mixed: bool = False,
 ):
     """
     Route detections to specialist models and return wrapped LaTeX parts.
@@ -170,6 +172,17 @@ def route_and_extract(
     # are safe. Table must wait for the text worker to be free first.
     use_workers = (_math_worker is not None and _ocr_worker is not None)
 
+    # Pick text OCR function based on detected language
+    if _ocr_worker is not None:
+        if is_mixed:
+            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch_mixed(crops, is_screenshot=ss)
+        elif is_cjk:
+            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch_cjk(crops, is_screenshot=ss)
+        else:
+            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch(crops, is_screenshot=ss)
+    else:
+        _text_fn = lambda crops, ss: run_text_ocr_batched(crops, is_screenshot=ss)
+
     if use_workers and math_indices and text_indices:
         math_crops = [detections[i]["crop"] for i in math_indices]
         text_crops = [detections[i]["crop"] for i in text_indices]
@@ -178,9 +191,7 @@ def route_and_extract(
                 _math_worker.run_math_batch,
                 math_crops, figures_dir, math_counter[0],
             )
-            text_fut = exe.submit(
-                _ocr_worker.run_text_batch, text_crops, is_screenshot,
-            )
+            text_fut = exe.submit(_text_fn, text_crops, is_screenshot)
             math_results, math_counter[0] = math_fut.result()
             texts = text_fut.result()
         for idx, raw in zip(math_indices, math_results):
@@ -202,10 +213,7 @@ def route_and_extract(
 
         if text_indices:
             crops = [detections[i]["crop"] for i in text_indices]
-            if _ocr_worker is not None:
-                texts = _ocr_worker.run_text_batch(crops, is_screenshot=is_screenshot)
-            else:
-                texts = run_text_ocr_batched(crops, is_screenshot=is_screenshot)
+            texts = _text_fn(crops, is_screenshot)
             for idx, txt in zip(text_indices, texts):
                 detections[idx]["raw_content"] = txt
 
@@ -291,7 +299,7 @@ def main():
 def _process_one(image_path_str: str, args, worker_thread):
     """Run the full pipeline on a single image, joining worker thread if needed."""
     image_stem = Path(image_path_str).stem
-    output_dir = Path(f"{image_stem}_output")
+    output_dir = Path(_ROOT) / "outputs" / f"{image_stem}_output"
     if output_dir.exists():
         import shutil
         shutil.rmtree(output_dir)
@@ -470,18 +478,41 @@ def _process_one(image_path_str: str, args, worker_thread):
     if header_logo_fname:
         header_logo_dets[0]['crop'].save(output_dir / header_logo_fname)
 
+    # Language detection: run CJK engine on sample crops and count real CJK
+    # Unicode codepoints. English OCR returns garbage ASCII on Chinese text so
+    # char-count alone is unreliable; codepoint presence is the right signal.
+    is_cjk = is_mixed = False
+    if _ocr_worker is not None:
+        sample_crops = [
+            d["crop"] for d in body_detections
+            if d["class_name"] in TEXT_CLASSES
+        ][:4]
+        if sample_crops:
+            cjk_chars = _ocr_worker.run_cjk_probe(sample_crops, is_screenshot)
+            if cjk_chars > 0:
+                en_chars = _ocr_worker.run_language_probe(sample_crops, is_screenshot)
+                if en_chars < 10 or cjk_chars > en_chars:
+                    is_cjk = True
+                    print(f"  [lang] CJK page detected ({cjk_chars} CJK chars) → PP-OCRv4 CJK engine")
+                else:
+                    is_mixed = True
+                    print(f"  [lang] Mixed page detected ({cjk_chars} CJK, {en_chars} EN) → dual-engine")
+
+    lang_kwargs = dict(is_cjk=is_cjk, is_mixed=is_mixed)
+    has_cjk = is_cjk or is_mixed
+
     if col_count == 2:
         full_dets, left_dets, right_dets = split_detections_by_column(
             body_detections, img_width, img_height, use_dag=True
         )
         full_parts,  full_idx,  f_cnt, m_cnt = route_and_extract(
-            full_dets,  str(figures_dir), 0,     is_screenshot=is_screenshot, math_start=0
+            full_dets,  str(figures_dir), 0,     is_screenshot=is_screenshot, math_start=0,    **lang_kwargs
         )
         left_parts,  left_idx,  f_cnt, m_cnt = route_and_extract(
-            left_dets,  str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt
+            left_dets,  str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
         )
         right_parts, right_idx, f_cnt, m_cnt = route_and_extract(
-            right_dets, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt
+            right_dets, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
         )
 
         full_parts  = _adjust_figure_paths(full_parts)
@@ -491,7 +522,7 @@ def _process_one(image_path_str: str, args, worker_thread):
         document = assemble_document(
             full_parts, full_idx, True,
             left_parts, left_idx, right_parts, right_idx,
-            header_logo_fname,
+            header_logo_fname, has_cjk=has_cjk,
         )
     elif col_count >= 3:
         print(f"    [layout] N-column layout detected: {col_count} columns")
@@ -504,20 +535,20 @@ def _process_one(image_path_str: str, args, worker_thread):
         f_cnt, m_cnt = 0, 0
         for group in [full_dets] + col_lists:
             parts, list_idx, f_cnt, m_cnt = route_and_extract(
-                group, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt
+                group, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
             )
             parts = _adjust_figure_paths(parts)
             all_parts.extend(parts)
             all_list_idx.update(i + offset for i in list_idx)
             offset += len(parts)
-        document = assemble_document(all_parts, all_list_idx, False, header_logo=header_logo_fname)
+        document = assemble_document(all_parts, all_list_idx, False, header_logo=header_logo_fname, has_cjk=has_cjk)
     else:
         body_sorted = apply_semantic_reading_order(body_detections, img_width, img_height)
         body_parts, list_idx, _, _ = route_and_extract(
-            body_sorted, str(figures_dir), is_screenshot=is_screenshot
+            body_sorted, str(figures_dir), is_screenshot=is_screenshot, **lang_kwargs
         )
         body_parts = _adjust_figure_paths(body_parts)
-        document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname)
+        document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname, has_cjk=has_cjk)
 
     if _math_worker is None:
         unload_texo()

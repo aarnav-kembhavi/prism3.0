@@ -9,6 +9,7 @@ Texo/model/
 
 # Local Outputs
 *_output/
+outputs/
 profiling_report.csv
 
 # Benchmark datasets and predictions (large, local only)
