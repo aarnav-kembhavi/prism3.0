@@ -373,7 +373,7 @@ def _worker_main(conn):
             crop_arrays = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
             nps   = [np.array(c.convert('RGB')) for c in crops]
-            per_crop = _stitch_and_run(engine, nps)
+            per_crop = _stitch_and_run(engine_photo, nps)
             results = []
             for np_img, crop_result in zip(nps, per_crop):
                 tokens = _tokens_from_result(crop_result, np_img.shape[1])

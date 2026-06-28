@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRISM</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    header span {
+      font-size: 13px;
+      color: #888;
+      font-weight: 400;
+    }
+
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Upload panel ── */
+    #upload-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    #drop-zone {
+      width: 100%;
+      max-width: 440px;
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 56px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      background: #fff;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: #4f6ef7;
+      background: #f0f3ff;
+    }
+    #drop-zone svg {
+      width: 48px;
+      height: 48px;
+      color: #aaa;
+      margin-bottom: 16px;
+    }
+    #drop-zone p {
+      font-size: 15px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    #drop-zone small {
+      font-size: 12px;
+      color: #aaa;
+    }
+    #file-input { display: none; }
+
+    /* ── Processing panel ── */
+    #processing-panel {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid #e5e5e5;
+      border-top-color: #4f6ef7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #status-msg {
+      font-size: 15px;
+      color: #555;
+      text-align: center;
+    }
+    #elapsed {
+      font-size: 13px;
+      color: #aaa;
+    }
+    #queue-msg {
+      font-size: 13px;
+      color: #888;
+      background: #f0f0f0;
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    /* ── Result panel ── */
+    #result-panel {
+      flex: 1;
+      display: none;
+      overflow: hidden;
+    }
+
+    /* Side-by-side: thumbnail left, PDF right */
+    #result-inner {
+      display: flex;
+      height: 100%;
+    }
+
+    #sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+      background: #fff;
+      border-right: 1px solid #e5e5e5;
+      overflow-y: auto;
+    }
+    #sidebar h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #input-preview {
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid #e5e5e5;
+      object-fit: contain;
+      max-height: 240px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 9px 0;
+      border-radius: 7px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #4f6ef7; color: #fff; }
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+
+    #pdf-viewer {
+      flex: 1;
+      border: none;
+      background: #525659;
+    }
+
+    /* ── Error panel ── */
+    #error-panel {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 40px;
+      text-align: center;
+    }
+    #error-icon {
+      font-size: 40px;
+    }
+    #error-msg {
+      font-size: 14px;
+      color: #555;
+      max-width: 480px;
+      white-space: pre-wrap;
+      background: #fff8f8;
+      border: 1px solid #f5c6c6;
+      padding: 12px 16px;
+      border-radius: 8px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PRISM</h1>
+  <span>Document image → PDF</span>
+</header>
+
+<main>
+
+  <!-- Upload state -->
+  <div id="upload-panel">
+    <div id="drop-zone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021
+                 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+      </svg>
+      <p>Drop an image here, or click to browse</p>
+      <small>PNG, JPG, WEBP, BMP, TIFF</small>
+      <input type="file" id="file-input" accept="image/*" />
+    </div>
+  </div>
+
+  <!-- Processing state -->
+  <div id="processing-panel">
+    <div class="spinner"></div>
+    <p id="status-msg">Initialising…</p>
+    <p id="elapsed"></p>
+    <p id="queue-msg" style="display:none"></p>
+  </div>
+
+  <!-- Result state -->
+  <div id="result-panel">
+    <div id="result-inner">
+      <div id="sidebar">
+        <h2>Input</h2>
+        <img id="input-preview" alt="uploaded image" />
+        <a id="download-btn" class="btn btn-primary" href="#" download="output.pdf">
+          Download PDF
+        </a>
+        <button class="btn btn-secondary" onclick="reset()">Convert another</button>
+      </div>
+      <iframe id="pdf-viewer" title="PDF output"></iframe>
+    </div>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-panel">
+    <div id="error-icon">⚠️</div>
+    <p id="error-msg"></p>
+    <button class="btn btn-secondary" style="max-width:180px" onclick="reset()">Try again</button>
+  </div>
+
+</main>
+
+<script>
+  const uploadPanel     = document.getElementById('upload-panel');
+  const processingPanel = document.getElementById('processing-panel');
+  const resultPanel     = document.getElementById('result-panel');
+  const errorPanel      = document.getElementById('error-panel');
+
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const statusMsg   = document.getElementById('status-msg');
+  const elapsedEl   = document.getElementById('elapsed');
+  const queueMsg    = document.getElementById('queue-msg');
+  const inputPreview = document.getElementById('input-preview');
+  const downloadBtn = document.getElementById('download-btn');
+  const pdfViewer   = document.getElementById('pdf-viewer');
+  const errorMsg    = document.getElementById('error-msg');
+
+  let pollTimer   = null;
+  let elapsedTimer = null;
+  let startTime   = null;
+  let previewUrl  = null;
+
+  // ── Drag and drop ──────────────────────────────────────────────────────────
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) submit(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) submit(fileInput.files[0]);
+  });
+
+  // ── State transitions ──────────────────────────────────────────────────────
+
+  function show(panel) {
+    [uploadPanel, processingPanel, resultPanel, errorPanel].forEach(p => {
+      p.style.display = 'none';
+    });
+    panel.style.display = panel === processingPanel || panel === errorPanel
+      ? 'flex' : (panel === resultPanel ? 'flex' : 'flex');
+  }
+
+  function reset() {
+    clearInterval(pollTimer);
+    clearInterval(elapsedTimer);
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+    pdfViewer.src = '';
+    fileInput.value = '';
+    show(uploadPanel);
+  }
+
+  function startElapsed() {
+    startTime = Date.now();
+    elapsedEl.textContent = '';
+    clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - startTime) / 1000);
+      elapsedEl.textContent = `${s}s elapsed`;
+    }, 1000);
+  }
+
+  // ── Upload and poll ────────────────────────────────────────────────────────
+
+  async function submit(file) {
+    // Preview
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    inputPreview.src = previewUrl;
+
+    show(processingPanel);
+    statusMsg.textContent = 'Uploading…';
+    elapsedEl.textContent = '';
+    queueMsg.style.display = 'none';
+    startElapsed();
+
+    const form = new FormData();
+    form.append('file', file);
+
+    let jobId;
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(await res.text());
+      ({ job_id: jobId } = await res.json());
+    } catch (err) {
+      showError(`Upload failed: ${err.message}`);
+      return;
+    }
+
+    poll(jobId);
+  }
+
+  function poll(jobId) {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      let data;
+      try {
+        const res = await fetch(`/status/${jobId}`);
+        if (!res.ok) throw new Error(await res.text());
+        data = await res.json();
+      } catch (err) {
+        clearInterval(pollTimer);
+        showError(`Status check failed: ${err.message}`);
+        return;
+      }
+
+      statusMsg.textContent = data.message || data.status;
+
+      if (data.status === 'queued' && data.queue_position) {
+        queueMsg.style.display = 'block';
+        queueMsg.textContent = `Position in queue: ${data.queue_position}`;
+      } else {
+        queueMsg.style.display = 'none';
+      }
+
+      if (data.status === 'done') {
+        clearInterval(pollTimer);
+        clearInterval(elapsedTimer);
+        showResult(jobId);
+      } else if (data.status === 'error') {
+        clearInterval(pollTimer);
+        clearInterval(elapsedTimer);
+        showError(data.message);
+      }
+    }, 2000);
+  }
+
+  function showResult(jobId) {
+    downloadBtn.href = `/pdf/${jobId}`;
+    pdfViewer.src   = `/pdf/${jobId}`;
+    show(resultPanel);
+    resultPanel.style.display = 'flex';
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    show(errorPanel);
+    errorPanel.style.display = 'flex';
+  }
+</script>
+
+</body>
+</html>
