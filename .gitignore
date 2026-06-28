@@ -18,6 +18,10 @@ preds/
 # Large model weights
 models/
 
+# Runtime logs and temp uploads
+*.log
+_web_uploads/
+
 # Local tooling
 .claude/
 .vscode/
