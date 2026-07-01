@@ -6,17 +6,22 @@ Decision tree:
   1. Deskew + modality detection (always)
   2a. Screenshot → skip all Stage 1 (v6 path). Clean digital renders need no
       corrections; CLAHE degrades already-crisp text.
-  2b. Photo, no defects detected → skip Stage 1 (v6 path). Saves formula OCR
-      quality on clean captures (+11.6pp formula English vs full Stage 1).
-  2c. Photo, defects detected (shadow ≥ 0.20, glare ≥ 0.5%, moiré ≥ 4.0) →
-      full Stage 1 with only the triggered correction steps applied.
+  2b. Phone-photo but clean digital doc/scan (pure-white background present,
+      white_frac ≥ 0.02) → skip Stage 1 (v6 path). The entropy modality detector
+      mislabels content-rich digital docs as photos; the white test rescues them.
+  2c. Genuine camera capture (white_frac < 0.02 — no pure white, as real
+      sensors/lighting produce) → full Stage 1.
 
-Full Stage 1 order (defective photo path):
+The white-fraction gate replaced an earlier moiré/glare/shadow gate that fired
+on ~100% of pages (moiré ~300 and white paper both trip those metrics — they
+don't discriminate). See the _CAMERA_WHITE_THRESHOLD note below.
+
+Full Stage 1 order (camera-capture path):
   1. White balance correction (gray world)
   2. Geometric rectification (multi-strategy)
-  3. Shadow removal (difference-of-Gaussians)     — if has_shadow
-  4. Glare inpainting (LAB threshold + Telea)     — if has_glare
-  5. Moiré removal (FFT notch filter)              — if has_moire
+  3. Shadow removal (difference-of-Gaussians)
+  4. Glare inpainting (LAB threshold + Telea)
+  5. Moiré removal (FFT notch filter)
   6. Contrast normalization (CLAHE)
   7. Smart DPI resize
 """
@@ -32,21 +37,31 @@ from .frequency_filter import (
     remove_glare,
     remove_moire,
     normalize_contrast,
-    detect_glare_mask,
-    measure_shadow_gradient,
-    measure_moire_score,
 )
 from .modality import detect_capture_modality, CaptureModality
 
-# Defect detection thresholds for photo gating
-_SHADOW_THRESHOLD = 0.20   # illumination ratio std-dev
-_MOIRE_THRESHOLD  = 4.0    # high-freq FFT peak/mean ratio
-_GLARE_THRESHOLD  = 0.005  # fraction of image pixels flagged as glare
+# Camera-capture gate. The entropy modality detector labels both genuine phone
+# captures AND clean digital docs / scans as "phone_photo". The reliable way to
+# tell them apart is pure-white presence: a real camera capture has almost no
+# near-white (L>250) pixels — sensor noise and real lighting never produce pure
+# white, so paper reads ~240 off-white — whereas digital renders and clean scans
+# have large pure-white backgrounds. A page below this white fraction is treated
+# as a genuine capture and gets full Stage 1; above it, it's a clean doc and
+# skips (the benchmark-best v6 path).
+#
+# Chosen by a labeled gate sweep (22-60 clean phone-photo pages vs 6 real defect
+# photos): white<0.02 gives 100% defect recall at ~10% false-positive, versus the
+# old moiré/glare thresholds which fired on ~100% of pages (moiré ~300 and white
+# paper both trip them — they don't discriminate). Adding skew/noise signals
+# either raised false positives or put the threshold dangerously close to real
+# defects, so a single robust test wins.
+_CAMERA_WHITE_THRESHOLD = 0.02
 
 
-def _measure_glare_coverage(image_bgr):
-    mask = detect_glare_mask(image_bgr)
-    return float(np.count_nonzero(mask)) / (image_bgr.shape[0] * image_bgr.shape[1])
+def _white_fraction(image_bgr):
+    """Fraction of near-pure-white (LAB L > 250) pixels."""
+    L = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2LAB)[:, :, 0]
+    return float(np.mean(L > 250))
 
 
 def _smart_dpi_resize(img, target_dpi, source_dpi):
@@ -120,29 +135,19 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             print(f"  [norm] Screenshot: keeping original {w}x{h}")
 
     else:
-        # Phone photo — run defect detection to decide whether Stage 1 is needed.
-        shadow_score = measure_shadow_gradient(img)
-        moire_score  = measure_moire_score(img)
-        glare_cov    = _measure_glare_coverage(img)
+        # Phone-photo modality — decide genuine camera capture vs a clean digital
+        # doc / scan the entropy detector mislabeled, using pure-white presence.
+        white_frac = _white_fraction(img)
+        is_camera_photo = white_frac < _CAMERA_WHITE_THRESHOLD
+        print(f"  [norm] Phone-photo white_frac={white_frac:.4f} "
+              f"(thr {_CAMERA_WHITE_THRESHOLD}) -> "
+              f"{'camera capture' if is_camera_photo else 'clean digital'}")
 
-        has_shadow = shadow_score >= _SHADOW_THRESHOLD
-        has_moire  = moire_score  >= _MOIRE_THRESHOLD
-        has_glare  = glare_cov    >= _GLARE_THRESHOLD
-        has_defects = has_shadow or has_moire or has_glare
-
-        print(
-            f"  [norm] Defect scores — shadow: {shadow_score:.3f} "
-            f"(thr {_SHADOW_THRESHOLD}), moiré: {moire_score:.1f} "
-            f"(thr {_MOIRE_THRESHOLD}), glare: {glare_cov:.4f} "
-            f"(thr {_GLARE_THRESHOLD})"
-        )
-        print(f"  [norm] Defects: shadow={has_shadow}, moiré={has_moire}, glare={has_glare}")
-
-        if not has_defects:
-            # Clean photo — skip Stage 1 corrections (v6 path).
-            # White balance, CLAHE, and DPI resize all hurt formula OCR
-            # on already-clean captures (benchmark v6 vs v4: +11.6pp formula).
-            print("  [norm] Photo clean — skipping Stage 1 corrections")
+        if not is_camera_photo:
+            # Clean digital doc / scan misclassified as phone_photo — skip Stage 1
+            # (benchmark-best v6 path). CLAHE/white-balance/DPI-resize hurt formula
+            # OCR on already-clean pages (+11.6pp formula, v6 vs v4).
+            print("  [norm] Clean digital — skipping Stage 1 corrections")
             fidelity_img = img.copy()
 
             # Light cap: phone photos can be 12MP+; cap shorter side at 1800px
@@ -160,8 +165,9 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
                 print(f"  [norm] Photo: keeping original {w}x{h}")
 
         else:
-            # Defective photo — run full Stage 1.
-            print("  [norm] Photo defective — running full Stage 1")
+            # Genuine camera capture — run full Stage 1 (a real photo benefits from
+            # white balance, rectification, shadow/glare/moiré removal, and CLAHE).
+            print("  [norm] Camera capture — running full Stage 1")
 
             print("  [norm] Step 1: White balance correction")
             img = white_balance_gray_world(img)
@@ -172,17 +178,14 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             import gc as _gc; _gc.collect()
             fidelity_img = img.copy()
 
-            if has_shadow:
-                print("  [norm] Step 3: Shadow removal")
-                img = remove_shadows(img)
+            print("  [norm] Step 3: Shadow removal")
+            img = remove_shadows(img)
 
-            if has_glare:
-                print("  [norm] Step 4: Glare removal (inpainting)")
-                img = remove_glare(img)
+            print("  [norm] Step 4: Glare removal (inpainting)")
+            img = remove_glare(img)
 
-            if has_moire:
-                print("  [norm] Step 5: Moiré removal (FFT notch)")
-                img = remove_moire(img)
+            print("  [norm] Step 5: Moiré removal (FFT notch)")
+            img = remove_moire(img)
 
             import gc as _gc; _gc.collect()
 
