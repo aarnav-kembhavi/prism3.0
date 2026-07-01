@@ -121,26 +121,15 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from normalization import normalize_image_pil, normalize_image_pil_skip_stage1
     from normalization.modality import CaptureModality
     _normalise_fn = normalize_image_pil_skip_stage1 if skip_stage1 else normalize_image_pil
-    from pipeline.models_interface import get_yolo_model, unload_yolo
-    from pipeline.layout_utils import (
-        apply_semantic_reading_order, sort_detections_geometric,
-        xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
-        split_detections_n_columns,
-    )
-    from pipeline.latex_builder import wrap_content, assemble_document, save_tex
+    from pipeline.layout_utils import xyxy_to_pil_crop
+    from pipeline.latex_builder import save_tex
     from pipeline.detection_postprocess import postprocess_detections
     from pipeline.text_worker import TextOCRWorkerDual
     from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual
     from pipeline.tatr_worker_onnx import TATROnnxWorker
-    from pipeline.models_interface import _table_heuristic
+    from pipeline.models_interface import unload_yolo
+    from pipeline.page_core import Workers, build_document, MATH_CLASSES, IMAGE_CLASSES
     from pipeline.tex_to_md import tex_to_omnidocbench_md
-
-    TEXT_CLASSES  = {"Text", "Title", "Section-header", "Caption",
-                     "Footnote", "Page-footer", "Page-header", "List-item"}
-    MATH_CLASSES  = {"Formula"}
-    TABLE_CLASSES = {"Table"}
-    IMAGE_CLASSES = {"Picture"}
-    LIST_ITEM_CLASS = "List-item"
 
     ocr_worker = TextOCRWorkerDual()
     math_worker = MathOCRWorkerOnnxDual()
@@ -259,128 +248,14 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             del image_norm, image_fidelity
             gc.collect()
 
-            # Stage 3: extraction
-            col_count = detect_column_count(detections, img_width)
-            body_detections = detections
+            # Stage 3: extraction + assembly (shared with orchestrate.py)
             is_cjk  = stem in (cjk_pages  or set())
             is_mixed = stem in (mixed_pages or set())
-
-            def _route(dets, f_start=0, m_start=0):
-                text_idx  = [i for i, d in enumerate(dets) if d['class_name'] in TEXT_CLASSES]
-                math_idx  = [i for i, d in enumerate(dets) if d['class_name'] in MATH_CLASSES]
-                table_idx = [i for i, d in enumerate(dets) if d['class_name'] in TABLE_CLASSES]
-                math_ctr  = [m_start]
-
-                if is_mixed:
-                    _run_text = ocr_worker.run_text_batch_mixed
-                elif is_cjk:
-                    _run_text = ocr_worker.run_text_batch_cjk
-                else:
-                    _run_text = ocr_worker.run_text_batch
-
-                if math_idx and text_idx:
-                    math_crops = [dets[i]['crop'] for i in math_idx]
-                    text_crops = [dets[i]['crop'] for i in text_idx]
-                    with ThreadPoolExecutor(max_workers=2) as exe:
-                        mf = exe.submit(math_worker.run_math_batch, math_crops, str(figures_dir), math_ctr[0])
-                        tf = exe.submit(_run_text, text_crops, is_screenshot)
-                        math_results, math_ctr[0] = mf.result()
-                        texts = tf.result()
-                    for idx, raw in zip(math_idx, math_results):
-                        dets[idx]['raw_content'] = raw
-                    for idx, txt in zip(text_idx, texts):
-                        dets[idx]['raw_content'] = txt
-                else:
-                    if math_idx:
-                        crops = [dets[i]['crop'] for i in math_idx]
-                        mres, math_ctr[0] = math_worker.run_math_batch(crops, str(figures_dir), math_ctr[0])
-                        for idx, raw in zip(math_idx, mres):
-                            dets[idx]['raw_content'] = raw
-                    if text_idx:
-                        crops = [dets[i]['crop'] for i in text_idx]
-                        texts = _run_text(crops, is_screenshot)
-                        for idx, txt in zip(text_idx, texts):
-                            dets[idx]['raw_content'] = txt
-
-                if table_idx:
-                    table_crops = [dets[i]['crop'] for i in table_idx]
-                    # Structure recognition via TATR (same path as orchestrate.py).
-                    # Fall back to the coordinate heuristic only when TATR returns
-                    # nothing. Using the crude heuristic alone (the old behaviour)
-                    # discards column structure and tanks TEDS.
-                    tokens_list = ocr_worker.run_table_tokens_batch(table_crops)
-                    table_results = []
-                    for crop, tokens in zip(table_crops, tokens_list):
-                        result = None
-                        if tokens:
-                            try:
-                                result = tatr_worker.build_table_html(crop, tokens, crop.width)
-                            except Exception as e:
-                                print(f'  [TATR] error: {e}')
-                        if not result and tokens:
-                            heuristic_tokens = [
-                                {'text': t['text'],
-                                 'x1': t['x1'], 'x2': t['x2'],
-                                 'y1': t['y1'], 'y2': t['y2'],
-                                 'cx': (t['x1'] + t['x2']) / 2,
-                                 'cy': (t['y1'] + t['y2']) / 2,
-                                 'h':  t['y2'] - t['y1'],
-                                 'w':  t['x2'] - t['x1']}
-                                for t in tokens
-                            ]
-                            result = _table_heuristic(heuristic_tokens, crop.width)
-                        table_results.append(result or '')
-                    for idx, raw in zip(table_idx, table_results):
-                        dets[idx]['raw_content'] = raw
-
-                body_parts = []
-                list_indices = set()
-                f_ctr = f_start
-                for i, det in enumerate(dets):
-                    cn = det['class_name']
-                    if cn in TEXT_CLASSES or cn in MATH_CLASSES:
-                        raw = det.get('raw_content', '')
-                        wrapped = wrap_content(cn, raw)
-                        if cn == LIST_ITEM_CLASS:
-                            list_indices.add(len(body_parts))
-                        body_parts.append(wrapped)
-                    elif cn in TABLE_CLASSES:
-                        raw = det.get('raw_content', '')
-                        if raw:
-                            body_parts.append(wrap_content(cn, raw))
-                    elif cn in IMAGE_CLASSES:
-                        f_ctr += 1
-                        fname = f'figure_{f_ctr:03d}.png'
-                        det['crop'].save(str(figures_dir / fname))
-                        body_parts.append(wrap_content('Picture', fname))
-                return body_parts, list_indices, f_ctr, math_ctr[0]
-
-            if col_count == 2:
-                full_dets, left_dets, right_dets = split_detections_by_column(
-                    body_detections, img_width, img_height, use_dag=True
-                )
-                fp, fi, fc, mc = _route(full_dets)
-                lp, li, fc, mc = _route(left_dets,  f_start=fc, m_start=mc)
-                rp, ri, fc, mc = _route(right_dets, f_start=fc, m_start=mc)
-                document = assemble_document(fp, fi, True, lp, li, rp, ri)
-            elif col_count >= 3:
-                full_dets, col_lists = split_detections_n_columns(
-                    body_detections, img_width, img_height, use_dag=True
-                )
-                all_parts: list = []
-                all_list_idx: set = set()
-                offset = 0
-                fc, mc = 0, 0
-                for group in [full_dets] + col_lists:
-                    gp, gi, fc, mc = _route(group, f_start=fc, m_start=mc)
-                    all_parts.extend(gp)
-                    all_list_idx.update(i + offset for i in gi)
-                    offset += len(gp)
-                document = assemble_document(all_parts, all_list_idx, False)
-            else:
-                body_sorted = apply_semantic_reading_order(body_detections, img_width, img_height)
-                bp, bi, _, _ = _route(body_sorted)
-                document = assemble_document(bp, bi, False)
+            workers = Workers(ocr=ocr_worker, math=math_worker, tatr=tatr_worker)
+            document = build_document(
+                detections, img_width, img_height, workers, str(figures_dir),
+                is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
+            )
 
             # Convert LaTeX → Markdown
             md_text = tex_to_omnidocbench_md(document)

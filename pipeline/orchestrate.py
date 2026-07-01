@@ -66,13 +66,10 @@ from pipeline.tatr_worker_onnx import TATROnnxWorker
 _ocr_worker:  "TextOCRWorker | None" = None
 _math_worker: "MathOCRWorker | None" = None
 _tatr_worker: "TATROnnxWorker | None" = None
-from pipeline.layout_utils import (
-    apply_semantic_reading_order, sort_detections_geometric,
-    xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
-    split_detections_n_columns,
-)
-from pipeline.latex_builder import wrap_content, assemble_document, save_tex
+from pipeline.layout_utils import xyxy_to_pil_crop, detect_column_count
+from pipeline.latex_builder import save_tex
 from pipeline.detection_postprocess import postprocess_detections
+from pipeline.page_core import Workers, build_document
 
 try:
     from evaluation.profiler import BackgroundProfiler
@@ -131,15 +128,6 @@ def _is_likely_logo(crop_pil: Image.Image) -> bool:
     return non_white < 0.15 and color_std > 8.0
 
 
-def _adjust_figure_paths(parts: list[str]) -> list[str]:
-    """Prefix bare figure_NNN filenames with the assets/figures/ subdirectory."""
-    return [
-        p.replace("{figure_", "{assets/figures/figure_")
-        if "includegraphics" in p else p
-        for p in parts
-    ]
-
-
 def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
     if _USE_RAW_YOLO:
         from pipeline.models_interface import get_yolo_detector
@@ -176,142 +164,35 @@ def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, i
     return detections
 
 
-def route_and_extract(
-    detections,
-    figures_dir: str,
-    figure_start: int = 0,
-    is_screenshot: bool = False,
-    math_start: int = 0,
-    is_cjk: bool = False,
-    is_mixed: bool = False,
-):
-    """
-    Route detections to specialist models and return wrapped LaTeX parts.
-    Returns (body_parts, list_indices, figure_counter, math_counter).
-    """
-    os.makedirs(figures_dir, exist_ok=True)
-    body_parts     = []
-    list_indices   = set()
-    figure_counter = figure_start
-    math_counter   = [math_start]
+class _InProcessOCR:
+    """Adapter exposing the OCR-worker interface backed by in-process RapidOCR
+    (used only for --no-ocr-worker; no CJK/mixed distinction in-process)."""
+    def run_text_batch(self, crops, is_screenshot=False):
+        return run_text_ocr_batched(crops, is_screenshot=is_screenshot)
+    run_text_batch_cjk   = run_text_batch
+    run_text_batch_mixed = run_text_batch
+    def run_table_batch(self, crops):
+        return run_table_extraction_batched(crops)
+    def run_table_tokens_batch(self, crops):
+        # No token export in-process; empty forces the OCR-worker heuristic path.
+        return [[] for _ in crops]
 
-    text_indices  = [i for i, d in enumerate(detections) if d["class_name"] in TEXT_CLASSES]
-    math_indices  = [i for i, d in enumerate(detections) if d["class_name"] in MATH_CLASSES]
-    table_indices = [i for i, d in enumerate(detections) if d["class_name"] in TABLE_CLASSES]
 
-    # Optimization 2: dispatch math and text to their workers in parallel.
-    # Each worker has its own independent Pipe connection so concurrent calls
-    # are safe. Table must wait for the text worker to be free first.
-    use_workers = (_math_worker is not None and _ocr_worker is not None)
+class _InProcessMath:
+    """Adapter exposing MathOCRWorker.run_math_batch via in-process Texo."""
+    def run_math_batch(self, crops, figures_dir, counter):
+        c = [counter]
+        res = run_math_recognition_batched(crops, figures_dir, c)
+        unload_texo()
+        return res, c[0]
 
-    # Pick text OCR function based on detected language
+
+def _build_workers_bundle() -> Workers:
+    """Bundle the active workers for page_core. Falls back to in-process
+    adapters when subprocess workers weren't launched (--no-ocr-worker)."""
     if _ocr_worker is not None:
-        if is_mixed:
-            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch_mixed(crops, is_screenshot=ss)
-        elif is_cjk:
-            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch_cjk(crops, is_screenshot=ss)
-        else:
-            _text_fn = lambda crops, ss: _ocr_worker.run_text_batch(crops, is_screenshot=ss)
-    else:
-        _text_fn = lambda crops, ss: run_text_ocr_batched(crops, is_screenshot=ss)
-
-    if use_workers and math_indices and text_indices:
-        math_crops = [detections[i]["crop"] for i in math_indices]
-        text_crops = [detections[i]["crop"] for i in text_indices]
-        with ThreadPoolExecutor(max_workers=2) as exe:
-            math_fut = exe.submit(
-                _math_worker.run_math_batch,
-                math_crops, figures_dir, math_counter[0],
-            )
-            text_fut = exe.submit(_text_fn, text_crops, is_screenshot)
-            math_results, math_counter[0] = math_fut.result()
-            texts = text_fut.result()
-        for idx, raw in zip(math_indices, math_results):
-            detections[idx]["raw_content"] = raw
-        for idx, txt in zip(text_indices, texts):
-            detections[idx]["raw_content"] = txt
-    else:
-        if math_indices:
-            crops = [detections[i]["crop"] for i in math_indices]
-            if _math_worker is not None:
-                results, math_counter[0] = _math_worker.run_math_batch(
-                    crops, figures_dir, math_counter[0]
-                )
-            else:
-                results = run_math_recognition_batched(crops, figures_dir, math_counter)
-                unload_texo()
-            for idx, raw in zip(math_indices, results):
-                detections[idx]["raw_content"] = raw
-
-        if text_indices:
-            crops = [detections[i]["crop"] for i in text_indices]
-            texts = _text_fn(crops, is_screenshot)
-            for idx, txt in zip(text_indices, texts):
-                detections[idx]["raw_content"] = txt
-
-    if table_indices:
-        table_crops = [detections[i]["crop"] for i in table_indices]
-        if _ocr_worker is not None and _tatr_worker is not None:
-            # Get raw tokens from OCR worker, then run TATR structure recognition
-            tokens_list = _ocr_worker.run_table_tokens_batch(table_crops)
-            table_results = []
-            for crop, tokens in zip(table_crops, tokens_list):
-                result = None
-                if tokens:
-                    try:
-                        result = _tatr_worker.build_table_html(crop, tokens, crop.width)
-                    except Exception as e:
-                        print(f"  [TATR] error: {e}")
-                if not result:
-                    from pipeline.models_interface import _table_heuristic  # noqa: PLC0415
-                    heuristic_tokens = [
-                        {'text': t['text'],
-                         'x1': t['x1'], 'x2': t['x2'],
-                         'y1': t['y1'], 'y2': t['y2'],
-                         'cx': (t['x1'] + t['x2']) / 2,
-                         'cy': (t['y1'] + t['y2']) / 2,
-                         'h':  t['y2'] - t['y1'],
-                         'w':  t['x2'] - t['x1']}
-                        for t in tokens
-                    ]
-                    result = _table_heuristic(heuristic_tokens, crop.width) if tokens else ''
-                table_results.append(result)
-        elif _ocr_worker is not None:
-            table_results = _ocr_worker.run_table_batch(table_crops)
-        else:
-            table_results = run_table_extraction_batched(table_crops)
-        for idx, raw in zip(table_indices, table_results):
-            detections[idx]["raw_content"] = raw
-
-    # Change E: when not using subprocess, free RapidOCR sessions after all OCR
-    if _ocr_worker is None:
-        unload_rapidocr()
-
-    for i, det in enumerate(detections):
-        class_name = det["class_name"]
-        crop       = det["crop"]
-
-        if class_name in TEXT_CLASSES or class_name in MATH_CLASSES:
-            raw     = det.get("raw_content", "")
-            wrapped = wrap_content(class_name, raw)
-            if class_name == LIST_ITEM_CLASS:
-                list_indices.add(len(body_parts))
-            body_parts.append(wrapped)
-
-        elif class_name in TABLE_CLASSES:
-            raw = det.get("raw_content", "")
-            if raw:
-                body_parts.append(wrap_content(class_name, raw))
-            else:
-                print("  [table] WARNING: Extraction returned empty.")
-
-        elif class_name in IMAGE_CLASSES:
-            figure_counter += 1
-            fname = f"figure_{figure_counter:03d}.png"
-            crop.save(os.path.join(figures_dir, fname))
-            body_parts.append(wrap_content("Picture", fname))
-
-    return body_parts, list_indices, figure_counter, math_counter[0]
+        return Workers(ocr=_ocr_worker, math=_math_worker, tatr=_tatr_worker)
+    return Workers(ocr=_InProcessOCR(), math=_InProcessMath(), tatr=None)
 
 
 def _launch_workers():
@@ -396,6 +277,7 @@ def _process_one(image_path_str: str, args, worker_thread):
         unload_got()
 
         if not raw_latex.strip().startswith("\\documentclass"):
+            from pipeline.latex_builder import assemble_document
             document = assemble_document([raw_latex], set(), False)
         else:
             document = raw_latex
@@ -567,57 +449,16 @@ def _process_one(image_path_str: str, args, worker_thread):
                     is_mixed = True
                     print(f"  [lang] Mixed page detected ({cjk_chars} CJK, {en_chars} EN) → dual-engine")
 
-    lang_kwargs = dict(is_cjk=is_cjk, is_mixed=is_mixed)
-    has_cjk = is_cjk or is_mixed
-
-    if col_count == 2:
-        full_dets, left_dets, right_dets = split_detections_by_column(
-            body_detections, img_width, img_height, use_dag=True
-        )
-        full_parts,  full_idx,  f_cnt, m_cnt = route_and_extract(
-            full_dets,  str(figures_dir), 0,     is_screenshot=is_screenshot, math_start=0,    **lang_kwargs
-        )
-        left_parts,  left_idx,  f_cnt, m_cnt = route_and_extract(
-            left_dets,  str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
-        )
-        right_parts, right_idx, f_cnt, m_cnt = route_and_extract(
-            right_dets, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
-        )
-
-        full_parts  = _adjust_figure_paths(full_parts)
-        left_parts  = _adjust_figure_paths(left_parts)
-        right_parts = _adjust_figure_paths(right_parts)
-
-        document = assemble_document(
-            full_parts, full_idx, True,
-            left_parts, left_idx, right_parts, right_idx,
-            header_logo_fname, has_cjk=has_cjk,
-        )
-    elif col_count >= 3:
+    if col_count >= 3:
         print(f"    [layout] N-column layout detected: {col_count} columns")
-        full_dets, col_lists = split_detections_n_columns(
-            body_detections, img_width, img_height, use_dag=True
-        )
-        all_parts: list = []
-        all_list_idx: set = set()
-        offset = 0
-        f_cnt, m_cnt = 0, 0
-        for group in [full_dets] + col_lists:
-            parts, list_idx, f_cnt, m_cnt = route_and_extract(
-                group, str(figures_dir), f_cnt, is_screenshot=is_screenshot, math_start=m_cnt, **lang_kwargs
-            )
-            parts = _adjust_figure_paths(parts)
-            all_parts.extend(parts)
-            all_list_idx.update(i + offset for i in list_idx)
-            offset += len(parts)
-        document = assemble_document(all_parts, all_list_idx, False, header_logo=header_logo_fname, has_cjk=has_cjk)
-    else:
-        body_sorted = apply_semantic_reading_order(body_detections, img_width, img_height)
-        body_parts, list_idx, _, _ = route_and_extract(
-            body_sorted, str(figures_dir), is_screenshot=is_screenshot, **lang_kwargs
-        )
-        body_parts = _adjust_figure_paths(body_parts)
-        document   = assemble_document(body_parts, list_idx, False, header_logo=header_logo_fname, has_cjk=has_cjk)
+
+    # Shared extraction + assembly (same core as the benchmark, page_core.py).
+    workers = _build_workers_bundle()
+    document = build_document(
+        body_detections, img_width, img_height, workers, str(figures_dir),
+        is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
+        header_logo_fname=header_logo_fname,
+    )
 
     if _math_worker is None:
         unload_texo()
