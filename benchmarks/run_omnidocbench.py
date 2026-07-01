@@ -58,12 +58,15 @@ def parse_args():
     p.add_argument('--eval-only', action='store_true', help='Skip PRISM, just run eval on existing preds')
     p.add_argument('--skip-eval', action='store_true', help='Run PRISM only, skip final eval step')
     p.add_argument('--no-cdm', action='store_true', default=True, help='Disable CDM metric (requires TeX Live + Linux)')
+    p.add_argument('--skip-stage1', action='store_true', help='Ablation: skip Stage 1 corrections (deskew+modality only)')
+    p.add_argument('--formula-from-fidelity', action='store_true', help='Route formula crops from image_fidelity (no CLAHE) while text/table use image_norm (with CLAHE)')
+    p.add_argument('--lang-filter', default=None, help='Only process pages with this language (e.g. english)')
     return p.parse_args()
 
 
 # ── PRISM pipeline (adapted from orchestrate.py) ──────────────────────────────
 
-def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set = None, mixed_pages: set = None, ppt_pages: set = None) -> dict[str, str]:
+def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set = None, mixed_pages: set = None, ppt_pages: set = None, skip_stage1: bool = False, formula_from_fidelity: bool = False) -> dict[str, str]:
     """
     Run PRISM on a list of image files.  Workers are shared across all images.
     Returns {image_stem: markdown_text} dict.
@@ -74,8 +77,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from concurrent.futures import ThreadPoolExecutor
 
     sys.path.insert(0, str(ROOT))
-    from normalization import normalize_image_pil
+    from normalization import normalize_image_pil, normalize_image_pil_skip_stage1
     from normalization.modality import CaptureModality
+    _normalise_fn = normalize_image_pil_skip_stage1 if skip_stage1 else normalize_image_pil
     from pipeline.models_interface import get_yolo_model, unload_yolo
     from pipeline.layout_utils import (
         apply_semantic_reading_order, sort_detections_geometric,
@@ -117,8 +121,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             figures_dir = assets_dir / 'figures'
             figures_dir.mkdir(parents=True, exist_ok=True)
 
-            # Stage 1: normalise
-            image_norm, image_fidelity, modality_result = normalize_image_pil(img_path_str)
+            # Stage 1: normalise (or bypass for ablation)
+            image_norm, image_fidelity, modality_result = _normalise_fn(img_path_str)
             is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT) or (stem in (ppt_pages or set()))
             norm_path = str(assets_dir / 'normalized.png')
             image_norm.save(norm_path)
@@ -136,7 +140,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                 class_id = int(box.cls[0].item())
                 confidence = float(box.conf[0].item())
                 class_name = class_names[class_id]
-                if class_name in IMAGE_CLASSES:
+                if class_name in IMAGE_CLASSES or (formula_from_fidelity and class_name in MATH_CLASSES):
                     crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
                 else:
                     crop = xyxy_to_pil_crop(image_norm, [x1, y1, x2, y2])
@@ -166,7 +170,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                         if cls == 'isolate_formula':
                             if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
                                 continue
-                            crop = xyxy_to_pil_crop(image_norm, bbox)
+                            crop = xyxy_to_pil_crop(image_fidelity if formula_from_fidelity else image_norm, bbox)
                             detections.append({
                                 'bbox': bbox, 'class_id': -2,
                                 'class_name': 'Formula', 'confidence': conf_, 'crop': crop,
@@ -207,7 +211,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                         max(0, x1 - FORMULA_PAD), max(0, y1 - FORMULA_PAD),
                         min(img_width, x2 + FORMULA_PAD), min(img_height, y2 + FORMULA_PAD),
                     ]
-                if det['class_name'] in IMAGE_CLASSES:
+                if det['class_name'] in IMAGE_CLASSES or (formula_from_fidelity and det['class_name'] in MATH_CLASSES):
                     det['crop'] = xyxy_to_pil_crop(image_fidelity, bbox)
                 else:
                     det['crop'] = xyxy_to_pil_crop(image_norm, bbox)
@@ -401,6 +405,7 @@ def main():
     os.makedirs(pred_dir, exist_ok=True)
 
     # Collect image paths from GT JSON, building language map
+    import ast as _ast
     with open(args.gt_json, encoding='utf-8') as f:
         gt_data = json.load(f)
     images_dir = Path(args.images_dir)
@@ -408,13 +413,18 @@ def main():
     cjk_pages   = set()  # simplified_chinese → CJK engine
     mixed_pages = set()  # en_ch_mixed → dual-engine (EN + CJK, pick best)
     ppt_pages   = set()  # PPT2PDF → force screenshot mode
+    lang_filter = args.lang_filter  # e.g. 'english'
     for page in gt_data:
         img_name = page['page_info']['image_path']
         img_path = images_dir / img_name
         if img_path.exists():
-            image_paths.append(str(img_path))
             attrs = page['page_info']['page_attribute']
+            if isinstance(attrs, str):
+                attrs = _ast.literal_eval(attrs)
             lang = attrs.get('language', '')
+            if lang_filter and lang != lang_filter:
+                continue
+            image_paths.append(str(img_path))
             if lang == 'simplified_chinese':
                 cjk_pages.add(Path(img_name).stem)
             elif lang == 'en_ch_mixed':
@@ -424,10 +434,17 @@ def main():
         else:
             print(f'[!] Image not found: {img_path}')
 
+    if args.skip_stage1:
+        label = 'skip-stage1'
+    elif args.formula_from_fidelity:
+        label = 'full-pipeline+formula-from-fidelity'
+    else:
+        label = 'full-pipeline'
+    print(f'[*] Config: {label}')
     print(f'[*] Found {len(image_paths)} pages to process ({len(cjk_pages)} CJK, {len(mixed_pages)} mixed, {len(ppt_pages)} PPT).')
 
     if not args.eval_only:
-        _run_prism_on_images(image_paths, pred_dir, cjk_pages=cjk_pages, mixed_pages=mixed_pages, ppt_pages=ppt_pages)
+        _run_prism_on_images(image_paths, pred_dir, cjk_pages=cjk_pages, mixed_pages=mixed_pages, ppt_pages=ppt_pages, skip_stage1=args.skip_stage1, formula_from_fidelity=args.formula_from_fidelity)
 
     if not args.skip_eval:
         print('\n[*] Running OmniDocBench evaluation...')

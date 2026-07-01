@@ -1,21 +1,24 @@
 # normalization/pipeline.py
 """
-Full normalization pipeline for Stage 1.
+Stage 1 normalization pipeline — adaptive gating by modality and defect detection.
 
-Pipeline order (phone photo — full path):
-  1. Load image
-  0. Capture modality detection (histogram bin analysis)
-  2. White balance correction (gray world)
-  3. Geometric rectification (multi-strategy)
-  4. Shadow removal (difference-of-Gaussians)
-  5. Glare inpainting (LAB threshold + Telea inpaint)
-  6. Moiré removal (FFT notch filter)
-  7. Contrast normalization (CLAHE)
-  8. Smart DPI resize
+Decision tree:
+  1. Deskew + modality detection (always)
+  2a. Screenshot → skip all Stage 1 (v6 path). Clean digital renders need no
+      corrections; CLAHE degrades already-crisp text.
+  2b. Photo, no defects detected → skip Stage 1 (v6 path). Saves formula OCR
+      quality on clean captures (+11.6pp formula English vs full Stage 1).
+  2c. Photo, defects detected (shadow ≥ 0.20, glare ≥ 0.5%, moiré ≥ 4.0) →
+      full Stage 1 with only the triggered correction steps applied.
 
-Screenshot path (steps 1-5 skipped):
-  Digital renders have no perspective distortion, physical shadows,
-  specular glare, or moire patterns. Only CLAHE + DPI resize.
+Full Stage 1 order (defective photo path):
+  1. White balance correction (gray world)
+  2. Geometric rectification (multi-strategy)
+  3. Shadow removal (difference-of-Gaussians)     — if has_shadow
+  4. Glare inpainting (LAB threshold + Telea)     — if has_glare
+  5. Moiré removal (FFT notch filter)              — if has_moire
+  6. Contrast normalization (CLAHE)
+  7. Smart DPI resize
 """
 
 import cv2
@@ -29,8 +32,21 @@ from .frequency_filter import (
     remove_glare,
     remove_moire,
     normalize_contrast,
+    detect_glare_mask,
+    measure_shadow_gradient,
+    measure_moire_score,
 )
 from .modality import detect_capture_modality, CaptureModality
+
+# Defect detection thresholds for photo gating
+_SHADOW_THRESHOLD = 0.20   # illumination ratio std-dev
+_MOIRE_THRESHOLD  = 4.0    # high-freq FFT peak/mean ratio
+_GLARE_THRESHOLD  = 0.005  # fraction of image pixels flagged as glare
+
+
+def _measure_glare_coverage(image_bgr):
+    mask = detect_glare_mask(image_bgr)
+    return float(np.count_nonzero(mask)) / (image_bgr.shape[0] * image_bgr.shape[1])
 
 
 def _smart_dpi_resize(img, target_dpi, source_dpi):
@@ -85,57 +101,97 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
     print(f"  [norm] Capture modality: {modality_result}")
 
     if is_screenshot:
-        print("  [norm] Screenshot path: skipping Steps 1-5")
+        # Clean digital render — no corrections needed (v6 path).
+        # Screenshots have no perspective distortion, shadows, glare, moiré,
+        # and are already well-contrasted (CLAHE degrades clean digital text).
+        print("  [norm] Screenshot: skipping all Stage 1 corrections")
         fidelity_img = img.copy()
 
-        print("  [norm] Step 6: Contrast normalization (CLAHE)")
-        img = normalize_contrast(img)
-
-        # Screenshots need no DPI upscale — they're already clean, and our
-        # OCR backend (DBNet) caps internally at 1280px anyway. Upscaling
-        # 700px → 1815px wastes ~6x RAM and YOLO/crop processing time.
-        # Only downscale if the screenshot is unusually large (>1280px).
+        # Only downscale if unusually large — never upscale.
         SCREENSHOT_MAX_SIDE = 1280
         h, w = img.shape[:2]
         if max(h, w) > SCREENSHOT_MAX_SIDE:
-            scale    = SCREENSHOT_MAX_SIDE / max(h, w)
+            scale = SCREENSHOT_MAX_SIDE / max(h, w)
             new_w, new_h = int(w * scale), int(h * scale)
             img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_AREA)
             fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
             print(f"  [norm] Screenshot: downsampled to {new_w}x{new_h}")
         else:
-            print(f"  [norm] Screenshot: keeping original {w}x{h} (no upscale)")
+            print(f"  [norm] Screenshot: keeping original {w}x{h}")
 
     else:
-        print("  [norm] Phone photo path: full pipeline")
+        # Phone photo — run defect detection to decide whether Stage 1 is needed.
+        shadow_score = measure_shadow_gradient(img)
+        moire_score  = measure_moire_score(img)
+        glare_cov    = _measure_glare_coverage(img)
 
-        print("  [norm] Step 1: White balance correction")
-        img = white_balance_gray_world(img)
+        has_shadow = shadow_score >= _SHADOW_THRESHOLD
+        has_moire  = moire_score  >= _MOIRE_THRESHOLD
+        has_glare  = glare_cov    >= _GLARE_THRESHOLD
+        has_defects = has_shadow or has_moire or has_glare
 
-        print("  [norm] Step 2: Geometric rectification")
-        img = detect_and_rectify(input_path, img_override=img)
+        print(
+            f"  [norm] Defect scores — shadow: {shadow_score:.3f} "
+            f"(thr {_SHADOW_THRESHOLD}), moiré: {moire_score:.1f} "
+            f"(thr {_MOIRE_THRESHOLD}), glare: {glare_cov:.4f} "
+            f"(thr {_GLARE_THRESHOLD})"
+        )
+        print(f"  [norm] Defects: shadow={has_shadow}, moiré={has_moire}, glare={has_glare}")
 
-        # Fidelity copy: post-rectification, pre-destructive corrections.
-        # GC here frees any intermediate arrays from steps 1-2 before we hold two copies.
-        import gc as _gc; _gc.collect()
-        fidelity_img = img.copy()
+        if not has_defects:
+            # Clean photo — skip Stage 1 corrections (v6 path).
+            # White balance, CLAHE, and DPI resize all hurt formula OCR
+            # on already-clean captures (benchmark v6 vs v4: +11.6pp formula).
+            print("  [norm] Photo clean — skipping Stage 1 corrections")
+            fidelity_img = img.copy()
 
-        print("  [norm] Step 3: Shadow removal (DoG)")
-        img = remove_shadows(img)
+            # Light cap: phone photos can be 12MP+; cap shorter side at 1800px
+            # for YOLO memory management without the full DPI-based resize.
+            PHOTO_MAX_SHORTER = 1800
+            shorter = min(img.shape[:2])
+            if shorter > PHOTO_MAX_SHORTER:
+                scale = PHOTO_MAX_SHORTER / shorter
+                new_w = int(img.shape[1] * scale)
+                new_h = int(img.shape[0] * scale)
+                img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_AREA)
+                fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                print(f"  [norm] Photo: capped to {new_w}x{new_h} (shorter side {PHOTO_MAX_SHORTER}px)")
+            else:
+                print(f"  [norm] Photo: keeping original {w}x{h}")
 
-        print("  [norm] Step 4: Glare removal (inpainting)")
-        img = remove_glare(img)
+        else:
+            # Defective photo — run full Stage 1.
+            print("  [norm] Photo defective — running full Stage 1")
 
-        print("  [norm] Step 5: Moire removal (FFT)")
-        img = remove_moire(img)
-        import gc as _gc; _gc.collect()  # free the float64 FFT buffers before next step
+            print("  [norm] Step 1: White balance correction")
+            img = white_balance_gray_world(img)
 
-        print("  [norm] Step 6: Contrast normalization (CLAHE)")
-        img = normalize_contrast(img)
+            print("  [norm] Step 2: Geometric rectification")
+            img = detect_and_rectify(input_path, img_override=img)
 
-        print("  [norm] Step 7: DPI resize")
-        img = _smart_dpi_resize(img, target_dpi, source_dpi)
-        fidelity_img = _smart_dpi_resize(fidelity_img, target_dpi, source_dpi)
+            import gc as _gc; _gc.collect()
+            fidelity_img = img.copy()
+
+            if has_shadow:
+                print("  [norm] Step 3: Shadow removal")
+                img = remove_shadows(img)
+
+            if has_glare:
+                print("  [norm] Step 4: Glare removal (inpainting)")
+                img = remove_glare(img)
+
+            if has_moire:
+                print("  [norm] Step 5: Moiré removal (FFT notch)")
+                img = remove_moire(img)
+
+            import gc as _gc; _gc.collect()
+
+            print("  [norm] Step 6: Contrast normalization (CLAHE)")
+            img = normalize_contrast(img)
+
+            print("  [norm] Step 7: DPI resize")
+            img = _smart_dpi_resize(img, target_dpi, source_dpi)
+            fidelity_img = _smart_dpi_resize(fidelity_img, target_dpi, source_dpi)
 
     final_h, final_w = img.shape[:2]
     print(f"  [norm] Done. Output: {final_w}x{final_h}")
@@ -147,3 +203,19 @@ def normalize_image_pil(input_path, target_dpi=250, source_dpi=96):
     rgb_color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
     rgb_fidelity = cv2.cvtColor(fidelity, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb_color), Image.fromarray(rgb_fidelity), modality_result
+
+
+def normalize_image_pil_skip_stage1(input_path):
+    """
+    Stage 1.5-only baseline: deskew + modality detection only.
+    No white balance, rectification, shadow/glare/moiré/CLAHE, or DPI resize.
+    Returns the deskewed raw image as both norm and fidelity so YOLO and OCR
+    both see uncorrected pixels. Used for ablation comparisons.
+    """
+    img = cv2.imread(input_path)
+    if img is None:
+        raise FileNotFoundError(f"Cannot read image: {input_path}")
+    img = deskew(img)
+    modality_result = detect_capture_modality(img)
+    pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    return pil, pil.copy(), modality_result

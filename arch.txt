@@ -1,0 +1,57 @@
+PRISM Pipeline Architecture
+===========================
+
+INPUT: image (PNG/JPG)
+
+1. LAYOUT DETECTION
+   Models: YOLOv11n-DocLayNet, DocLayout-YOLO
+   - YOLOv11n-DocLayNet → bounding boxes + class labels
+     (Text, Title, Section-header, Caption, List-item, Formula, Table, Picture, Page-header, Page-footer)
+   - DocLayout-YOLO → boosts formula/table detection confidence
+   - Header/logo regions separated for later placement
+
+2. LANGUAGE DETECTION
+   Models: RapidOCR PP-OCRv4 (English + Chinese engines)
+   - Sample up to 4 text crops
+   - Run Chinese OCR engine → count CJK Unicode codepoints
+   - Run English OCR engine → count ASCII chars
+   - Route: Chinese-only | mixed (both engines) | English-only
+
+3. OCR
+   Models: RapidOCR PP-OCRv4 (English), RapidOCR PP-OCRv4 (Chinese)
+   - English engine for Latin text
+   - Chinese engine for Chinese text
+   - Tasks: text | text_chinese | text_mixed | probe | probe_chinese | table
+
+4. MATH OCR
+   Model: Texo-distill (ONNX)
+   - Formula crops → LaTeX math strings
+
+5. TABLE STRUCTURE
+   Model: TATR (Table Transformer)
+   - Table crops → row/col grid → LaTeX tabular environment
+   - 3-column layout detection for complex tables
+
+6. LAYOUT ASSEMBLY
+   - Reading order: top→bottom, left→right within columns
+   - Two-column detection → paracol split
+   - List-item grouping → itemize environments
+
+7. LATEX GENERATION
+   - Class-name → LaTeX wrapper mapping
+   - OCR post-processing: soft-hyphen cleanup, thousands-separator, citation bracket fixes
+   - Preamble: xeCJK (if Chinese detected) or inputenc (English)
+   - Output: main.tex
+
+8. PDF COMPILATION
+   - xelatex (Chinese) or pdflatex (English)
+
+OUTPUT
+   main.tex   — structured LaTeX source
+   main.pdf   — compiled document
+   crops/     — per-region image crops
+
+WEB UI
+   Sequential job queue backend
+   Endpoints: upload | status | pdf | latex
+   Frontend: split LaTeX (syntax highlighted) / PDF (inline iframe) view

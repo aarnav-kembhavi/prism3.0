@@ -236,6 +236,28 @@ def _tokens_from_result(result, img_w):
     return tokens
 
 
+def _tokens_full(result, img_w):
+    """Return tokens with x1/x2/y1/y2 for use with TATR."""
+    import re as _re
+    if not result:
+        return []
+    tokens = []
+    for entry in result:
+        try:
+            bbox, text, _conf = entry[0], entry[1], entry[2]
+            text = text.strip()
+            if not text or _re.match(r'^[\-\_\=\.]+$', text):
+                continue
+            xs = [pt[0] for pt in bbox]; ys = [pt[1] for pt in bbox]
+            x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
+            if (x2 - x1) > 0.8 * img_w:
+                continue
+            tokens.append({'text': text, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2})
+        except (TypeError, IndexError, ValueError):
+            continue
+    return tokens
+
+
 # ── worker main loop ──────────────────────────────────────────────────────────
 
 def _worker_main(conn):
@@ -401,6 +423,18 @@ def _worker_main(conn):
                 results.append(_table_heuristic(tokens, np_img.shape[1]) if tokens else '')
             conn.send(results)
 
+        elif task == 'table_tokens':
+            # Like 'table' but returns raw token dicts (x1/x2/y1/y2/text) so
+            # the caller can pass them to TATR for structure recognition.
+            crop_arrays = payload
+            crops = [Image.fromarray(a) for a in crop_arrays]
+            nps   = [np.array(c.convert('RGB')) for c in crops]
+            per_crop = _stitch_and_run(engine_photo, nps)
+            results = []
+            for np_img, crop_result in zip(nps, per_crop):
+                results.append(_tokens_full(crop_result, np_img.shape[1]))
+            conn.send(results)
+
 
 # ── TextOCRWorker class (used in main process) ────────────────────────────────
 
@@ -483,6 +517,13 @@ class TextOCRWorker:
         self._conn.send(('table', self._serialize(crops)))
         return self._conn.recv()
 
+    def run_table_tokens_batch(self, crops):
+        """Return raw token dicts (x1/x2/y1/y2/text) per crop for TATR."""
+        if not crops:
+            return []
+        self._conn.send(('table_tokens', self._serialize(crops)))
+        return self._conn.recv()
+
 
 class TextOCRWorkerDual:
     """Two TextOCRWorker subprocesses that split crops in parallel.
@@ -530,3 +571,6 @@ class TextOCRWorkerDual:
 
     def run_table_batch(self, crops):
         return self._split(crops, self._w1.run_table_batch, self._w2.run_table_batch)
+
+    def run_table_tokens_batch(self, crops):
+        return self._split(crops, self._w1.run_table_tokens_batch, self._w2.run_table_tokens_batch)

@@ -1,308 +1,439 @@
-# PRISM — Project Context
+# PRISM — Full Project Context
 
-**Pipeline:** YOLO (layout detection) → RapidOCR PP-OCRv4 (text OCR) → Texo ONNX (math OCR) → LaTeX → Markdown  
-**Goal:** Lightweight, GPU-free document parsing pipeline for English academic text with bilingual (EN+ZH) support.  
-**Platform:** Windows 11, Python 3.12, CPU-only inference.
+## What It Is
+
+PRISM (Pipeline for Robust Image-to-Structured Markup) is an end-to-end document image → LaTeX pipeline. It takes a single photo or screenshot of a document page (PNG/JPG) and produces a structured LaTeX source file (`main.tex`) and compiled PDF. It handles text, math formulas, tables, multi-column layouts, captions, headers, and footers.
+
+**Target inputs:** scanned academic papers, textbooks, books, magazines, exam papers, resumes, newspapers — captured by phone camera or as digital screenshots.
+
+**Supported languages:** English (primary), Chinese (CJK via xeCJK). Other languages exist in the benchmark dataset but are not a tested target.
+
+**Platform:** Windows 11, Python 3.12.6, CPU-only inference (no CUDA required).
 
 ---
 
-## Repository Structure
+## Output
+
+For each input image, PRISM writes to `outputs/<stem>_output/`:
+- `main.tex` — structured LaTeX source
+- `main.pdf` — compiled PDF (pdflatex for English, xelatex for Chinese)
+- `crops/` — per-region image crops (for debugging)
+
+---
+
+## High-Level Pipeline (8 Stages)
 
 ```
-testprism/
-├── pipeline/                   # Core pipeline
-│   ├── orchestrate.py              # Main CLI entry point — run PRISM on any image
-│   ├── detection_postprocess.py    # NMS, merge, suppression on YOLO boxes
-│   ├── latex_builder.py            # Assemble LaTeX document from detected blocks
-│   ├── layout_utils.py             # Reading order, column detection, DAG sort
-│   ├── math_worker_onnx.py         # Texo ONNX subprocess (math OCR worker)
-│   ├── models_interface.py         # Model loading/unloading singletons
-│   ├── tex_to_md.py                # LaTeX → OmniDocBench Markdown converter
-│   └── text_worker.py              # RapidOCR subprocess (text + table OCR worker)
-│
-├── weights/                    # Tracked model weight files
-│   ├── yolov11n-doclaynet.onnx     # Layout detection model (~10 MB)
-│   ├── en_PP-OCRv4_rec.onnx        # English RapidOCR recognition model (~7.5 MB)
-│   └── en_dict.txt                 # English character dictionary for RapidOCR
-│
-├── normalization/              # Image normalization package
-│   ├── __init__.py                 # normalize_image_pil() entry point
-│   ├── modality.py                 # Screenshot vs phone-photo detection
-│   ├── pipeline.py                 # Full normalization pipeline
-│   ├── geometric.py                # Perspective correction
-│   ├── region_adaptive.py          # Shadow removal, Sauvola binarization
-│   └── frequency_filter.py         # FFT moire removal
-│
-├── benchmarks/                 # Evaluation scripts
-│   ├── run_omnidocbench.py         # OmniDocBench eval (primary benchmark)
-│   ├── run_fox.py                  # Fox bilingual benchmark
-│   ├── run_ocrbench.py             # OCRBench (VQA format)
-│   ├── run_docvqa.py               # DocVQA (sliding-window ANLS)
-│   ├── rerun_mixed.py              # Re-process only en_ch_mixed pages
-│   ├── benchmark_glare.py          # Glare robustness benchmark
-│   ├── make_report.py              # Parse OmniDocBench result JSONs → Markdown
-│   └── qa_extract.py               # LLM-based QA extraction (Groq/OpenRouter/Anthropic)
-│
-├── Texo/                       # Math OCR model (FormulaNet / ONNX export)
-│   ├── model/onnx/                 # encoder_model.onnx + decoder_model_merged.onnx
-│   └── src/texo/                   # Model architecture and training code
-│
-├── omnidocbench_eval/          # OmniDocBench evaluation framework (submodule)
-│   ├── src/                        # Eval pipeline (matching, metrics, CDM)
-│   └── demo_data/                  # 18-page demo set with GT markdown
-│
-├── data/                       # Benchmark datasets (gitignored, local only)
-│   ├── omnidocbench/               # 981 full-benchmark images + GT JSON
-│   ├── fox/                        # 212 Fox pages (EN + CN)
-│   ├── ocrbench/                   # OCRBench parquet
-│   └── docvqa/                     # DocVQA validation parquet shards
-│
-├── preds/                      # Prediction outputs (gitignored)
-│   ├── omnidocbench/               # 981 .md predictions for full benchmark
-│   ├── fox/                        # Fox predictions
-│   ├── ocrbench/                   # OCRBench predictions
-│   ├── docvqa/                     # DocVQA predictions
-│   └── glare_bench/                # Glare robustness test outputs
-│
-├── models/                     # Model weights (gitignored)
-│   └── MFD/YOLO/                   # YOLO fine-tuned variants (not tracked)
-│
-├── results.md                  # Benchmark results summary (paper-ready)
-├── context.md                  # This file
-├── PRISM_OmniDocBench_Report.md # Detailed per-category OmniDocBench breakdown
-├── pyproject.toml / uv.lock    # Python dependencies (managed with uv)
-└── .gitignore                  # Excludes data/, preds/, models/
+Input image (PNG/JPG)
+        │
+        ▼
+[NORMALISATION — Stage 1 + Stage 1.5]   ← normalization/
+        │
+        ▼
+[LAYOUT DETECTION]                       ← pipeline/models_interface.py
+  YOLOv11n-DocLayNet + DocLayout-YOLO
+        │
+        ▼
+[DETECTION POSTPROCESS]                  ← pipeline/detection_postprocess.py
+  NMS, overlap resolution, box refinement
+        │
+        ▼
+[CONTENT EXTRACTION]                     ← pipeline/orchestrate.py
+  Text OCR / Math OCR / Table structure
+  (all run via persistent subprocess workers)
+        │
+        ▼
+[READING ORDER & LAYOUT ASSEMBLY]        ← pipeline/layout_utils.py
+  Column detection, caption pairing, footnote sinking
+        │
+        ▼
+[LATEX GENERATION]                       ← pipeline/latex_builder.py
+  Class-name → LaTeX environment mapping
+        │
+        ▼
+[PDF COMPILATION]
+  pdflatex (English) / xelatex (Chinese)
+        │
+        ▼
+Output: main.tex + main.pdf
 ```
 
 ---
 
-## Pipeline Stages
+## Normalisation Pipeline
 
-### 1. Image Normalization (`normalization/`)
-Detects whether input is a screenshot or phone photo using entropy/histogram analysis.
-- **Screenshot path**: CLAHE contrast normalization + downscale to 1280px
-- **Phone photo path**: white balance → geometric rectification → shadow removal (DoG) → glare removal (inpainting) → moire removal (FFT) → CLAHE → DPI resize
+### Why Two Stages
 
-### 2. Layout Detection (`models_interface.py`)
-YOLOv11n fine-tuned on DocLayNet (11 classes). Classes: Text, Title, Section-header, Caption, Footnote, Page-header, Page-footer, List-item, Formula, Table, Picture. Runs as ONNX for CPU-only inference.
+Stage 1 normalises the **whole image** so YOLO can detect regions accurately.
+Stage 1.5 normalises **individual crops** from the fidelity image (raw pixels, not the Stage 1 output) so OCR/TATR/Texo see clean content. The two stages serve different consumers and are not redundant — Stage 1's corrections never reach OCR; crops come from the pre-destructive fidelity image.
 
-### 3. Detection Post-processing (`detection_postprocess.py`)
-NMS, small-box suppression, header suppression (top 12% of page), formula padding (+12px on all sides).
+### Stage 1 — Whole-Image Normalisation (`normalization/`)
 
-### 4. Column Detection + Reading Order (`layout_utils.py`)
-- Gutter histogram detects 1–8 column layouts
-- 2-column: split left/right with ±20% midpoint margin
-- N-column: gutter-center boundaries
-- DAG-based reading order: caption pairing + footnote sinking (O(n), post-sort)
+Execution order (deskew runs before modality detection):
 
-### 5. Text OCR (`text_worker.py`)
-RapidOCR PP-OCRv4 running in a persistent subprocess (avoids torch memory inheritance).
-- **EN engine**: `en_PP-OCRv4_rec.onnx` + `en_dict.txt`
-- **CJK engine**: bundled ch_PP-OCRv4 models
-- **Mixed engine**: runs both engines on every block, keeps the one with more output characters
-- Crops are stitched into batches of 20 before each DBNet inference pass
-- Preprocessing parallelized with `ThreadPoolExecutor(max_workers=4)`
-- `TextOCRWorkerDual`: two subprocesses running in parallel, splits crop batch in half
+| Step | Applies To | Operation |
+|------|-----------|-----------|
+| 0 | ALL | **Deskew** — projection profile method, rotate ±15°, pick angle with max derivative variance of row sums, apply affine warp if angle > 0.5° |
+| 1 | ALL | **Capture Modality Detection** — 256-bin grayscale histogram, normalised Shannon entropy < 0.55 → SCREENSHOT, ≥ 0.55 → PHONE PHOTO |
+| 2 | Photos | **White Balance** — gray world algorithm, equalise BGR channel means |
+| 3 | Photos | **Geometric Rectification** — 3 strategies (morph gradient → Hough lines → Canny contour), perspective warp to frontal view |
+|   |         | ← **FIDELITY IMAGE COPY taken here** (post-rectification, pre-destructive) |
+| 4 | Photos | **Shadow Removal** — difference-of-Gaussians (divide by 51px Gaussian blur) |
+| 5 | Photos | **Glare Inpainting** — LAB L > 230 mask, Telea inpainting (radius 5px), skip if glare < 0.1% |
+| 6 | Photos | **Moiré Removal** — FFT notch filter per channel, 97th-percentile spike suppression, Gaussian mask (σ=3), IFFT |
+| 7 | Photos | **Contrast Normalisation** — CLAHE on LAB L-channel (clip=2.0, grid=8×8) |
+| 8 | Photos | **Smart DPI Resize** — target 250 DPI, cap shorter side at 1800px, never downscale below 0.5× |
+| — | Screenshots | ← **FIDELITY IMAGE COPY taken here** (right after deskew) |
+| 2s | Screenshots | **Contrast Normalisation** — CLAHE only |
+| 3s | Screenshots | **Downscale if Oversized** — only if longest side > 1280px, no upscale |
 
-### 6. Math OCR (`math_worker_onnx.py`)
-Texo (FormulaNet) ONNX autoregressive decoder running in a persistent subprocess.
-- Encoder: ViT-style image encoder → 384×384 grayscale input
-- Decoder: 2-layer transformer, greedy decode with repetition penalty (1.15)
-- `max_new_tokens=384` (raised from 256 to reduce formula truncations)
-- Quality gate: discards hallucinations (≥10 tildes, repeated `\hline`, extreme length)
-- `MathOCRWorkerOnnxDual`: two ONNX sessions in parallel subprocesses
+**Stage 1 outputs:**
+- Normalised image → passed to YOLO
+- Fidelity image → used for all OCR crops (preserves original pixel values)
+- `ModalityResult` (modality, entropy, confidence) → passed downstream
 
-### 7. Table Extraction (`text_worker.py` + `models_interface.py`)
-RapidOCR tokens → coordinate-based heuristic table builder. Groups tokens into rows by Y centroid proximity, finds column boundaries via X-projection histogram, emits booktabs LaTeX.
+### Stage 1.5 — Per-Region Adaptive Preprocessing (`normalization/region_adaptive.py`)
 
-### 8. LaTeX Assembly + Markdown Conversion (`latex_builder.py` + `tex_to_md.py`)
-`assemble_document()` combines paracol columns, itemize lists, and body blocks into a full LaTeX document. `tex_to_omnidocbench_md()` converts to OmniDocBench-compatible Markdown: equations → `\[...\]`, tables → HTML `<table>`, sections → `#`/`##`.
+Runs on each YOLO crop cut from the **fidelity image** after layout detection.
+
+**Class-aware gating:**
+- Picture → skip all corrections entirely
+- Page-header / Page-footer → contrast normalisation only
+- Formula → skip shadow removal (DoG gradients look like shadows on equations)
+- All other classes → full pipeline below
+
+**Per-region pipeline (in order):**
+
+| Step | Applies To | Operation |
+|------|-----------|-----------|
+| 0 | ALL (adaptive threshold) | **Moiré Detection & Removal** — FFT on green channel, peak/mean ratio; phone 3.5×, screenshot 8.0×. Bypassed if Stage 1 already ran whole-image FFT (`skip_moire=True`) |
+| 1 | Photos only | **Glare Detection & Inpainting** — L > 225, area > 2% of crop → Telea inpaint. Heavy glare (>15%) triggers step 2 |
+| 2 | Photos only (triggered) | **Shadow Detection & Removal** — std-dev of ratio map ≥ 0.20 → DoG removal |
+| 3 | ALL | **Contrast Normalisation** — RMS std-dev < 18.0 → CLAHE |
+
+**Stage 1.5 output:** preprocessed crop + `RegionArtifactProfile` (moiré/glare/shadow/contrast: detected, fixed, severity score)
+
+---
+
+## Models
+
+| Component | Model | Format | Size |
+|-----------|-------|--------|------|
+| Layout detection | YOLOv11n-DocLayNet | ONNX | 11 MB |
+| Formula/table detection boost | DocLayout-YOLO (docstructbench, imgsz=1024) | ONNX | 72 MB |
+| Text OCR detection | RapidOCR PP-OCRv4 det | ONNX (bundled in package) | ~4 MB |
+| Text OCR recognition | RapidOCR PP-OCRv4 rec (English) | ONNX | 7 MB |
+| Math OCR | Texo-distill encoder | ONNX | 52 MB |
+| Math OCR | Texo-distill decoder (merged) | ONNX | 27 MB |
+| Table structure | TATR v1.1-all INT8 | ONNX | 30 MB |
+| **Total** | | | **~203 MB** |
+
+**Notes:**
+- TATR was originally 115 MB safetensors (PyTorch). Exported to ONNX FP32 (116 MB), then INT8 quantized to 30 MB (3.9× reduction). The main process never imports torch.
+- Texo-distill is a distilled Donut-family encoder-decoder (77 MB safetensors FP32), trained for LaTeX formula recognition.
+- Chinese OCR uses RapidOCR's built-in Chinese PP-OCRv4 engine (not a local file in weights/).
+
+---
+
+## Subprocess Worker Architecture
+
+All heavy inference runs in persistent child processes to isolate memory and allow parallel dispatch. The main process never imports torch.
+
+```
+Main process (orchestrate.py)
+├── TextOCRWorker (subprocess)        pipeline/text_worker.py
+│     RapidOCR PP-OCRv4, ~130–160 MB
+│     Tasks: text, text_chinese, text_mixed, probe, probe_chinese,
+│            table, table_tokens (x1/x2/y1/y2 per token for TATR)
+│
+├── MathOCRWorkerOnnx (subprocess)    pipeline/math_worker_onnx.py
+│     Texo ONNX encoder+decoder, ~200 MB
+│     Tasks: math
+│
+└── TATROnnxWorker (subprocess)       pipeline/tatr_worker_onnx.py
+      TATR INT8 ONNX, ~30 MB
+      Tasks: detect → row/col grid → LaTeX tabular
+```
+
+Communication: `multiprocessing.Pipe`, spawn context, `(task, payload)` / `(status, result)` protocol.
+
+**Worker startup sequence:** text+math workers start in background threads while YOLO runs, overlapping ~3s Texo load with normalisation+detection. Math and text extraction then run concurrently via `ThreadPoolExecutor`.
+
+**RAM:** ~652 MB total (main + 3 workers) vs ~1,621 MB in the original in-process design.
+
+---
+
+## Layout Detection Detail
+
+Two YOLO models run in sequence:
+
+1. **YOLOv11n-DocLayNet** — primary layout detector. Outputs bounding boxes with 10 classes:
+   `Text, Title, Section-header, Caption, List-item, Formula, Table, Picture, Page-header, Page-footer`
+
+2. **DocLayout-YOLO** (docstructbench, imgsz=1024) — secondary model. Boosts formula and table detection confidence; rescues missed or low-confidence detections that the primary missed.
+
+**Detection postprocessing** (`detection_postprocess.py`):
+- Confidence threshold filter
+- Class-aware NMS
+- Overlap resolution (containment-based suppression)
+- Box refinement
+- Reading order sort
+
+---
+
+## Content Extraction
+
+### Text OCR
+- **Engine:** RapidOCR PP-OCRv4 (detection + recognition, both ONNX), runs in `TextOCRWorker` subprocess
+- **Language routing:** sample up to 4 crops → count CJK codepoints vs ASCII chars → route to English-only / Chinese-only / mixed (both engines)
+- **Preprocessing:** quiet-zone padding, max 1500px downscale; non-ASCII artifact filtering on output
+- **Post-processing:** soft-hyphen cleanup, thousands-separator normalisation, citation bracket fixes
+
+### Math OCR
+- **Engine:** Texo-distill (custom distilled Donut-family FormulaNet encoder-decoder, ONNX), runs in `MathOCRWorkerOnnx` subprocess
+- **Preprocessing:** Otsu binarisation + aspect-ratio padding for formula crops
+- **Output:** LaTeX math strings; repetition-penalty and max_new_tokens guards against hallucination
+- **Fallback:** placeholder inserted if output is degenerate
+
+### Table Structure
+- **Engine:** TATR (microsoft/table-transformer-structure-recognition-v1.1-all), INT8 ONNX, runs in `TATROnnxWorker` subprocess
+- **Flow:**
+  1. Table crop → `table_tokens` task to `TextOCRWorker` → returns `{text, x1, x2, y1, y2}` per token
+  2. Tokens sent to `TATROnnxWorker` → DETR detection → rows and cols as xyxy boxes
+  3. Each token assigned to best-overlap (row, col) cell
+  4. Cell grid → LaTeX `tabular` with booktabs rules
+- **Fallback:** coordinate heuristic if TATR returns no rows/cols
+
+### Reading Order & Assembly (`layout_utils.py`)
+- Semantic DAG: geometric order (top→bottom, left→right) as baseline
+- Caption pairing: captions tied to nearest Picture or Table
+- Footnote sinking: footnotes always follow body text
+- Column detection: gutter analysis → split into 1/2/3-column zones → `paracol` environment for multi-column
+- List-item grouping → `itemize` environments
+
+---
+
+## LaTeX Generation (`latex_builder.py`)
+
+- Class → environment mapping:
+  - Title, Section-header → `\section*{}`, `\subsection*{}`
+  - Text → plain paragraph
+  - Formula → `\[ ... \]` (display math)
+  - Table → `\begin{tabular}{...}` with booktabs rules
+  - Picture → `\includegraphics{crops/...}`
+  - Caption → `\caption{}`
+  - List-item → `\begin{itemize}`
+- Preamble: `xeCJK` (Chinese detected) or `inputenc` + `fontenc` (English)
+- Packages: `geometry`, `graphicx`, `booktabs`, `amsmath`, `amssymb`, `paracol`
+
+---
+
+## Web UI (`app.py`)
+
+**Backend:** FastAPI, sequential job queue (one job processed at a time), background thread worker.
+
+**Endpoints:**
+- `POST /upload` — accept image, queue job, return `{job_id}`
+- `GET /status/{id}` — `{status, message, queue_position}`
+- `GET /pdf/{id}` — PDF bytes
+- `GET /latex/{id}` — LaTeX source
+- `GET /` — serve `index.html`
+
+**Frontend:** split view — LaTeX source (syntax highlighted) left, PDF inline iframe right.
+
+**Job lifecycle:** upload → queue → `orchestrate.py` subprocess → output written → PDF served → cleanup after 10 minutes.
+
+**Current limitation:** each job spawns a fresh `orchestrate.py` subprocess so all models reload per upload (~10s overhead). Fixable by keeping orchestrate running as a long-lived daemon with persistent workers.
+
+---
+
+## Latency
+
+**Pipeline throughput (warm — models loaded once, workers persistent across pages):**
+- Mean: ~5.1 s/page, median ~4.7 s, range 4.9–5.3 s
+- Measured: 26-page batch run (`run_bench_workers.py`)
+- This is the true pipeline speed; the number to cite
+
+**Web UI latency (cold — fresh subprocess per upload):**
+- Mean: ~15.6 s, range 10–20 s
+- Screenshots fastest (~10 s, skip normalisation Steps 1–6)
+- Photos with many formulas/tables slowest (~20 s)
+- Extra ~10 s is model reload overhead, not pipeline speed
+
+**Model load breakdown (cold start):**
+YOLO ~1 s, DocLayout-YOLO ~2 s, Texo ONNX ~1.5 s, TATR ONNX ~0.3 s, RapidOCR ~1 s
 
 ---
 
 ## Benchmark Results
 
-### OmniDocBench (981 pages, full benchmark)
+**Dataset:** OmniDocBench, 981 pages
+**Metric:** Edit Distance Rate (EDR, lower = better) / Accuracy (higher = better)
 
-| Task | EDR (lower=better) | Accuracy (1-EDR) |
-|------|-------------------|-----------------|
-| Text block | 0.4717 | 52.8% |
-| Reading order | 0.5814 | 41.9% |
-| Table (Edit dist) | 0.6202 | 38.0% |
-| Table (TEDS) | — | 30.7% |
-| Display formula | 0.8434 | 15.7% |
+Four pipeline variants benchmarked:
+- **v4** (2026-06-27): Full unconditional Stage 1 (baseline)
+- **v5** (2026-07-01): Adaptive Stage 1 gated on detection scores — ABANDONED (table regression)
+- **v6** (2026-07-01): Skip Stage 1 entirely (deskew + modality only) — **current best**
+- **v7** (2026-07-01): Full Stage 1 + formula crops from pre-CLAHE fidelity image
 
-**Text by language:**
+### Text Block (v6 — current best)
 
-| Language | EDR | Accuracy |
-|----------|-----|----------|
-| English | 0.2030 | 79.7% |
-| Simplified Chinese | 0.5444 | 45.6% |
-| Mixed EN+ZH | 0.8899 | 11.0% |
+| Document Type | v4 | v6 (skip-s1) | v7 (fid-formula) |
+|---|---|---|---|
+| academic_literature | 92.2% | 91.8% | 92.2% |
+| research_report | 87.5% | 89.2% | 87.3% |
+| book | 86.9% | 88.2% | 86.9% |
+| magazine | 76.0% | 82.8% | 76.0% |
+| colorful_textbook | 65.0% | 65.2% | 64.7% |
+| exam_paper | 32.9% | 38.5% | 32.8% |
 
-**English academic subset (193 pages — Nougat-comparable):**
+English: v4 85.1% → v6 **85.6%** → v7 85.1%
 
-| Metric | PRISM | Nougat |
-|--------|-------|--------|
-| Text EDR | 0.1487 | ~0.365 |
-| Text accuracy | **85.1%** | ~63.5% |
+### Formula (Display Math, v6 — current best)
 
-PRISM outperforms Nougat 2.5× on English academic text and beats it on every English doc type.
+| Subset | v4 | v6 (skip-s1) | v7 (fid-formula) |
+|---|---|---|---|
+| English | 45.8% | **57.4%** | 46.4% |
+| academic_literature | 63.1% | **70.2%** | 64.9% |
 
-**System comparison (full benchmark, text EDR):**
+Key finding: the +11.6pp formula gain (v4→v6) comes from skipping ALL of Stage 1 — not just CLAHE. v7 (formula crops from pre-CLAHE fidelity image) only gains +0.6pp. DPI resize and white balance also affect Texo output, not just CLAHE on the crop.
 
-| System | Text EDR | Accuracy |
-|--------|----------|----------|
-| GOT-OCR2.0 | ~0.22 | ~78% |
-| MinerU | ~0.28 | ~72% |
-| Marker | ~0.36 | ~64% |
-| Nougat (English-only) | 0.365 | 63.5% |
-| Nougat (Full) | 0.452 | 54.8% |
-| **PRISM (Full)** | **0.4717** | **52.8%** |
-| **PRISM (EN subset)** | **0.1487** | **85.1%** |
+### Table (v6 — marginal best)
 
-### Fox Benchmark (212 pages bilingual)
+Overall English: v6 EDR 0.410 (58.9% acc), TEDS 49.3%
 
-| Split | Pages | NED | Accuracy |
-|-------|-------|-----|----------|
-| English | 112 | 0.117 | 88.3% |
-| Chinese | 100 | 0.102 | 89.8% |
-| **Overall** | **212** | **0.110** | **89.0%** |
+| Document Type | TEDS v4 | TEDS v6 | TEDS v7 |
+|---|---|---|---|
+| academic_literature | 43.8% | 45.0% | 43.4% |
+| newspaper | 59.6% | 57.4% | 51.1% |
+| magazine | 52.8% | 37.3% | 40.2% |
+| book | 56.5% | 35.6% | 36.6% |
+| exam_paper | 51.0% | 33.0% | 30.6% |
 
-### OCRBench (reference only — VLM benchmark)
-550 questions, ANLS via Llama 3.1 8B (Groq): **10.3%** overall.  
-Not comparable to published leaderboard numbers (PRISM is an extraction pipeline, not a VLM).
+TEDS ALL: v4 42.0%, v6 31.6%, v7 31.5%
 
-### DocVQA (reference only — lower bound)
-5349 questions, 1286 documents, sliding-window ANLS: **45.7%**.  
-Sliding-window NED underestimates true accuracy; state-of-the-art OCR baselines score 30–60%.
+Note: v6 and v7 table TEDS are nearly identical (~31.5% ALL). v4's 42% was from an earlier pipeline state and may reflect code differences unrelated to Stage 1. The table gap needs further investigation.
 
-### Glare Robustness Benchmark (18 OmniDocBench demo pages)
+### Reading Order (v6 — best)
 
-| Metric | Clean | Specular Glare | Gradient Glare |
-|--------|-------|----------------|----------------|
-| Per-page latency (s) | 6.69 | 6.17 | 6.69 |
-| Peak RAM – all procs (MB) | 1669 | 1970 | 2013 |
-| Chars extracted (mean/pg) | 1269 | 1204 | 1108 |
-| Text accuracy vs GT | 27.5% | 28.8% | 29.4% |
+| Metric | v4 | v6 | v7 |
+|---|---|---|---|
+| ALL | 44.9% | **47.2%** | 44.2% |
+| English | — | **71.0%** | 70.8% |
+| academic_literature | 76.6% | 75.6% | 76.5% |
+| magazine | 61.2% | 62.8% | 61.2% |
 
-Glare adds ~300 MB RAM (normalization pipeline activates glare inpainting on affected pages) but does not significantly increase latency. Char yield drops ~13% under gradient glare. The normalization pipeline's inpainting step is surprisingly effective — glared accuracy is not worse than clean on this 18-page sample.
+### Full Ablation Summary
 
----
+| Metric | v4 | v5 | v6 | v7 |
+|---|---|---|---|---|
+| Text English | 85.1% | 84.4% | **85.6%** | 85.1% |
+| Formula English | 45.8% | 47.1% | **57.4%** | 46.4% |
+| Table TEDS ALL | 42.0%* | 30.9% | 31.6% | 31.5% |
+| Table TEDS EN | 48.9%* | 47.6% | **49.3%** | 48.4% |
+| Reading Order ALL | 44.9% | 44.2% | **47.2%** | 44.2% |
 
-## Key Engineering Decisions
+*v4 measured on earlier pipeline code, may not be directly comparable to v6/v7
 
-### Subprocess Worker Architecture
-`text_worker.py` and `math_worker_onnx.py` run as persistent subprocesses to avoid inheriting the ~400 MB torch/CUDA memory footprint of the main process. Workers start once per batch and stay alive across all pages. ONNX CPU memory arena is disabled globally (`enable_cpu_mem_arena=False`) to allow OS memory reclaim between pages.
-
-### YOLO Lifecycle
-YOLO is loaded once at the start of a batch, stays loaded across all pages, and is unloaded after the full batch completes. Previously it was unloaded after every page (wasting ~0.5–1s reload per page).
-
-### Dual-Worker Parallelism
-- `TextOCRWorkerDual`: splits crop batch across two RapidOCR subprocesses
-- `MathOCRWorkerOnnxDual`: splits formula batch across two Texo ONNX subprocesses
-- Within a page: math and text run concurrently via `ThreadPoolExecutor(max_workers=2)`
-
-### Language Routing
-- `data_source == 'simplified_chinese'` → CJK engine (`ch_PP-OCRv4`)
-- `data_source == 'en_ch_mixed'` → dual-engine (EN + CJK, keeps block with more chars)
-- `data_source == 'PPT2PDF'` → force `is_screenshot=True` (slide rendering)
-- Default → English PP-OCRv4 engine
-
-Previously, `en_ch_mixed` pages were incorrectly routed to the CJK-only engine — this was a bug fixed during development.
-
-### Footnote Reading Order
-The original DAG-based reading order added an edge from every non-footnote to every footnote (O(n²) edges). Replaced with O(n) post-sort reordering: non-footnotes first, footnotes last, preserving relative order within each group.
+**v6 (skip-stage1) wins on all metrics.** v5 (adaptive whole-image gating) and v7 (per-crop routing) both failed to improve over baseline. Current default: skip Stage 1 entirely.
 
 ---
 
-## Optimizations Applied (June 2026)
+## Comparison vs Nougat
 
-| # | Change | File | Impact |
-|---|--------|------|--------|
-| 1 | Stop unloading YOLO between pages | `run_omnidocbench.py` | ~0.5–1s saved per page |
-| 2 | `TextOCRWorkerDual` for parallel text OCR | `run_omnidocbench.py` | ~2× throughput on text-heavy pages |
-| 3 | Parallelize `_preprocess_crop` with ThreadPoolExecutor | `text_worker.py` | Faster crop preparation |
-| 4 | `MathOCRWorkerOnnxDual` for parallel math OCR | `math_worker_onnx.py` | ~2× throughput on formula-heavy pages |
-| 6 | Raise `max_new_tokens` 256→384 | `math_worker_onnx.py` | Fewer formula truncations |
-| 7 | Dual-engine mixed strategy (both EN+CJK, pick best) | `text_worker.py` | Better accuracy on mixed-language pages |
-| 8 | O(n) footnote sinking (was O(n²)) | `layout_utils.py` | Faster reading order, fewer false constraints |
-| 9 | Force `is_screenshot=True` for PPT2PDF pages | `run_omnidocbench.py` | Better layout detection on slides |
+English academic subset (academic_literature, book, colorful_textbook, exam_paper — v6 results):
 
----
+| Document Type | PRISM v6 | Nougat | Delta |
+|---|---|---|---|
+| academic_literature | 91.8% | 78.6% | +13.2 pp |
+| book | 88.2% | 26.6% | +61.6 pp |
+| colorful_textbook | 65.2% | 18.0% | +47.2 pp |
+| exam_paper | 38.5% | 7.0% | +31.5 pp |
 
-## Weaknesses and Known Gaps
+PRISM v6 beats Nougat on every English document type. English subset: PRISM EDR 0.144 vs Nougat 0.365 — 2.5× better.
 
-| Area | Score | Root cause |
-|------|-------|------------|
-| Display formulas | 15.7% | Texo struggles with complex multi-line equations; `max_new_tokens` limit |
-| Reading order | 41.9% | DAG cycles on complex layouts; newspaper/magazine irregular flow |
-| Table TEDS | 30.7% | Heuristic column detection misses merged cells and complex structures |
-| Mixed EN+ZH text | 11.0% | Neither OCR engine handles truly interleaved EN+ZH in a single line |
-| Handwriting | ~0% | RapidOCR trained on printed text only; no handwriting support |
-| PPT2PDF | 25.6% | Slide layouts don't match document layout assumptions |
+## Full-Benchmark Comparison (text EDR, lower = better)
 
-**Recommended improvements (not yet implemented):**
-- Replace table heuristic with Microsoft Table Transformer (TATR) — expected +15–20% TEDS
-- Fine-tune or replace Texo for better formula coverage
-- Multilingual OCR engine (e.g., PaddleOCR multi-language) for true mixed-script lines
+| System | Scope | Text EDR |
+|---|---|---|
+| GOT-OCR 2.0 | Full (CJK+EN) | ~0.22 |
+| MinerU | Full (CJK+EN) | ~0.28 |
+| Marker | Full (CJK+EN) | ~0.36 |
+| Nougat | Full | 0.452 |
+| PRISM v6 | Full (EN only) | 0.410 |
+| PRISM v6 | English subset | 0.144 |
+
+PRISM v6's gap vs GOT-OCR/MinerU is driven by Chinese pages (~40% of dataset) and handwritten notes — not English document quality.
+
+**Weak areas:** Chinese-only pages, mixed Chinese-English pages, handwritten notes, PPT-to-PDF slides. Table TEDS regression vs v4 baseline needs investigation.
 
 ---
 
-## Paper Framing
+## Codebase Structure
 
-**Recommended scope:** "lightweight, GPU-free document parsing optimised for English academic text."
-
-**Strongest claims:**
-- 85.1% text accuracy on English academic subset (2.5× better than Nougat)
-- 89.0% bilingual OCR on Fox benchmark
-- CPU-only, no GPU required, ~7s/page on i7 hardware
-
-**Not competitive on:**
-- Full OmniDocBench (52.8% vs GOT-OCR2.0 ~78%)
-- Formula recognition (15.7%)
-- Handwriting
-
-**Recommended benchmarks for paper:** OmniDocBench (EN academic subset) + Fox. OCRBench and DocVQA should be appendix/reference only.
-
----
-
-## Running the Pipeline
-
-```bash
-# Single image
-python pipeline/orchestrate.py path/to/image.jpg
-
-# Full OmniDocBench evaluation (981 pages)
-python benchmarks/run_omnidocbench.py \
-    --gt-json data/omnidocbench/OmniDocBench_available.json \
-    --images-dir data/omnidocbench/images \
-    --pred-dir preds/omnidocbench
-
-# Fox bilingual benchmark
-python benchmarks/run_fox.py
-
-# Glare robustness benchmark (18 demo pages)
-python benchmarks/benchmark_glare.py
-
-# Re-run only mixed-language pages
-python benchmarks/rerun_mixed.py
-
-# Parse OmniDocBench result JSON into Markdown report
-python benchmarks/make_report.py
+```
+testprism/
+├── app.py                          FastAPI web UI backend
+├── pipeline/
+│   ├── orchestrate.py              Main CLI entry point and job coordinator
+│   ├── models_interface.py         In-process model wrappers (YOLO, RapidOCR, Texo)
+│   ├── text_worker.py              RapidOCR subprocess worker
+│   ├── math_worker_onnx.py         Texo ONNX subprocess worker
+│   ├── tatr_worker_onnx.py         TATR INT8 ONNX subprocess worker (production)
+│   ├── tatr_worker.py              (legacy) TATR PyTorch worker, not used by default
+│   ├── detection_postprocess.py    YOLO output cleaning (NMS, overlap, box refine)
+│   ├── layout_utils.py             Reading order, column detection, crop extraction
+│   ├── latex_builder.py            LaTeX environment generation and document assembly
+│   └── pix2tex_worker.py           (legacy) pix2tex subprocess, not used
+├── normalization/
+│   ├── pipeline.py                 Stage 1 orchestrator
+│   ├── modality.py                 Histogram entropy → screenshot/photo classification
+│   ├── geometric.py                Deskew + perspective rectification
+│   ├── frequency_filter.py         White balance, shadow, glare, moiré, CLAHE
+│   └── region_adaptive.py          Stage 1.5 per-crop preprocessing
+├── Texo/                           Math OCR model (distilled Donut-family FormulaNet)
+│   └── src/texo/model/formulanet.py
+├── weights/
+│   ├── yolov11n-doclaynet.onnx     Primary layout detector (11 MB)
+│   └── en_PP-OCRv4_rec.onnx        English OCR recognition (7 MB)
+├── models/
+│   ├── doclayout_yolo_docstructbench_imgsz1024.onnx   Secondary detector (72 MB)
+│   ├── tatr_structure.onnx         TATR FP32 ONNX (116 MB, source)
+│   └── tatr_structure_int8.onnx    TATR INT8 ONNX (30 MB) ← used in production
+├── omnidocbench_eval/              Evaluation harness (OmniDocBench fork)
+├── scripts/
+│   └── export_tatr_onnx.py         Export TATR PyTorch → ONNX FP32 → INT8
+├── test_images/                    Test images (real/, synthetic/, rotation_benchmark/)
+├── outputs/                        Per-image output folders (gitignored)
+├── normalise.png                   Normalisation pipeline architecture diagram
+├── arch.txt                        High-level pipeline architecture summary
+├── arch2.txt                       Normalisation pipeline detailed spec
+└── metrics.txt                     Model sizes, latency, benchmark results
 ```
 
 ---
 
-## Dependencies
+## Key Dependencies
 
-Key packages (managed with `uv`, see `pyproject.toml`):
-- `ultralytics` — YOLO inference
-- `rapidocr-onnxruntime` — text OCR
-- `onnxruntime` — ONNX inference for Texo and RapidOCR
-- `tokenizers` — Rust-based tokenizer for Texo decoder
-- `opencv-python` — image preprocessing
-- `Pillow`, `numpy`, `scipy` — image manipulation
-- `psutil` — RAM measurement in benchmarks
-- `python-Levenshtein` — NED computation
-- `pandas`, `pyarrow` — parquet handling for DocVQA/OCRBench
+| Library | Role |
+|---------|------|
+| `fastapi` | Web UI backend |
+| `ultralytics` | DocLayout-YOLO inference wrapper |
+| `onnxruntime` | All ONNX inference: YOLO, RapidOCR, Texo, TATR (CPU) |
+| `rapidocr-onnxruntime` | PP-OCRv4 text OCR (English + Chinese engines bundled) |
+| `opencv-python` | Normalisation (CLAHE, FFT, inpainting, morphology, Hough, warp) |
+| `Pillow` | Image I/O throughout the pipeline |
+| `numpy` | Array operations throughout |
+| `torch` + `transformers` | Texo/TATR training and ONNX export only; not needed at inference |
+| `onnxruntime.quantization` | TATR INT8 quantization export |
+
+---
+
+## Requirements
+
+- Python 3.12.6
+- pdflatex (MiKTeX or TeX Live) in PATH for PDF compilation
+- xelatex for Chinese documents
+- CPU only — no GPU required
+- ~650 MB RAM at inference (with all 3 workers running)
+- Windows 11 (tested); Linux likely compatible with minor path adjustments

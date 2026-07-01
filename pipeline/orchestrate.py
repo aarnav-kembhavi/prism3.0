@@ -36,7 +36,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 
-from normalization import normalize_image_pil
+from normalization import normalize_image_pil, normalize_image_pil_skip_stage1
 from pipeline.models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
     run_page_got,
@@ -47,10 +47,12 @@ from pipeline.models_interface import (
 )
 from pipeline.text_worker import TextOCRWorker
 from pipeline.math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
+from pipeline.tatr_worker_onnx import TATROnnxWorker
 
 # Subprocess workers — populated by main(); None means in-process fallback.
 _ocr_worker:  "TextOCRWorker | None" = None
 _math_worker: "MathOCRWorker | None" = None
+_tatr_worker: "TATROnnxWorker | None" = None
 from pipeline.layout_utils import (
     apply_semantic_reading_order, sort_detections_geometric,
     xyxy_to_pil_crop, detect_column_count, split_detections_by_column,
@@ -219,7 +221,32 @@ def route_and_extract(
 
     if table_indices:
         table_crops = [detections[i]["crop"] for i in table_indices]
-        if _ocr_worker is not None:
+        if _ocr_worker is not None and _tatr_worker is not None:
+            # Get raw tokens from OCR worker, then run TATR structure recognition
+            tokens_list = _ocr_worker.run_table_tokens_batch(table_crops)
+            table_results = []
+            for crop, tokens in zip(table_crops, tokens_list):
+                result = None
+                if tokens:
+                    try:
+                        result = _tatr_worker.build_table_html(crop, tokens, crop.width)
+                    except Exception as e:
+                        print(f"  [TATR] error: {e}")
+                if not result:
+                    from pipeline.models_interface import _table_heuristic  # noqa: PLC0415
+                    heuristic_tokens = [
+                        {'text': t['text'],
+                         'x1': t['x1'], 'x2': t['x2'],
+                         'y1': t['y1'], 'y2': t['y2'],
+                         'cx': (t['x1'] + t['x2']) / 2,
+                         'cy': (t['y1'] + t['y2']) / 2,
+                         'h':  t['y2'] - t['y1'],
+                         'w':  t['x2'] - t['x1']}
+                        for t in tokens
+                    ]
+                    result = _table_heuristic(heuristic_tokens, crop.width) if tokens else ''
+                table_results.append(result)
+        elif _ocr_worker is not None:
             table_results = _ocr_worker.run_table_batch(table_crops)
         else:
             table_results = run_table_extraction_batched(table_crops)
@@ -258,12 +285,14 @@ def route_and_extract(
 
 
 def _launch_workers():
-    """Start both subprocess workers (called in a background thread)."""
-    global _ocr_worker, _math_worker
+    """Start all subprocess workers (called in a background thread)."""
+    global _ocr_worker, _math_worker, _tatr_worker
     _ocr_worker = TextOCRWorker()
     _ocr_worker.start()
     _math_worker = MathOCRWorker()
     _math_worker.start()
+    _tatr_worker = TATROnnxWorker()
+    _tatr_worker.start()
 
 
 def main():
@@ -276,6 +305,8 @@ def main():
                         help="Use GOT-OCR2 for full-page LaTeX (slower, higher quality)")
     parser.add_argument("--no-ocr-worker",    action="store_true",
                         help="Run RapidOCR in-process instead of a subprocess worker")
+    parser.add_argument("--skip-stage1",      action="store_true",
+                        help="Ablation: skip Stage 1 corrections (deskew+modality only, no CLAHE/shadow/glare/moire/resize)")
     args = parser.parse_args()
 
     # Optimization 1: start workers in a background thread so Texo loads
@@ -294,6 +325,8 @@ def main():
         _ocr_worker.stop()
     if _math_worker is not None:
         _math_worker.stop()
+    if _tatr_worker is not None:
+        _tatr_worker.stop()
 
 
 def _process_one(image_path_str: str, args, worker_thread):
@@ -347,8 +380,12 @@ def _process_one(image_path_str: str, args, worker_thread):
 
     # ── Stage 1: Normalization ───────────────────────────────────
     t_stage1_start = time.perf_counter()
-    print("[*] Stage 1: Image Normalization")
-    image_norm, image_fidelity, modality_result = normalize_image_pil(image_path_str)
+    if args.skip_stage1:
+        print("[*] Stage 1: SKIPPED (deskew+modality only)")
+        image_norm, image_fidelity, modality_result = normalize_image_pil_skip_stage1(image_path_str)
+    else:
+        print("[*] Stage 1: Image Normalization")
+        image_norm, image_fidelity, modality_result = normalize_image_pil(image_path_str)
     from normalization.modality import CaptureModality
     is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT)
     print(f"[*] Modality: {'screenshot' if is_screenshot else 'phone_photo'}")

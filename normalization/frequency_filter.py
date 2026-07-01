@@ -223,6 +223,41 @@ def remove_moire(image_bgr, notch_radius=30, threshold_percentile=97):
 
 
 # ----------------------------------------------------------------
+# Detection-only helpers (used by adaptive Stage 1)
+# ----------------------------------------------------------------
+
+def measure_shadow_gradient(image_bgr, blur_large=51):
+    """Return std-dev of illumination ratio map (same metric as Stage 1.5 shadow detection)."""
+    blur_large = blur_large | 1
+    img_f = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    bg = cv2.GaussianBlur(img_f, (blur_large, blur_large), 0)
+    ratio = img_f / (bg + 1e-6)
+    return float(np.std(ratio))
+
+
+def measure_moire_score(image_bgr, notch_radius=30, threshold_percentile=97):
+    """Return peak/mean ratio in high-freq zone on green channel (same metric as Stage 1.5)."""
+    channel = image_bgr[:, :, 1].astype(np.float32)
+    fshift = np.fft.fftshift(np.fft.fft2(channel))
+    magnitude = np.abs(fshift)
+    rows, cols = channel.shape
+    crow, ccol = rows // 2, cols // 2
+    Y, X = np.ogrid[:rows, :cols]
+    dist = np.sqrt((X - ccol) ** 2 + (Y - crow) ** 2)
+    high_freq = magnitude[dist > notch_radius]
+    if high_freq.size == 0:
+        return 0.0
+    mean_val = float(np.mean(high_freq))
+    return float(np.max(high_freq)) / mean_val if mean_val > 0 else 0.0
+
+
+def measure_contrast(image_bgr):
+    """Return RMS std-dev of grayscale (same metric as Stage 1.5 contrast detection)."""
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    return float(np.std(gray))
+
+
+# ----------------------------------------------------------------
 # Legacy aliases for backward compatibility
 # ----------------------------------------------------------------
 

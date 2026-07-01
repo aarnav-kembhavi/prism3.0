@@ -1,0 +1,140 @@
+PRISM Normalisation Pipeline Architecture
+==========================================
+
+PURPOSE: Preprocess raw input images before layout detection, then re-preprocess
+each detected region crop before OCR.
+Adapts behaviour based on whether the image is a phone photo or a screenshot.
+
+INPUT: raw image (PNG/JPG)
+
+════════════════════════════════════════
+STAGE 1 — WHOLE-IMAGE NORMALISATION
+════════════════════════════════════════
+
+ACTUAL CODE EXECUTION ORDER (pipeline.py):
+
+STEP 0 (ALL inputs): DESKEW  ← runs FIRST, before modality detection
+   - Projection profile method: rotate downsampled binary image across -15°..+15°
+   - Pick angle with highest derivative variance of row sums (text lines sharpest)
+   - Apply affine rotation with white background fill if angle > 0.5°
+   - Skips correction if detected angle < 0.5° (min_correction threshold)
+
+STEP 1 (ALL inputs): CAPTURE MODALITY DETECTION
+   - Convert to grayscale, compute 256-bin intensity histogram
+   - Measure normalised Shannon entropy of histogram
+     · entropy < 0.55 → SCREENSHOT (sparse bins, concentrated distribution)
+     · entropy >= 0.55 → PHONE PHOTO (dense bins, sensor noise spread)
+   - Confidence = distance from 0.55 boundary (scaled to 0.5–1.0)
+   - Drives which steps below are applied or skipped
+
+── PHONE PHOTO PATH ──────────────────────────────────────────
+
+STEP 2 (photos only): WHITE BALANCE
+   - Gray world algorithm: scale each BGR channel so per-channel mean equals global mean
+   - Removes colour cast from indoor/artificial lighting
+
+STEP 3 (photos only): GEOMETRIC RECTIFICATION
+   - 3 strategies tried in order (first success wins, quad must cover ≥15% of image):
+     1. Morphological gradient + adaptive threshold + largest quadrilateral contour
+     2. Hough line detection → cluster lines → intersect to find 4 corners
+     3. Classic Canny edge detection + contour approximation
+     Fallback: return image unchanged if all 3 fail
+   - Accepted quad → perspective warp (four-point transform) → flat frontal view
+   ↓
+   [FIDELITY IMAGE COPY TAKEN HERE — post-rectification, pre-destructive steps]
+
+STEP 4 (photos only): SHADOW REMOVAL
+   - Difference-of-Gaussians: divide image by heavily blurred version (kernel 51px)
+   - Normalises illumination gradient from desk lamps / window light
+
+STEP 5 (photos only): GLARE INPAINTING
+   - Detect glare mask: LAB L-channel > 230 → morphological close + dilate
+   - Remove noise contours < 100px area
+   - Inpaint glare regions: Telea fast-marching algorithm (radius 5px)
+   - Skip entirely if glare covers < 0.1% of image
+
+STEP 6 (photos only): MOIRÉ REMOVAL
+   - FFT notch filter applied per BGR channel
+   - Detect periodic frequency spikes beyond DC notch radius (97th percentile)
+   - Suppress spikes with Gaussian-smoothed mask (sigma=3) to avoid ringing
+   - IFFT back to spatial domain
+
+STEP 7 (photos only): CONTRAST NORMALISATION
+   - CLAHE on LAB L-channel (clip_limit=2.0, tile_grid=8×8)
+
+STEP 8 (photos only): SMART DPI RESIZE
+   - Target 250 DPI (upscale from assumed 96 DPI source)
+   - If shorter side >= 1200px: cap at 1800px shorter side (avoids YOLO overhead)
+   - Never downscale below 0.5×
+   - Upscale → Lanczos4; downscale → INTER_AREA
+   - Fidelity image resized by same factor
+
+── SCREENSHOT PATH ───────────────────────────────────────────
+
+   [FIDELITY IMAGE COPY TAKEN HERE — right after deskew]
+
+STEP 2 (screenshots only): CONTRAST NORMALISATION
+   - CLAHE on LAB L-channel (clip_limit=2.0, tile_grid=8×8)
+
+STEP 3 (screenshots only): DOWNSCALE IF OVERSIZED
+   - Only downscale if longest side > 1280px (OCR backend cap)
+   - No upscale — already clean, upscaling wastes memory and degrades OCR
+   - Fidelity image resized by same factor
+
+──────────────────────────────────────────────────────────────
+
+STAGE 1 OUTPUTS
+   - normalised image   — passed to YOLO layout detection
+   - fidelity image     — taken before destructive corrections (shadow/glare/moiré)
+                          used for OCR crops to preserve original pixel values
+   - ModalityResult     — modality + entropy + confidence (passed downstream to
+                          OCR worker and per-region preprocessor)
+
+
+════════════════════════════════════════
+STAGE 1.5 — PER-REGION ADAPTIVE PREPROCESSING
+════════════════════════════════════════
+
+PURPOSE: After YOLO crops each detected region, re-examine and correct
+artifacts at the crop level — conditions vary region-by-region
+(e.g. a shadow may fall on one text block but not another).
+
+CLASS-AWARE GATING
+   - Picture regions     → skip all corrections entirely (original pixels preserved)
+   - Page-header/footer  → contrast normalisation only (no glare/shadow/moiré)
+   - Formula regions     → skip shadow removal (gradient patterns may look like shadows)
+   - All others          → full per-region pipeline below
+
+PER-REGION PIPELINE (in order)
+
+  0. MOIRÉ DETECTION & REMOVAL (ALL inputs — adaptive threshold)
+     - FFT on green channel; peak/mean ratio in high-freq zone
+     - Phone threshold: 3.5×  |  Screenshot threshold: 8.0×  ← both can fire
+     - If detected: FFT notch filter + Gaussian-smoothed mask (same as Stage 1)
+     - skip_moire=True bypasses this if whole-image FFT already ran in Stage 1
+
+  1. GLARE DETECTION & INPAINTING (photos only — hard-skipped for screenshots)
+     - Phone lightness threshold: L > 225
+     - Glare area threshold: 2% of crop pixels
+     - If detected: Telea inpainting (radius 5px)
+     - If heavy glare (>15% of crop) → also trigger shadow removal (step 2)
+
+  2. SHADOW DETECTION & REMOVAL (photos only — triggered by heavy glare only)
+     - Detection: std-dev of illumination ratio map (Gaussian blur 51px / original)
+     - Threshold: std-dev >= 0.20
+     - If detected: Difference-of-Gaussians shadow removal
+
+  3. CONTRAST NORMALISATION (ALL inputs)
+     - Detection: RMS std-dev of grayscale crop < 18.0
+     - If low contrast: CLAHE (clip_limit=2.0, tile_grid=8×8)
+
+STAGE 1.5 OUTPUT
+   - preprocessed crop       — clean crop ready for OCR / TATR / Texo-distill
+   - RegionArtifactProfile   — per-crop report (moiré/glare/shadow/contrast:
+                               detected? corrected? severity score)
+
+
+NOTE ON DIAGRAM (normalise.png)
+════════════════════════════════════════
+normalise.png is accurate and matches this document.
+All three previous errors have been corrected in the current version of the figure.

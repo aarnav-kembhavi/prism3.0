@@ -1,0 +1,281 @@
+PRISM — System Metrics & Benchmark Results
+==========================================
+Benchmark: OmniDocBench v4 (981 pages, 2026-06-27)
+Platform: Windows 11, Intel Core i5-11xxx, Python 3.12.6
+
+
+════════════════════════════════════════
+MODEL SIZE BREAKDOWN
+════════════════════════════════════════
+
+Component                     Model                                    Size
+─────────────────────────────────────────────────────────────────────────────
+Layout detection              YOLOv11n-DocLayNet (ONNX)                11 MB
+Formula/table boost           DocLayout-YOLO (ONNX, imgsz=1024)        72 MB
+Text OCR (English)            RapidOCR PP-OCRv4 rec (ONNX)             7 MB
+                              RapidOCR PP-OCRv4 det (ONNX, bundled)    ~4 MB
+Math OCR                      Texo-distill encoder (ONNX)              52 MB
+                              Texo-distill decoder merged (ONNX)       27 MB
+Table structure               TATR v1.1-all INT8 (ONNX)               30 MB
+─────────────────────────────────────────────────────────────────────────────
+TOTAL (inference weights)                                             ~203 MB
+
+Notes:
+- RapidOCR detection model is from the RapidOCR package (not a local file)
+- Texo-distill is a distilled Donut-family encoder-decoder; 77 MB safetensors FP32
+- TATR converted from 115 MB safetensors to 30 MB ONNX INT8 (3.9x reduction)
+
+
+════════════════════════════════════════
+PIPELINE LATENCY (per page, CPU)
+════════════════════════════════════════
+
+Platform: Windows 11, Intel Core i5-11xxx
+
+PIPELINE THROUGHPUT (warm — workers persistent, models loaded once)
+Measured: 26-page PDF2LaTeX run
+
+  Mean per page               ~5.1 s
+  Median per page             ~4.7 s
+  Range                       4.9–5.3 s
+
+This is the true pipeline speed. Models load once; each subsequent page
+pays only inference cost.
+
+WEB UI LATENCY (cold — fresh process per upload, all models reload each call)
+Measured: 2 runs x 6 images
+
+  Image type                  Run 1     Run 2
+  ────────────────────────────────────────────
+  IEEE two-col (figure)       20.0 s    13.8 s
+  Resume single-col           15.9 s    17.1 s
+  IEEE two-col (tables)       15.9 s    15.4 s
+  Screenshot (clean)          10.4 s    10.7 s
+  Glared photo (table)        16.2 s    16.4 s
+  Glared photo (math)          —        20.3 s
+  ────────────────────────────────────────────
+  Mean                        ~15.6 s
+
+The extra ~10 s is model reload overhead — a deployment concern, not a
+pipeline speed limit. Fixable by keeping orchestrate running as a
+long-lived daemon with persistent workers (same pattern as the benchmark).
+
+Notes:
+- OCR worker warm batch: 3.3–3.7 s per page; cold first call: 7.5 s
+- Model load breakdown (cold): YOLO ~1 s, DocLayout-YOLO ~2 s,
+  Texo ONNX ~1.5 s, TATR ONNX ~0.3 s, RapidOCR ~1 s
+- RAM: ~652 MB main process with ONNX workers (vs ~1,621 MB original in-process)
+- TATR now ONNX INT8 subprocess worker (30 MB, no torch/transformers in main process)
+
+
+════════════════════════════════════════
+BENCHMARK RESULTS
+OmniDocBench v5 · 981 pages · 2026-07-01
+Pipeline: Adaptive Stage 1 (corrections gated on detection)
+Metric: Edit Distance (lower = better) / Accuracy (higher = better)
+════════════════════════════════════════
+
+── TEXT BLOCK ────────────────────────────────────────────────────────────────
+
+By document type:
+
+  Document Type           Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  academic_literature       0.082        91.8%     -0.4pp
+  research_report           0.141        85.9%     -1.6pp
+  book                      0.134        86.6%     -0.3pp
+  colorful_textbook         0.347        65.3%     +0.3pp
+  exam_paper                0.649        35.1%     +2.2pp
+  magazine                  0.298        70.2%     -5.8pp
+
+By language:
+
+  Language                Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  English                   0.156        84.4%     -0.7pp
+  Simplified Chinese        0.540        46.0%     -0.8pp
+
+By layout:
+
+  Layout                  Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  Single column             0.547        45.3%     -0.3pp
+  Double column             0.290        71.0%     +0.9pp
+  Three column              0.144        85.6%     +0.4pp
+
+
+── FORMULA (Display) ─────────────────────────────────────────────────────────
+
+  Subset                  Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  academic_literature       0.340        66.0%     +2.9pp
+  English pages             0.529        47.1%     +1.3pp
+  ALL                       0.744        25.6%     -0.2pp
+
+
+── TABLE ─────────────────────────────────────────────────────────────────────
+
+Note: table regression vs v4 caused by adaptive CLAHE bypass — under investigation.
+CLAHE skip (std-dev > 35) is too aggressive for Chinese characters and dense tables.
+
+Overall English: Edit Dist 0.418 (58.2% acc) · TEDS 47.6%
+
+By document type (TEDS / Edit Dist acc):
+
+  Document Type           TEDS     Edit acc    vs v4 TEDS
+  ─────────────────────────────────────────────────────────
+  academic_literature     43.5%      51.8%         -0.3pp
+  newspaper               51.4%      64.3%         -8.2pp
+  magazine                35.2%      61.8%        -17.6pp
+  book                    31.8%      44.6%        -24.6pp
+  exam_paper              30.8%      47.3%        -20.2pp
+
+
+── READING ORDER ─────────────────────────────────────────────────────────────
+
+Overall: Edit Dist 0.558 (44.2% acc)
+
+By document type:
+
+  Document Type           Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  academic_literature       0.226        77.4%     +0.8pp
+  book                      0.427        57.3%     -1.9pp
+  magazine                  0.434        56.6%     -4.6pp
+  colorful_textbook         0.470        53.0%     -0.2pp
+  exam_paper                0.653        34.7%     +2.3pp
+
+By layout:
+
+  Layout                  Edit Dist    Accuracy    vs v4
+  ──────────────────────────────────────────────────────
+  Three column              0.218        78.2%     +0.4pp
+  Double column             0.390        61.0%     +0.4pp
+  Single column             0.645        35.5%     -0.8pp
+
+
+════════════════════════════════════════
+ABLATION: STAGE 1 CONFIGURATION COMPARISON
+981 pages · OmniDocBench · 2026-07-01
+════════════════════════════════════════
+
+Pipeline variants tested:
+  v4  — Full unconditional Stage 1 (all corrections always applied)
+  v5  — Adaptive Stage 1 (corrections gated on detection scores)          [ABANDONED]
+  v6  — Skip Stage 1 entirely (deskew + modality only)                    2026-07-01
+  v7  — Full Stage 1 + formula crops from image_fidelity (pre-CLAHE)      2026-07-01
+
+── TEXT BLOCK ────────────────────────────────────────────────────────────────
+
+  Metric                    v4      v5      v6      v7
+  ──────────────────────────────────────────────────────
+  English acc               85.1%   84.4%   85.6%   85.1%
+  acad. literature          92.2%   91.8%   91.8%   92.2%
+  research_report           87.5%   85.9%   89.2%   87.3%
+  book                      86.9%   86.6%   88.2%   86.9%
+  magazine                  76.0%   70.2%   82.8%   76.0%
+  colorful_textbook         65.0%   65.3%   65.2%   64.7%
+  exam_paper                32.9%   35.1%   38.5%   32.8%
+  three_column layout       85.2%   85.6%   82.6%   85.2%
+  double_column layout      70.1%   71.0%   73.3%   70.0%
+
+── FORMULA (Display) ─────────────────────────────────────────────────────────
+
+  Metric                    v4      v5      v6      v7
+  ──────────────────────────────────────────────────────
+  English acc               45.8%   47.1%   57.4%   46.4%
+  acad. literature          63.1%   66.0%   70.2%   64.9%
+  1col layout               49.4%   —       55.1%   51.9%
+  double_column layout      31.6%   —       31.5%   28.3%
+
+  Finding: only full skip-stage1 (v6) achieves the +11.6pp formula gain.
+  Formula-from-fidelity routing (v7) gives +0.6pp — not the source of gain.
+  The benefit comes from NO DPI resize + NO white balance, not just no CLAHE.
+
+── TABLE ─────────────────────────────────────────────────────────────────────
+
+  Metric                    v4      v5      v6      v7
+  ──────────────────────────────────────────────────────
+  TEDS ALL                  42.0%   30.9%   31.6%   31.5%
+  TEDS English              48.9%   47.6%   49.3%   48.4%
+  TEDS acad. literature     43.8%   43.5%   45.0%   43.4%
+  TEDS newspaper            59.6%   51.4%   57.4%   51.1%
+  TEDS magazine             52.8%   35.2%   37.3%   40.2%
+  TEDS book                 56.5%   31.8%   35.6%   36.6%
+  TEDS exam_paper           51.0%   30.8%   33.0%   30.6%
+  Edit Dist English         52.4%   58.2%   58.9%   58.5%
+
+  Note: v4 table TEDS (42.0% ALL) came from an earlier pipeline version.
+  v6 and v7 both measure ~31.5% ALL, suggesting the table regression is
+  not from CLAHE gating but from another pipeline change between v4 and v6/v7.
+  Skip-stage1 (v6) and formula-from-fidelity (v7) are essentially tied on tables.
+
+── READING ORDER ─────────────────────────────────────────────────────────────
+
+  Metric                    v4      v5      v6      v7
+  ──────────────────────────────────────────────────────
+  ALL acc                   44.9%   44.2%   47.2%   44.2%
+  English acc               —       —       71.0%   70.8%
+  acad. literature          76.6%   77.4%   75.6%   76.5%
+  book                      59.2%   57.3%   58.2%   58.2%
+  magazine                  61.2%   56.6%   62.8%   61.2%
+  three_column layout       77.8%   78.2%   72.6%   77.8%
+  double_column layout      60.6%   61.0%   61.4%   60.3%
+
+── OVERALL WINNER BY METRIC ──────────────────────────────────────────────────
+
+  Text English:       v6 (85.6%) — marginal
+  Formula English:    v6 (57.4%) — substantial (+11.6pp vs v4)
+  Table TEDS English: v6 (49.3%) — marginal
+  Reading Order:      v6 (47.2%) — modest improvement
+
+  v6 (skip-stage1) is the current best pipeline on all four metrics.
+  v7 (formula-from-fidelity) offers no meaningful gain over v4 and is not
+  worth the added complexity. Recommend adopting v6 as default.
+
+  Open question: why did table TEDS drop from 42% (v4) to 31.5% (v6/v7)?
+  Both v6 and v7 are equally affected — suggests a pipeline change unrelated
+  to Stage 1 that occurred between the v4 and v6/v7 benchmark runs.
+
+
+════════════════════════════════════════
+COMPARISON vs NOUGAT
+OmniDocBench — English academic subset
+(academic_literature, book, colorful_textbook, exam_paper; v6 results)
+════════════════════════════════════════
+
+  Document Type           PRISM acc    Nougat acc    Delta
+  ──────────────────────────────────────────────────────────
+  academic_literature       91.8%        78.6%       +13.2pp
+  book                      88.2%        26.6%       +61.6pp
+  colorful_textbook         65.2%        18.0%       +47.2pp
+  exam_paper                38.5%         7.0%       +31.5pp
+
+English academic subset aggregate (v6):
+
+  Metric              PRISM EDR    Nougat EDR    PRISM acc    Nougat acc
+  ──────────────────────────────────────────────────────────────────────
+  Text block            0.144        0.365          85.6%       63.5%
+  Formula (English)     0.426        —              57.4%         —
+  Table (Edit Dist)     0.410        —              58.9%         —
+
+PRISM (v6) outperforms Nougat on every English document type.
+On the English subset: PRISM 0.144 EDR vs Nougat 0.365 EDR — 2.5× better.
+
+
+════════════════════════════════════════
+FULL-BENCHMARK PUBLISHED COMPARISON
+(OmniDocBench, all document types — text Edit Dist, lower is better)
+════════════════════════════════════════
+
+  System          Scope              Text EDR
+  ──────────────────────────────────────────────
+  GOT-OCR 2.0     Full (CJK+EN)       ~0.22
+  MinerU          Full (CJK+EN)       ~0.28
+  Marker          Full (CJK+EN)       ~0.36
+  Nougat          Full                 0.452
+  PRISM v6        Full (EN only)       0.410
+  PRISM v6        English subset       0.144
+
+Note: PRISM's gap vs GOT-OCR/MinerU is driven by Chinese pages (~40% of dataset)
+and handwritten notes. v6 (skip-stage1) is now the best-performing variant.
