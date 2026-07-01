@@ -279,3 +279,44 @@ FULL-BENCHMARK PUBLISHED COMPARISON
 
 Note: PRISM's gap vs GOT-OCR/MinerU is driven by Chinese pages (~40% of dataset)
 and handwritten notes. v6 (skip-stage1) is now the best-performing variant.
+
+
+════════════════════════════════════════
+AUDIT FIXES — VALIDATION
+OmniDocBench 18-page demo · before/after · same gating · 2026-07-01
+════════════════════════════════════════
+
+Headline fix: benchmark now routes tables through TATR (was crude heuristic).
+
+  Metric                     before    after     delta
+  ──────────────────────────────────────────────────────────
+  Table TEDS all             30.5%     57.6%     +27.1pp
+  Table TEDS structure-only  40.1%     83.2%     +43.1pp
+  Table TEDS english         16.6%     64.5%     +47.8pp
+  Table TEDS chinese         36.5%     54.7%     +18.2pp
+  Table Edit_dist (acc)      41.5%     74.4%     +32.9pp
+  Formula english (acc)      49.2%     52.1%     +2.8pp
+  Formula sample-avg (acc)   53.2%     54.0%     +0.8pp
+  Text english (acc)         84.1%     84.1%     flat
+  Text ALL (acc)             61.8%     61.6%     flat (noise)
+  Reading-order english      73.2%     73.2%     flat
+  Reading-order ALL          53.8%     53.8%     flat
+
+Confirms the audit diagnosis: the v4->v6 "table regression" was the benchmark
+silently using the crude coordinate heuristic instead of TATR. Wiring TATR in
+recovers +27pp TEDS. Non-table metrics unchanged (thread caps / lazy engines /
+dep split are perf+size only; conf floor + token cap gave a mild formula gain).
+
+Gating on demo set: 15/18 pages -> screenshot -> skip Stage 1 (v6);
+3 photo-like pages -> full Stage 1. Wall time flat on 16-core (thread caps
+target low-core deployment). ~160 MB unused model artifacts removed from disk.
+
+DEFERRED (need dedicated validated effort, not done here):
+- Remove torch from main process by running YOLO + DocLayout via raw
+  onnxruntime instead of ultralytics. High value (~400 MB main-process RAM)
+  but needs a careful YOLOv11/DocLayout ONNX pre/post-processing (letterbox +
+  NMS + coord rescale) rewrite; risk of detection regression without a full
+  benchmark to confirm. Not attempted blind.
+- Quantize Texo encoder/decoder to INT8 (~40 MB + CPU speed). The ONNX worker
+  deliberately ships FP32 ("no INT8 quality regression"); changing it needs a
+  formula-accuracy re-validation before adoption.
