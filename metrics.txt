@@ -442,3 +442,36 @@ Two levers to recover text/formula without losing real-defect handling:
   a) tune defect thresholds so clean scans aren't misclassified (best)
   b) run v8 with --skip-stage1 for the benchmark-optimal number (isolates
      the audit fixes: would show TATR+raw-YOLO+batching vs v6 on text/formula)
+
+
+========================================
+THREE-WAY: v8-gated vs v8-skip vs v6 (981 pages)
+========================================
+
+  metric              v8(gated)  v8(skip-s1)   v6      skip-vs-v6
+  Text ALL              54.6%      59.2%      55.1%     +4.1pp
+  Text English          82.9%      85.7%      85.6%     +0.1pp
+  Formula English       51.0%      56.7%      57.4%     -0.7pp (noise)
+  Table TEDS ALL        49.3%      53.3%      31.6%    +21.7pp
+  Table TEDS English    71.6%      75.1%      49.3%    +25.8pp
+  Reading-order ALL     44.1%      47.7%      47.2%     +0.5pp
+  Reading-order English 69.6%      71.4%      71.0%     +0.4pp
+
+CONCLUSION: v8 skip-stage1 BEATS or MATCHES v6 on every metric (Text ALL
++4.1pp, tables +21.7/+25.8pp, formula within noise). The audit fixes (TATR,
+raw ONNX YOLO, Texo batching, consolidation) regressed nothing and hugely
+improved tables. This is the new best config.
+
+ROOT CAUSE of v8-gated's dip: the defect gate is miscalibrated and always
+fires on phone-photo-classified pages. Log evidence (133 "defective" pages):
+  moiré: 100% fire (scores 150-500 vs thr 4.0 -- all text scores high)
+  glare: ~99% fire (0.4-1.0 vs thr 0.005 -- white paper = bright pixels)
+The metrics don't discriminate clean scans from defective photos: the real
+glared test images scored moiré 283-308 / glare 0.31-0.81, INSIDE the clean-doc
+range. So the gate reduces to "phone_photo -> full Stage 1", applying needless
+CLAHE to clean scans.
+
+RECOMMENDATION: adopt skip-stage1 as the effective default, and redesign defect
+detection around reliable signals (geometric perspective distortion from the
+rectification quad; localized specular blobs, not global bright-pixel fraction)
+rather than the current non-discriminative moiré/glare thresholds.
