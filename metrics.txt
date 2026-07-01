@@ -320,3 +320,56 @@ DEFERRED (need dedicated validated effort, not done here):
 - Quantize Texo encoder/decoder to INT8 (~40 MB + CPU speed). The ONNX worker
   deliberately ships FP32 ("no INT8 quality regression"); changing it needs a
   formula-accuracy re-validation before adoption.
+
+
+════════════════════════════════════════
+DEEP-OPTIMIZATION PASS — torch removal, Texo INT8, cleanup
+2026-07-01 · validated on 18-page demo
+════════════════════════════════════════
+
+1. TORCH REMOVED FROM MAIN PROCESS  (pipeline/yolo_onnx.py)
+   YOLOv11-DocLayNet + DocLayout now run via raw onnxruntime (letterbox +
+   decode + per-class NMS + coord rescale), reproducing ultralytics box-for-box
+   (mean IoU 0.97 on matched boxes; matching detection counts on clean pages).
+
+   Main-process RAM (measured, isolated, 3 detect() calls):
+     ultralytics + torch : 600 MB   (torch imported)
+     raw onnxruntime      : 173 MB   (torch NOT imported)   ->  -427 MB
+
+   End-to-end demo metrics, raw-ONNX vs ultralytics (identical otherwise):
+     Text en +0.3pp | Formula en +0.0pp | Table TEDS all +2.4pp |
+     Table TEDS en +8.1pp | Reading-order -0.3pp   (all within 18-page noise)
+   Switch: PRISM_RAW_YOLO (default on; =0 falls back to ultralytics).
+
+2. TEXO INT8 — REJECTED (validated negative result)
+   Dynamic-quantized encoder 54->14 MB, decoder did not shrink (MatMuls sit
+   inside the KV-cache If-subgraphs quantize_dynamic skips). Validation on 17
+   real formula crops (INT8 encoder + FP32 decoder vs full FP32):
+     exact-match  : 8/17 (47%)      <- significant output drift
+     char-similar : 0.909
+     speed        : 3.4x SLOWER (13.5s vs 3.9s) — conv stem stays FP32, so
+                    quant/dequant overhead dominates with no INT8 kernel gain
+   Conclusion: FP32 Texo is correct. The original "no INT8" choice stands.
+
+3. CLEANUP
+   - Removed dead module normalization/region_adaptive.py (no references).
+   - Double-contrast on the defect path: on inspection it is self-limiting
+     (per-crop autocontrast/binarize only fire when rms_contrast < 40, so a
+     CLAHE'd high-contrast crop skips them); left as-is to avoid regressing
+     genuinely-defective-photo OCR.
+
+TOTAL JOURNEY (pre-audit baseline -> fully optimized, demo set):
+  Table TEDS all        30.5% -> 60.0%   (+29.5pp)
+  Table TEDS english    16.6% -> 72.6%   (+55.9pp)
+  Table TEDS structure  40.1% -> 83.2%   (+43.1pp)
+  Formula english        49.2% -> 52.1%  (+2.8pp)
+  Text english           84.1% -> 84.4%  (+0.3pp)
+  Reading-order english  73.2% -> 72.5%  (-0.7pp, noise)
+  Main-process RAM        ~600 -> ~173 MB (-427 MB)
+  On-disk model artifacts  -160 MB (unused FP32/variant weights removed)
+
+STILL DEFERRED (documented, not blindly attempted):
+  - Full benchmark/product code-path consolidation (table path IS now unified
+    via TATR; remaining: Dual-vs-single workers, header-logo insertion).
+  - Texo encoder batching across crops (modest gain; decoder autoregressive
+    decode dominates and can't batch trivially).
