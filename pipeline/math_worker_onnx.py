@@ -258,6 +258,12 @@ def _preprocess_to_tensor(crop: Image.Image) -> np.ndarray:
 
 # ── ONNX autoregressive generate ─────────────────────────────────────────────
 
+def _onnx_encode(enc_sess, pixels: np.ndarray) -> np.ndarray:
+    """Run the vision encoder on a batch of pixels [N,3,384,384] → [N,seq,hid]."""
+    (enc_hidden,) = enc_sess.run(['last_hidden_state'], {'pixel_values': pixels})
+    return enc_hidden
+
+
 def _onnx_generate(
     enc_sess,
     dec_sess,
@@ -266,22 +272,33 @@ def _onnx_generate(
     max_new_tokens: int = 256,
     rep_penalty: float = 1.15,
 ) -> list[int]:
-    """Autoregressive greedy decode using ONNX encoder+decoder sessions.
+    """Encode one image then greedy-decode. Used for one-off (retry) crops."""
+    enc_hidden = _onnx_encode(enc_sess, pixel)
+    return _onnx_decode(dec_sess, enc_hidden, tokenizer, max_new_tokens, rep_penalty)
+
+
+def _onnx_decode(
+    dec_sess,
+    enc_hidden: np.ndarray,
+    tokenizer,
+    max_new_tokens: int = 256,
+    rep_penalty: float = 1.15,
+) -> list[int]:
+    """Autoregressive greedy decode from a single image's encoder hidden state.
 
     Uses use_cache_branch=False for step 0 (init pass) then True for subsequent
     steps, with one critical fix: the cross-attention (encoder) KV is frozen
     after step 0 and reused throughout.  Re-computing cross-attn KV at each
     cached step causes divergence; this matches Optimum's ORTModelForVision2Seq
     behaviour and gives numerically identical output to FP32 Texo.
+
+    enc_hidden must be [1, seq, hid] (a single image's slice of a batch encode).
     """
     LAYERS   = 2
     HEADS    = 16
     HEAD_DIM = 24
     BOS = tokenizer.token_to_id('<s>')
     EOS = tokenizer.token_to_id('</s>')
-
-    # Encode image
-    (enc_hidden,) = enc_sess.run(['last_hidden_state'], {'pixel_values': pixel})
 
     empty_dec = np.zeros((1, HEADS, 0, HEAD_DIM), dtype=np.float32)
     empty_enc = np.zeros((1, HEADS, 0, HEAD_DIM), dtype=np.float32)
@@ -335,6 +352,90 @@ def _onnx_generate(
     return generated
 
 
+def _onnx_decode_batch(
+    dec_sess,
+    enc_hidden: np.ndarray,
+    tokenizer,
+    max_new_tokens: int = 256,
+    rep_penalty: float = 1.15,
+) -> list[list[int]]:
+    """Greedy-decode B formulas in parallel from a batched encoder output.
+
+    enc_hidden: [B, seq, hid]. All B sequences step together; a sequence that
+    emits EOS stops being recorded but keeps occupying its batch row until the
+    whole batch finishes (or max_new_tokens). Because attention never crosses
+    batch rows, each row's logits are bit-identical to a standalone decode, so
+    the output matches per-crop greedy decoding exactly — while collapsing
+    sum(lengths) sequential decoder calls into ~max(length) batched calls.
+    """
+    LAYERS   = 2
+    HEADS    = 16
+    HEAD_DIM = 24
+    B = int(enc_hidden.shape[0])
+    BOS = tokenizer.token_to_id('<s>')
+    EOS = tokenizer.token_to_id('</s>')
+
+    empty_dec = np.zeros((B, HEADS, 0, HEAD_DIM), dtype=np.float32)
+    empty_enc = np.zeros((B, HEADS, 0, HEAD_DIM), dtype=np.float32)
+    past_dec_k = [empty_dec] * LAYERS
+    past_dec_v = [empty_dec] * LAYERS
+    past_enc_k = [empty_enc] * LAYERS
+    past_enc_v = [empty_enc] * LAYERS
+
+    input_ids = np.full((B, 1), BOS, dtype=np.int64)
+    generated: list[list[int]] = [[] for _ in range(B)]
+    finished = np.zeros(B, dtype=bool)
+
+    for step in range(max_new_tokens):
+        use_cache = step > 0
+        feed = {
+            'input_ids':             input_ids,
+            'encoder_hidden_states': enc_hidden,
+            'use_cache_branch':      np.array([use_cache]),
+        }
+        for l in range(LAYERS):
+            feed[f'past_key_values.{l}.decoder.key']   = past_dec_k[l]
+            feed[f'past_key_values.{l}.decoder.value'] = past_dec_v[l]
+            feed[f'past_key_values.{l}.encoder.key']   = past_enc_k[l]
+            feed[f'past_key_values.{l}.encoder.value'] = past_enc_v[l]
+
+        out = dec_sess.run(None, feed)
+        logits = out[0][:, -1, :].copy()   # [B, vocab]
+
+        if rep_penalty != 1.0:
+            for b in range(B):
+                if finished[b] or not generated[b]:
+                    continue
+                row = logits[b]
+                for tok in set(generated[b]):
+                    if row[tok] < 0:
+                        row[tok] *= rep_penalty
+                    else:
+                        row[tok] /= rep_penalty
+
+        next_tokens = logits.argmax(1).astype(np.int64)   # [B]
+
+        past_dec_k = [out[1], out[5]]
+        past_dec_v = [out[2], out[6]]
+        if step == 0:
+            past_enc_k = [out[3], out[7]]
+            past_enc_v = [out[4], out[8]]
+
+        for b in range(B):
+            if finished[b]:
+                continue
+            if next_tokens[b] == EOS:
+                finished[b] = True
+            else:
+                generated[b].append(int(next_tokens[b]))
+
+        input_ids = next_tokens.reshape(B, 1)
+        if finished.all():
+            break
+
+    return generated
+
+
 # ── worker entry point (runs in subprocess) ───────────────────────────────────
 
 def _worker_main(conn):
@@ -378,11 +479,24 @@ def _worker_main(conn):
         crop_arrays, figures_dir, math_counter_val = msg
         crops = [Image.fromarray(a) for a in crop_arrays]
 
+        # Batched encode + batched greedy decode: one encoder pass and
+        # ~max(length) decoder passes per chunk instead of per crop. All crops
+        # in a chunk decode in parallel (attention never crosses batch rows, so
+        # output is identical to per-crop greedy). Chunked to bound RAM and cap
+        # padding waste from length variance. Retries below stay per-crop.
+        pixels = [_preprocess_to_tensor(c) for c in crops]   # each [1,3,384,384]
+        token_ids_all: list[list[int]] = []
+        _BATCH = 8
+        for _s in range(0, len(pixels), _BATCH):
+            _batch = np.concatenate(pixels[_s:_s + _BATCH], axis=0)
+            _eh = _onnx_encode(enc_sess, _batch)             # [b, seq, hid]
+            token_ids_all.extend(_onnx_decode_batch(
+                dec_sess, _eh, tokenizer,
+                max_new_tokens=_MAX_NEW_TOKENS, rep_penalty=1.15))
+
         results: list[str] = []
         for i, crop in enumerate(crops):
-            pixel = _preprocess_to_tensor(crop)
-            token_ids = _onnx_generate(enc_sess, dec_sess, pixel, tokenizer,
-                                       max_new_tokens=_MAX_NEW_TOKENS, rep_penalty=1.15)
+            token_ids = token_ids_all[i]
             raw = tokenizer.decode(token_ids).strip()   # tokenizers skips specials by default
 
             # strip outer delimiters
