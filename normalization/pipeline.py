@@ -122,11 +122,16 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         print("  [norm] Screenshot: skipping all Stage 1 corrections")
         fidelity_img = img.copy()
 
-        # Only downscale if unusually large — never upscale.
-        SCREENSHOT_MAX_SIDE = 1280
+        # Cap the SHORTER side at 1800px (matches the clean-photo path) instead
+        # of the longer side at 1280. The old 1280-longer cap shrank a 2667x1500
+        # screenshot to 1280x720, and formula crops taken from it lost the detail
+        # Texo needs — costing several points of formula accuracy vs the
+        # full-resolution skip-stage1 path. 1800-shorter preserves detail while
+        # still bounding memory on unusually large captures. Never upscale.
+        SCREENSHOT_MAX_SHORTER = 1800
         h, w = img.shape[:2]
-        if max(h, w) > SCREENSHOT_MAX_SIDE:
-            scale = SCREENSHOT_MAX_SIDE / max(h, w)
+        if min(h, w) > SCREENSHOT_MAX_SHORTER:
+            scale = SCREENSHOT_MAX_SHORTER / min(h, w)
             new_w, new_h = int(w * scale), int(h * scale)
             img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_AREA)
             fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_AREA)

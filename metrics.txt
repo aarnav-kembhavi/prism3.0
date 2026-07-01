@@ -475,3 +475,31 @@ RECOMMENDATION: adopt skip-stage1 as the effective default, and redesign defect
 detection around reliable signals (geometric perspective distortion from the
 rectification quad; localized specular blobs, not global bright-pixel fraction)
 rather than the current non-discriminative moiré/glare thresholds.
+
+
+========================================
+DEFECT-GATE REDESIGN + SCREENSHOT RESOLUTION FIX (2026-07-02)
+120-page subset, phone-photo-weighted
+========================================
+
+Gate redesign: replaced the non-discriminative moiré/glare gate with
+white_frac<0.02 (real camera captures lack pure-white pixels; clean digital
+docs have them). Labeled sweep: 100% defect recall, ~10% FP (all low-formula).
+
+Second issue found via the confirmation run: normalize_image_pil downsampled
+screenshots to 1280px longest-side, starving Texo of formula detail. Fixed to
+1800px shortest-side (matches the clean-photo path). Impact (same 120 pages):
+
+  metric              old(1280cap)  new-gate+resfix   skip-all(ref)
+  Text ALL              62.1%          62.4%           61.9%
+  Text English          89.2%          85.5%           85.5%
+  Formula English       43.8%          66.9%  (+23pp)  66.9%
+  Table TEDS ALL        54.9%          57.7%           57.7%
+  Table TEDS English    68.8%          72.2%           72.2%
+  Reading-order ALL     48.2%          50.6%           50.8%
+
+RESULT: the adaptive pipeline (new gate + resfix) now MATCHES skip-stage1 on
+clean docs (+-0.5pp on every metric) while still routing genuine camera
+captures to full Stage 1 (100% recall). Gate applied Stage 1 to only 1/120
+clean pages (a PPT slide). The v8-gated-vs-v8-skip full-run gap is closed:
+adaptive default == benchmark-best, and real defective uploads are handled.
