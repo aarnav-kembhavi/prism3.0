@@ -34,10 +34,22 @@ try:
     _ort_orig_session = _ort_module.InferenceSession
     _ort_SessionOptions = _ort_module.SessionOptions
 
+    try:
+        from pipeline.onnx_config import onnx_threads as _onnx_threads
+        _MAIN_ONNX_THREADS = _onnx_threads()
+    except Exception:
+        _MAIN_ONNX_THREADS = 0
+
     def _no_arena_session(path_or_bytes, sess_options=None, providers=None, **kw):
         if sess_options is None:
             sess_options = _ort_SessionOptions()
         sess_options.enable_cpu_mem_arena = False
+        if _MAIN_ONNX_THREADS:
+            try:
+                sess_options.intra_op_num_threads = _MAIN_ONNX_THREADS
+                sess_options.inter_op_num_threads = 1
+            except Exception:
+                pass
         # Enable OS-level memory mapping for model weights so pages can be
         # evicted under pressure without copying the full model into heap.
         try:

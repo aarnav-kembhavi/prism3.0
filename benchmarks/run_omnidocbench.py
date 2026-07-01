@@ -21,6 +21,12 @@ from pathlib import Path
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', 'NO_ALBUMENTATIONS_UPDATE')
 
+# Cap ONNX/OpenMP threads before any model library is imported so the
+# concurrent worker subprocesses don't oversubscribe a modest CPU target.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pipeline.onnx_config import apply_thread_env
+apply_thread_env()
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).parent.parent
@@ -90,6 +96,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from pipeline.detection_postprocess import postprocess_detections
     from pipeline.text_worker import TextOCRWorkerDual
     from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual
+    from pipeline.tatr_worker_onnx import TATROnnxWorker
+    from pipeline.models_interface import _table_heuristic
     from pipeline.tex_to_md import tex_to_omnidocbench_md
 
     TEXT_CLASSES  = {"Text", "Title", "Section-header", "Caption",
@@ -101,9 +109,11 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
     ocr_worker = TextOCRWorkerDual()
     math_worker = MathOCRWorkerOnnxDual()
+    tatr_worker = TATROnnxWorker()
     print('[*] Starting workers...')
     ocr_worker.start()
     math_worker.start()
+    tatr_worker.start()
     print('[*] Workers ready.')
 
     results: dict[str, str] = {}
@@ -168,6 +178,11 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                         conf_ = float(box.conf[0])
                         bbox = box.xyxy[0].tolist()
                         if cls == 'isolate_formula':
+                            # 0.20 floor: the raw 0.15 recall level adds very
+                            # low-confidence formula boxes that overlap text and
+                            # feed Texo garbage the quality gate must discard.
+                            if conf_ < 0.20:
+                                continue
                             if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
                                 continue
                             crop = xyxy_to_pil_crop(image_fidelity if formula_from_fidelity else image_norm, bbox)
@@ -264,7 +279,32 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
                 if table_idx:
                     table_crops = [dets[i]['crop'] for i in table_idx]
-                    table_results = ocr_worker.run_table_batch(table_crops)
+                    # Structure recognition via TATR (same path as orchestrate.py).
+                    # Fall back to the coordinate heuristic only when TATR returns
+                    # nothing. Using the crude heuristic alone (the old behaviour)
+                    # discards column structure and tanks TEDS.
+                    tokens_list = ocr_worker.run_table_tokens_batch(table_crops)
+                    table_results = []
+                    for crop, tokens in zip(table_crops, tokens_list):
+                        result = None
+                        if tokens:
+                            try:
+                                result = tatr_worker.build_table_html(crop, tokens, crop.width)
+                            except Exception as e:
+                                print(f'  [TATR] error: {e}')
+                        if not result and tokens:
+                            heuristic_tokens = [
+                                {'text': t['text'],
+                                 'x1': t['x1'], 'x2': t['x2'],
+                                 'y1': t['y1'], 'y2': t['y2'],
+                                 'cx': (t['x1'] + t['x2']) / 2,
+                                 'cy': (t['y1'] + t['y2']) / 2,
+                                 'h':  t['y2'] - t['y1'],
+                                 'w':  t['x2'] - t['x1']}
+                                for t in tokens
+                            ]
+                            result = _table_heuristic(heuristic_tokens, crop.width)
+                        table_results.append(result or '')
                     for idx, raw in zip(table_idx, table_results):
                         dets[idx]['raw_content'] = raw
 
@@ -340,6 +380,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
     ocr_worker.stop()
     math_worker.stop()
+    tatr_worker.stop()
     unload_yolo()
     return results
 

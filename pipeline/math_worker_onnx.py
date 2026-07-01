@@ -78,6 +78,13 @@ def _sanitize(text: str) -> str:
 _TILDE_THRESHOLD = 10   # Var-B: lower to 6 to catch more hallucinations
 _COL_MIN_GAP     = 15   # Var-A: lower to 8 to capture tighter column gaps
 
+# Cap on tokens generated per formula. Greedy decode is one sequential
+# decoder.run() per token on CPU, and the quality gate runs only AFTER the
+# full generation, so an over-long cap makes hallucinating crops (and their
+# row/col-split retries) extremely expensive. 256 covers real display
+# equations while bounding worst-case latency (was 384).
+_MAX_NEW_TOKENS = 256
+
 # Patterns that indicate Texo is looping / hallucinating
 _BAD_PATTERNS = [
     re.compile(r'(\\hline\s*){5,}'),                          # repeated \hline
@@ -343,8 +350,10 @@ def _worker_main(conn):
 
     tokenizer = Tokenizer.from_file(os.path.join(MODEL_DIR, 'tokenizer.json'))
 
+    from pipeline.onnx_config import apply_session_threads
     opts = ort.SessionOptions()
     opts.enable_cpu_mem_arena = False
+    apply_session_threads(opts)
     enc_sess = ort.InferenceSession(
         os.path.join(ONNX_DIR, 'encoder_model.onnx'),
         sess_options=opts,
@@ -373,7 +382,7 @@ def _worker_main(conn):
         for i, crop in enumerate(crops):
             pixel = _preprocess_to_tensor(crop)
             token_ids = _onnx_generate(enc_sess, dec_sess, pixel, tokenizer,
-                                       max_new_tokens=384, rep_penalty=1.15)
+                                       max_new_tokens=_MAX_NEW_TOKENS, rep_penalty=1.15)
             raw = tokenizer.decode(token_ids).strip()   # tokenizers skips specials by default
 
             # strip outer delimiters
@@ -390,7 +399,7 @@ def _worker_main(conn):
                 """Run Texo on sub_crop; return clean LaTeX or '' on gate failure."""
                 px = _preprocess_to_tensor(sub_crop)
                 ids = _onnx_generate(enc_sess, dec_sess, px, tokenizer,
-                                     max_new_tokens=384, rep_penalty=1.15)
+                                     max_new_tokens=_MAX_NEW_TOKENS, rep_penalty=1.15)
                 r = tokenizer.decode(ids).strip()
                 for d in ('$$', '$', r'\[', r'\]', r'\(', r'\)'):
                     if r.startswith(d): r = r[len(d):]

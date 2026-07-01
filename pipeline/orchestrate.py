@@ -28,6 +28,11 @@ _pypath = os.environ.get('PYTHONPATH', '')
 if _ROOT not in _pypath.split(os.pathsep):
     os.environ['PYTHONPATH'] = _ROOT + (os.pathsep + _pypath if _pypath else '')
 
+# Cap OpenMP/BLAS threads before ultralytics/torch import so the main-process
+# YOLO + DocLayout don't grab every core while worker subprocesses run.
+from pipeline.onnx_config import apply_thread_env
+apply_thread_env()
+
 import time
 import argparse
 import gc
@@ -415,6 +420,10 @@ def _process_one(image_path_str: str, args, worker_thread):
                     conf_ = float(box.conf[0])
                     bbox  = box.xyxy[0].tolist()
                     if cls == 'isolate_formula':
+                        # 0.20 floor: drop the lowest-confidence formula boxes
+                        # that overlap text and feed Texo garbage.
+                        if conf_ < 0.20:
+                            continue
                         if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
                             continue
                         detections.append({

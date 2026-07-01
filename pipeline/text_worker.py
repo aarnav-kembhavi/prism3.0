@@ -265,10 +265,18 @@ def _worker_main(conn):
     # Re-apply arena + memory-mapping patch in subprocess (fresh Python state)
     try:
         import onnxruntime as _ort
+        from pipeline.onnx_config import onnx_threads as _onnx_threads
+        _n_threads = _onnx_threads()
         _orig = _ort.InferenceSession; _opts = _ort.SessionOptions
         def _patched(p, sess_options=None, providers=None, **kw):
             if sess_options is None: sess_options = _opts()
             sess_options.enable_cpu_mem_arena = False
+            # Cap threads so concurrent OCR/math workers don't oversubscribe.
+            try:
+                sess_options.intra_op_num_threads = _n_threads
+                sess_options.inter_op_num_threads = 1
+            except Exception:
+                pass
             try:
                 sess_options.add_session_config_entry("session.use_memory_mapped_if_possible", "1")
             except Exception:
@@ -285,13 +293,26 @@ def _worker_main(conn):
     if os.path.exists(en_rec) and os.path.exists(en_dict):
         base_kwargs['rec_model_path'] = en_rec
         base_kwargs['rec_keys_path']  = en_dict
-    # Screenshots: higher threshold + no CLS (text always horizontal in screenshots)
-    engine_screenshot = RapidOCR(**base_kwargs, det_box_thresh=0.5, use_cls=False)
-    engine_photo      = RapidOCR(**base_kwargs, det_box_thresh=0.3)
-    # CJK engine: bundled ch_PP-OCRv4 models (char dict embedded in model)
     cjk_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
-    engine_cjk_screenshot = RapidOCR(**cjk_kwargs, det_box_thresh=0.5, use_cls=False)
-    engine_cjk_photo      = RapidOCR(**cjk_kwargs, det_box_thresh=0.3)
+
+    # Build the 4 engine variants lazily: most pages use only one. Eagerly
+    # constructing all four (× 2 dual workers = 8) holds ~4× the RapidOCR
+    # det/rec/cls sessions in RAM for engines a given page never touches.
+    _engine_cache = {}
+
+    def _get_engine(lang, is_screenshot):
+        key = (lang, is_screenshot)
+        eng = _engine_cache.get(key)
+        if eng is None:
+            kwargs = dict(base_kwargs if lang == 'en' else cjk_kwargs)
+            if is_screenshot:
+                # Screenshots: higher threshold + no CLS (text always horizontal)
+                eng = RapidOCR(**kwargs, det_box_thresh=0.5, use_cls=False)
+            else:
+                eng = RapidOCR(**kwargs, det_box_thresh=0.3)
+            _engine_cache[key] = eng
+        return eng
+
     conn.send('ready')
 
     while True:
@@ -309,7 +330,7 @@ def _worker_main(conn):
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
-            engine = engine_screenshot if is_screenshot else engine_photo
+            engine = _get_engine('en', is_screenshot)
             results = [''] * len(crops)
             chunk_size = 20
             for start in range(0, len(crops), chunk_size):
@@ -326,7 +347,7 @@ def _worker_main(conn):
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
-            engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            engine = _get_engine('cjk', is_screenshot)
             results = [''] * len(crops)
             chunk_size = 20
             for start in range(0, len(crops), chunk_size):
@@ -347,8 +368,8 @@ def _worker_main(conn):
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
-            en_engine  = engine_screenshot if is_screenshot else engine_photo
-            cjk_engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            en_engine  = _get_engine('en', is_screenshot)
+            cjk_engine = _get_engine('cjk', is_screenshot)
             en_results  = [''] * len(crops)
             cjk_results = [''] * len(crops)
             chunk_size = 20
@@ -381,7 +402,7 @@ def _worker_main(conn):
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
-            engine = engine_screenshot if is_screenshot else engine_photo
+            engine = _get_engine('en', is_screenshot)
             total_chars = 0
             if processed:
                 per_crop = _stitch_and_run(engine, processed)
@@ -397,7 +418,7 @@ def _worker_main(conn):
             crops = [Image.fromarray(a) for a in crop_arrays]
             with ThreadPoolExecutor(max_workers=min(4, len(crops))) as exe:
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
-            engine = engine_cjk_screenshot if is_screenshot else engine_cjk_photo
+            engine = _get_engine('cjk', is_screenshot)
             cjk_count = 0
             if processed:
                 per_crop = _stitch_and_run(engine, processed)
@@ -416,7 +437,7 @@ def _worker_main(conn):
             crop_arrays = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
             nps   = [np.array(c.convert('RGB')) for c in crops]
-            per_crop = _stitch_and_run(engine_photo, nps)
+            per_crop = _stitch_and_run(_get_engine('en', False), nps)
             results = []
             for np_img, crop_result in zip(nps, per_crop):
                 tokens = _tokens_from_result(crop_result, np_img.shape[1])
@@ -429,7 +450,7 @@ def _worker_main(conn):
             crop_arrays = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
             nps   = [np.array(c.convert('RGB')) for c in crops]
-            per_crop = _stitch_and_run(engine_photo, nps)
+            per_crop = _stitch_and_run(_get_engine('en', False), nps)
             results = []
             for np_img, crop_result in zip(nps, per_crop):
                 results.append(_tokens_full(crop_result, np_img.shape[1]))

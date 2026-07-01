@@ -1,33 +1,51 @@
 [project]
 name = "samsung-prism-yolo-orchestration"
 version = "0.1.0"
-description = "Add your description here"
+description = "PRISM — CPU-only document-to-LaTeX/Markdown orchestration pipeline"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
+
+# Inference runtime only. The pipeline runs its specialist models through
+# ONNX Runtime (RapidOCR, Texo, TATR) plus ultralytics for YOLO layout
+# detection. Training/export/benchmark-only packages live in the optional
+# groups below so a deployment install stays small.
 dependencies = [
-    "albumentations>=2.0.8",
-    "datasets[vision]>=4.8.4",
-    "easyocr>=1.7.2",
-    "evaluate>=0.4.6",
-    "ftfy>=6.3.1",
-    "lightning>=2.6.1",
     "numpy>=2.0",
     "onnxruntime>=1.24.4",
     "opencv-python>=4.8.0",
-    "optimum-onnx>=0.1.0",
-    "paddleocr>=3.4.0",
-    "paddlepaddle>=3.3.0",
-    "pdf2image>=1.17.0",
     "pillow>=12.1.1",
     "psutil>=7.2.2",
-    "rapid-latex-ocr>=0.0.6",
-    "rapidfuzz>=3.14.5",
     "scipy>=1.11.0",
-    "timm>=1.0.26",
-    "torch>=2.10.0",
+    "pdf2image>=1.17.0",
+    "rapidocr-onnxruntime>=1.3.0",   # actual text/table OCR backend
+    "tokenizers>=0.19.0",             # Texo ONNX math worker decode
+    "ultralytics>=8.4.24",            # YOLO + DocLayout layout detection
+    "torch>=2.10.0",                  # required by ultralytics
     "torchvision>=0.25.0",
-    "transformers>=4.57.6",
-    "ultralytics>=8.4.24",
+    "transformers>=4.57.6",           # GOT high-quality mode + Texo torch path
+]
+
+[project.optional-dependencies]
+# Full-page GOT-OCR2 high-quality mode and the torch Texo fallback pull the
+# heaviest extras; the default ONNX path does not need them.
+train = [
+    "paddleocr>=3.4.0",
+    "paddlepaddle>=3.3.0",
+    "easyocr>=1.7.2",
+    "lightning>=2.6.1",
+    "datasets[vision]>=4.8.4",
+    "timm>=1.0.26",
+    "albumentations>=2.0.8",
+]
+benchmark = [
+    "pyyaml>=6.0",
+    "rapidfuzz>=3.14.5",
+    "evaluate>=0.4.6",
+    "ftfy>=6.3.1",
+]
+export = [
+    "optimum-onnx>=0.1.0",
+    "rapid-latex-ocr>=0.0.6",
 ]
 
 [dependency-groups]
