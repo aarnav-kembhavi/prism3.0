@@ -373,3 +373,37 @@ STILL DEFERRED (documented, not blindly attempted):
     via TATR; remaining: Dual-vs-single workers, header-logo insertion).
   - Texo encoder batching across crops (modest gain; decoder autoregressive
     decode dominates and can't batch trivially).
+
+
+════════════════════════════════════════
+CONSOLIDATION + TEXO BATCHING PASS
+2026-07-01 · validated on 18-page demo
+════════════════════════════════════════
+
+1. CODE-PATH CONSOLIDATION  (pipeline/page_core.py)
+   Benchmark and product both reimplemented detections->document inline and
+   had drifted. New page_core.py is the single implementation (Workers bundle,
+   route_and_extract, build_document = column-aware dispatch + assembly).
+   orchestrate.py and run_omnidocbench.py now both call build_document; their
+   inline copies deleted. A routing/table/column fix now lands once.
+
+   Validated: consolidated benchmark metrics IDENTICAL to inline version
+   (0.00pp delta on every metric — pure refactor). Product path clean.
+
+2. TEXO DECODER BATCHING  (pipeline/math_worker_onnx.py)
+   Split encode/decode; added _onnx_decode_batch to greedy-decode B formulas
+   in parallel from a batched encoder output (chunk size 8). Output bit-
+   identical to per-crop (attention never crosses batch rows).
+
+   Measured on 17 demo formula crops:
+     encoder batching alone : 0 speedup (decoder loop dominates)
+     decoder batching       : 1.15x (3.39s -> 2.94s), 17/17 exact match
+   Speedup grows with formulas-per-page; retry paths stay per-crop.
+
+SESSION SCORECARD (all validated, all shipped):
+  Table TEDS all (demo)        30.5% -> 60.0%   (TATR wiring)
+  Main-process RAM              ~600 -> ~173 MB (torch removed)
+  On-disk model artifacts       -160 MB
+  Texo formula decode           1.15x faster, identical output
+  Benchmark == product          one shared page_core (0.00pp drift)
+  Texo INT8                     tested + REJECTED (worse quality, 3.4x slower)
