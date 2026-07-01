@@ -21,6 +21,16 @@ from pathlib import Path
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', 'NO_ALBUMENTATIONS_UPDATE')
 
+# UTF-8 stdout/stderr: the pipeline prints Unicode (→, 【】, CJK). On Windows
+# the default console codec is cp1252 and raises UnicodeEncodeError. Previously
+# ultralytics/torch import happened to reconfigure the console; now that the
+# main process is torch-free we must do it explicitly.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # Cap ONNX/OpenMP threads before any model library is imported so the
 # concurrent worker subprocesses don't oversubscribe a modest CPU target.
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -38,6 +48,10 @@ DEFAULT_PRED = ROOT / 'preds' / 'omnidocbench'
 YOLO_MODEL_PATH      = str(ROOT / 'weights' / 'yolov11n-doclaynet.onnx')
 DOCLAYOUT_MODEL_PATH = str(ROOT / 'models' / 'doclayout_yolo_docstructbench_imgsz1024.onnx')
 
+# Backend switch: raw onnxruntime detectors (no torch) by default; set
+# PRISM_RAW_YOLO=0 to fall back to ultralytics for A/B comparison.
+_USE_RAW_YOLO = os.environ.get('PRISM_RAW_YOLO', '1') != '0'
+
 # DocLayout YOLO singleton — loaded once, shared across all pages
 _doclayout_model = None
 
@@ -47,6 +61,27 @@ def _get_doclayout_model():
         from ultralytics import YOLO as _YOLO
         _doclayout_model = _YOLO(DOCLAYOUT_MODEL_PATH, task='detect')
     return _doclayout_model
+
+
+def _yolo_detect(norm_path, conf=0.25, iou=0.7):
+    """Uniform layout detection → list of {bbox, class_name, confidence}."""
+    if _USE_RAW_YOLO:
+        from pipeline.models_interface import get_yolo_detector
+        return get_yolo_detector(YOLO_MODEL_PATH, imgsz=640).detect(norm_path, conf=conf, iou=iou)
+    from pipeline.models_interface import get_yolo_model
+    r = get_yolo_model(YOLO_MODEL_PATH)(norm_path, verbose=False)[0]
+    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
+             'confidence': float(b.conf[0])} for b in r.boxes]
+
+
+def _doclayout_detect(norm_path, conf=0.15):
+    """Uniform DocLayout detection → list of {bbox, class_name, confidence}."""
+    if _USE_RAW_YOLO:
+        from pipeline.models_interface import get_doclayout_detector
+        return get_doclayout_detector(DOCLAYOUT_MODEL_PATH, imgsz=1024).detect(norm_path, conf=conf)
+    r = _get_doclayout_model()(norm_path, conf=conf, verbose=False)[0]
+    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
+             'confidence': float(b.conf[0])} for b in r.boxes]
 
 
 def _iou(a, b):
@@ -137,28 +172,21 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             norm_path = str(assets_dir / 'normalized.png')
             image_norm.save(norm_path)
 
-            # Stage 2: YOLO detection
-            model = get_yolo_model(YOLO_MODEL_PATH)
-            results_yolo = model(norm_path, verbose=False)
-            detections = []
-            result_yolo = results_yolo[0]
-            class_names = result_yolo.names
+            # Stage 2: YOLO detection (raw onnxruntime by default; no torch)
             img_width, img_height = image_norm.width, image_norm.height
-
-            for box in result_yolo.boxes:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                class_id = int(box.cls[0].item())
-                confidence = float(box.conf[0].item())
-                class_name = class_names[class_id]
+            detections = []
+            for d in _yolo_detect(norm_path, conf=0.25, iou=0.7):
+                x1, y1, x2, y2 = d['bbox']
+                class_name = d['class_name']
                 if class_name in IMAGE_CLASSES or (formula_from_fidelity and class_name in MATH_CLASSES):
                     crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
                 else:
                     crop = xyxy_to_pil_crop(image_norm, [x1, y1, x2, y2])
                 detections.append({
                     'bbox': [x1, y1, x2, y2],
-                    'class_id': class_id,
+                    'class_id': 0,
                     'class_name': class_name,
-                    'confidence': confidence,
+                    'confidence': d['confidence'],
                     'crop': crop,
                 })
 
@@ -167,16 +195,13 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
             # conf=0.15 for broader formula recall; tables use 0.30 (higher precision needed).
             try:
-                dl_model = _get_doclayout_model()
-                dl_results = dl_model(norm_path, conf=0.15, verbose=False)
                 existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
                 existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
                 n_fml = n_tbl = 0
-                for r in dl_results:
-                    for box in r.boxes:
-                        cls = r.names[int(box.cls[0])]
-                        conf_ = float(box.conf[0])
-                        bbox = box.xyxy[0].tolist()
+                for box in _doclayout_detect(norm_path, conf=0.15):
+                        cls = box['class_name']
+                        conf_ = box['confidence']
+                        bbox = box['bbox']
                         if cls == 'isolate_formula':
                             # 0.20 floor: the raw 0.15 recall level adds very
                             # low-confidence formula boxes that overlap text and

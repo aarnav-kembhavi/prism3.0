@@ -214,6 +214,41 @@ def unload_yolo():
         print("[*] YOLO unloaded")
 
 
+# ── Raw onnxruntime detectors (no ultralytics / no torch in main process) ──────
+_yolo_detector      = None
+_yolo_detector_path = None
+_doclayout_detector = None
+
+
+def get_yolo_detector(model_path: str, imgsz: int = 640):
+    """Torch-free layout detector. Returns a YoloOnnxDetector singleton."""
+    global _yolo_detector, _yolo_detector_path
+    if _yolo_detector is None or _yolo_detector_path != model_path:
+        from pipeline.yolo_onnx import YoloOnnxDetector
+        print(f"[*] Loading YOLO detector (raw ONNX): {model_path}")
+        _yolo_detector = YoloOnnxDetector(model_path, imgsz=imgsz)
+        _yolo_detector_path = model_path
+    return _yolo_detector
+
+
+def get_doclayout_detector(model_path: str, imgsz: int = 1024):
+    """Torch-free DocLayout (YOLOv10) detector singleton."""
+    global _doclayout_detector
+    if _doclayout_detector is None:
+        from pipeline.yolo_onnx import YoloOnnxDetector
+        print(f"[*] Loading DocLayout detector (raw ONNX): {model_path}")
+        _doclayout_detector = YoloOnnxDetector(model_path, imgsz=imgsz)
+    return _doclayout_detector
+
+
+def unload_yolo_detector():
+    global _yolo_detector, _yolo_detector_path, _doclayout_detector
+    _yolo_detector = None
+    _yolo_detector_path = None
+    _doclayout_detector = None
+    import gc as _gc; _gc.collect()
+
+
 def unload_texo():
     global _texo_model, _texo_tokenizer, _texo_processor
     if _texo_model is not None:

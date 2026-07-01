@@ -18,6 +18,14 @@ import os
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', '1')
 
+# UTF-8 stdout/stderr — the pipeline prints Unicode (→, CJK) and the main
+# process is now torch-free, so nothing else reconfigures the Windows console.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 from pathlib import Path
 
 # Add repo root to path so pipeline.* and normalization are importable
@@ -76,6 +84,10 @@ except ImportError:
 YOLO_MODEL_PATH      = str(Path(__file__).resolve().parent.parent / 'weights' / 'yolov11n-doclaynet.onnx')
 DOCLAYOUT_MODEL_PATH = str(Path(__file__).resolve().parent.parent / 'models' / 'doclayout_yolo_docstructbench_imgsz1024.onnx')
 
+# Backend switch: raw onnxruntime detectors (no torch) by default; set
+# PRISM_RAW_YOLO=0 to fall back to ultralytics.
+_USE_RAW_YOLO = os.environ.get('PRISM_RAW_YOLO', '1') != '0'
+
 _doclayout_model = None
 
 def _get_doclayout_model():
@@ -84,6 +96,16 @@ def _get_doclayout_model():
         from ultralytics import YOLO as _YOLO
         _doclayout_model = _YOLO(DOCLAYOUT_MODEL_PATH, task='detect')
     return _doclayout_model
+
+
+def _doclayout_detect(norm_path, conf=0.15):
+    """Uniform DocLayout detection → list of {bbox, class_name, confidence}."""
+    if _USE_RAW_YOLO:
+        from pipeline.models_interface import get_doclayout_detector
+        return get_doclayout_detector(DOCLAYOUT_MODEL_PATH, imgsz=1024).detect(norm_path, conf=conf)
+    r = _get_doclayout_model()(norm_path, conf=conf, verbose=False)[0]
+    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
+             'confidence': float(b.conf[0])} for b in r.boxes]
 
 
 def _iou(a, b):
@@ -119,16 +141,19 @@ def _adjust_figure_paths(parts: list[str]) -> list[str]:
 
 
 def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
-    results    = model(image_path, verbose=False)
-    detections = []
-    result     = results[0]
-    class_names = result.names
+    if _USE_RAW_YOLO:
+        from pipeline.models_interface import get_yolo_detector
+        raw = get_yolo_detector(YOLO_MODEL_PATH, imgsz=640).detect(image_path, conf=0.25, iou=0.7)
+    else:
+        result = model(image_path, verbose=False)[0]
+        raw = [{'bbox': b.xyxy[0].tolist(), 'class_name': result.names[int(b.cls[0])],
+                'confidence': float(b.conf[0])} for b in result.boxes]
 
-    for box in result.boxes:
-        x1, y1, x2, y2 = box.xyxy[0].tolist()
-        class_id   = int(box.cls[0].item())
-        confidence = float(box.conf[0].item())
-        class_name = class_names[class_id]
+    detections = []
+    for d in raw:
+        x1, y1, x2, y2 = d['bbox']
+        class_name = d['class_name']
+        confidence = d['confidence']
 
         if class_name in IMAGE_CLASSES:
             crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
@@ -143,7 +168,7 @@ def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, i
 
         detections.append({
             "bbox": [x1, y1, x2, y2],
-            "class_id": class_id,
+            "class_id": 0,
             "class_name": class_name,
             "confidence": confidence,
             "crop": crop,
@@ -400,7 +425,8 @@ def _process_one(image_path_str: str, args, worker_thread):
 
     # ── Stage 2: Layout Detection ────────────────────────────────
     t_stage2_start = time.perf_counter()
-    model      = get_yolo_model(YOLO_MODEL_PATH)
+    # Raw-ONNX detector needs no torch/ultralytics model object; pass None.
+    model      = None if _USE_RAW_YOLO else get_yolo_model(YOLO_MODEL_PATH)
     yolo_input = str(assets_dir / "normalized.png")
     detections = run_detection(model, image_norm, image_fidelity, yolo_input)
     img_width, img_height = image_norm.width, image_norm.height
@@ -409,16 +435,13 @@ def _process_one(image_path_str: str, args, worker_thread):
     # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
     if Path(DOCLAYOUT_MODEL_PATH).exists():
         try:
-            dl_model = _get_doclayout_model()
-            dl_res = dl_model(yolo_input, conf=0.15, verbose=False)
             existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
             existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
             n_fml = n_tbl = 0
-            for r in dl_res:
-                for box in r.boxes:
-                    cls   = r.names[int(box.cls[0])]
-                    conf_ = float(box.conf[0])
-                    bbox  = box.xyxy[0].tolist()
+            for box in _doclayout_detect(yolo_input, conf=0.15):
+                    cls   = box['class_name']
+                    conf_ = box['confidence']
+                    bbox  = box['bbox']
                     if cls == 'isolate_formula':
                         # 0.20 floor: drop the lowest-confidence formula boxes
                         # that overlap text and feed Texo garbage.
