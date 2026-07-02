@@ -26,3 +26,5 @@ _web_uploads/
 # Local tooling
 .claude/
 .vscode/
+.venv_ppocr/
+.venv_smol/
