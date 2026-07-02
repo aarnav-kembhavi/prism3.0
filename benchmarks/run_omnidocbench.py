@@ -84,6 +84,21 @@ def _doclayout_detect(norm_path, conf=0.15):
              'confidence': float(b.conf[0])} for b in r.boxes]
 
 
+_USE_MFD = os.environ.get('PRISM_USE_MFD', '0') != '0'   # opt-in: modest gain, +167MB/+2s
+
+def _mfd_detect(norm_path, conf=0.25):
+    """Dedicated math-formula detection (MFD @ 1280px) → 'isolated' formula boxes.
+    Lifts display-formula recall ~29%->78% vs the general layout detectors."""
+    if not _USE_MFD:
+        return []
+    from pipeline.models_interface import get_mfd_detector
+    det = get_mfd_detector(1280)
+    if det is None:
+        return []
+    return [d for d in det.detect(norm_path, conf=conf, iou=0.5)
+            if d['class_name'] == 'isolated']
+
+
 def _iou(a, b):
     ix1=max(a[0],b[0]); iy1=max(a[1],b[1]); ix2=min(a[2],b[2]); iy2=min(a[3],b[3])
     iw=max(0,ix2-ix1); ih=max(0,iy2-iy1); inter=iw*ih
@@ -218,6 +233,25 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                     print(f'  [DL] +{n_fml} formula(s), +{n_tbl} table(s)')
             except Exception as _e:
                 print(f'  [DL] skipped: {_e}')
+
+            # MFD boost: dedicated formula detector @1280px (recall ~29%->78%).
+            try:
+                existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
+                n_mfd = 0
+                for box in _mfd_detect(norm_path, conf=0.25):
+                    bbox = box['bbox']
+                    if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
+                        continue
+                    crop = xyxy_to_pil_crop(image_fidelity if formula_from_fidelity else image_norm, bbox)
+                    detections.append({
+                        'bbox': bbox, 'class_id': -4,
+                        'class_name': 'Formula', 'confidence': box['confidence'], 'crop': crop,
+                    })
+                    existing_fml.append(bbox); n_mfd += 1
+                if n_mfd:
+                    print(f'  [MFD] +{n_mfd} formula(s)')
+            except Exception as _e:
+                print(f'  [MFD] skipped: {_e}')
 
             # Header suppress
             HEADER_SUPPRESS_H_FRAC = 0.12

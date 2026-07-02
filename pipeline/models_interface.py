@@ -241,11 +241,32 @@ def get_doclayout_detector(model_path: str, imgsz: int = 1024):
     return _doclayout_detector
 
 
+# Dedicated Math Formula Detection (MFD) — yolo_v8_ft, classes {0:embedding,
+# 1:isolated}. Run at imgsz=1280: dense-math pages lose small formulas at 640,
+# and this lifts display-formula recall from ~29% (general layout detectors) to
+# ~78%. This was the entire formula bottleneck — recognition (Texo) is fine.
+_mfd_detector = None
+_MFD_MODEL_PATH = os.path.join(ROOT_DIR, 'models', 'MFD', 'YOLO', 'yolo_v8_ft_640_dyn.onnx')
+
+
+def get_mfd_detector(imgsz: int = 1280):
+    """Torch-free math-formula detector singleton (None if model absent)."""
+    global _mfd_detector
+    if _mfd_detector is None:
+        if not os.path.exists(_MFD_MODEL_PATH):
+            return None
+        from pipeline.yolo_onnx import YoloOnnxDetector
+        print(f"[*] Loading MFD formula detector (raw ONNX @ {imgsz}px)")
+        _mfd_detector = YoloOnnxDetector(_MFD_MODEL_PATH, imgsz=imgsz)
+    return _mfd_detector
+
+
 def unload_yolo_detector():
-    global _yolo_detector, _yolo_detector_path, _doclayout_detector
+    global _yolo_detector, _yolo_detector_path, _doclayout_detector, _mfd_detector
     _yolo_detector = None
     _yolo_detector_path = None
     _doclayout_detector = None
+    _mfd_detector = None
     import gc as _gc; _gc.collect()
 
 
