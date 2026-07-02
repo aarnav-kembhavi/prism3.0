@@ -209,3 +209,45 @@ Fox pages are single-column screenshots; layout improvements have minimal impact
 - **+2.6pp formula accuracy** (25.8% overall, 45.8% EN) via Texo-distill ONNX + FORMULA_PAD=4 (hyperparameter sweep on 224 EN crops confirmed 4px optimal; larger padding bleeds neighboring content post-binarization)
 
 **Recommended benchmarks for paper:** OmniDocBench + Fox. These directly measure document parsing quality and bilingual OCR accuracy, which are PRISM's core claims.
+
+---
+
+## CPU Competitor Comparison — PRISM vs PP-StructureV3 vs SmolDocling (2026-07-02)
+
+20-page OmniDocBench v1.5 subset (stratified), Windows CPU (16 cores), 8-thread
+budget for all systems, **isolated runs** (one at a time). PP-StructureV3 = default
+*server* config; SmolDocling-256M via docling; PRISM = adaptive default.
+
+### Efficiency (measured, same hardware + pages) — PRISM's core story
+
+| Metric                  | PRISM   | PP-StructureV3 | SmolDocling-256M |
+|-------------------------|---------|----------------|------------------|
+| Peak RAM (process tree) | **1.3 GB** | 8.2 GB      | 2.3 GB           |
+| Latency median (s/page) | **6.8** | 58.2           | 92.2             |
+| Latency mean (s/page)   | 6.9     | 103.8          | 125.7            |
+| Inference weights       | **~200 MB** | >1 GB      | ~500 MB          |
+
+PRISM is **6x lighter + 8.5x faster** than PP-StructureV3, and **1.8x lighter +
+13x faster** than SmolDocling, CPU-only.
+
+### Accuracy — English subset (edit distance lower=better, TEDS higher=better)
+
+| Metric        | PRISM | PP-StructureV3 | SmolDocling |
+|---------------|-------|----------------|-------------|
+| Text          | 0.165 | **0.081**      | 0.461       |
+| Formula       | 0.491 | **0.320**      | 1.000*      |
+| Reading-order | 0.319 | **0.276**      | 0.498       |
+| Table TEDS    | 46.1% | **56.5%**      | 0.0%*       |
+
+\* SmolDocling formula/table self-run scores are format-mismatched (DocTags→markdown
+vs OmniDocBench notation), not true ability — cite its published 0.493 EN overall.
+
+### Takeaways
+1. Efficiency: PRISM wins decisively and cleanly (controlled, same hardware).
+2. vs SmolDocling: PRISM wins BOTH accuracy and efficiency — the 256M VLM is
+   slower, heavier, AND less accurate on CPU.
+3. vs PP-StructureV3: PRISM trades accuracy for 6x less RAM / 8.5x speed —
+   PRISM owns the efficient corner of the accuracy/efficiency frontier.
+
+(Full detail + caveats: benchmarks/compare/RESULTS.md. Mobile PP-Structure +
+GraniteDocling + GOT-OCR2.0 results appended below as they complete.)
