@@ -394,7 +394,7 @@ def main():
     md.append("")
 
     out_text = "\n".join(md)
-    out_path = Path("PRISM_OmniDocBench_Report.md")
+    out_path = Path("docs/PRISM_OmniDocBench_Report.md")
     out_path.write_text(out_text, encoding="utf-8")
     print(f"[✓] Report written: {out_path.resolve()}")
     print(f"    {len(out_text):,} characters")

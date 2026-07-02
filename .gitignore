@@ -28,3 +28,4 @@ _web_uploads/
 .vscode/
 .venv_ppocr/
 .venv_smol/
+.paddlex/

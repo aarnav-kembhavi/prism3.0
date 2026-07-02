@@ -14,6 +14,7 @@ from bench_metrics import MetricsTracker
 def main():
     images_dir, gt_json, out_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     n_threads = int(sys.argv[4]) if len(sys.argv) > 4 else 8
+    config = sys.argv[5] if len(sys.argv) > 5 else 'server'   # 'server' | 'mobile'
     os.environ['OMP_NUM_THREADS'] = str(n_threads)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -29,11 +30,18 @@ def main():
         gt = json.load(f)
     images = [p['page_info']['image_path'] for p in gt]
 
+    kw = dict(use_doc_orientation_classify=False, use_doc_unwarping=False)
+    if config == 'mobile':
+        # Lightweight variants: mobile OCR det/rec + small layout.
+        kw.update(
+            text_detection_model_name='PP-OCRv5_mobile_det',
+            text_recognition_model_name='PP-OCRv5_mobile_rec',
+            layout_detection_model_name='PP-DocLayout-S',
+        )
+
     m = MetricsTracker(); m.start_sampler()
     t = m.mark_load_start()
-    # CPU-friendly config: keep the full pipeline (layout+ocr+table+formula),
-    # disable doc-unwarping/orientation (adds latency, our pages are upright).
-    pipe = PPStructureV3(use_doc_orientation_classify=False, use_doc_unwarping=False)
+    pipe = PPStructureV3(**kw)
     m.mark_load_end(t)
     print(f"[ppstructure] loaded in {m.load_time_s:.1f}s, cold RSS {m.cold_rss_mb:.0f}MB")
 
@@ -70,7 +78,7 @@ def main():
             print(f"  {i+1}/{len(images)} done, peak RSS {m.peak_rss_mb:.0f}MB")
 
     m.stop_sampler()
-    m.save(os.path.join(out_dir, '_metrics.json'), 'PP-StructureV3', ok)
+    m.save(os.path.join(out_dir, '_metrics.json'), f'PP-StructureV3-{config}', ok)
 
 if __name__ == '__main__':
     main()
