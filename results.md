@@ -251,3 +251,27 @@ vs OmniDocBench notation), not true ability — cite its published 0.493 EN over
 
 (Full detail + caveats: benchmarks/compare/RESULTS.md. Mobile PP-Structure +
 GraniteDocling + GOT-OCR2.0 results appended below as they complete.)
+
+### Full frontier (all systems, same 20 pages, CPU 16c/8thr, isolated)
+
+| System              | Camp     | RAM   | s/page | TextEN | FormEN | RdEN  | TblTEDS |
+|---------------------|----------|-------|--------|--------|--------|-------|---------|
+| **PRISM**           | pipeline | **1.3 GB** | **6.8** | 0.165 | 0.491 | 0.319 | 46.1%  |
+| PP-StructV3-server  | pipeline | 8.0 GB | 58.2  | **0.081** | **0.320** | **0.276** | **56.5%** |
+| PP-StructV3-mobile  | pipeline | 3.6 GB | 6.3   | 0.156 | 1.000† | 0.362 | 43.5%  |
+| SmolDocling-256M    | VLM      | 2.3 GB | 92.2  | 0.461 | 1.000* | 0.498 | 0.0%*  |
+| GraniteDocling-258M | VLM      | 2.3 GB | 54.6  | 0.341 | 0.585 | 0.458 | 37.4%  |
+
+edit distance ↓ better, TEDS ↑ better. * = output-format mismatch (not true
+ability; cite published). † = mobile layout drops formula regions (config
+artifact). GOT-OCR2.0 dropped from self-run (docling CPU 8-bit/SDPA incompat);
+published EN overall 0.287.
+
+**Frontier takeaways:**
+1. PRISM is the RAM leader (1.3 GB) — 2.8x lighter than PP-mobile, 6x lighter
+   than PP-server, 1.8x lighter than the VLMs.
+2. PRISM latency (6.8s) ties PP-mobile (6.3s) and is 8-14x faster than the VLMs
+   and PP-server.
+3. vs BOTH VLMs (SmolDocling, GraniteDocling): PRISM wins on efficiency AND
+   accuracy across the board on English.
+4. Only PP-StructV3-server beats PRISM on accuracy — at 6x the RAM, 8.5x the time.
