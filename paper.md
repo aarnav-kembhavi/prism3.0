@@ -230,6 +230,21 @@
     with dim=0 (16-cell grid too coarse at the extreme edge); tilted
     calibration-chart photos on dark backgrounds still not rectified
     (quad validation rejects them; low priority for document workloads).
+- **Recognition-verified normalization + the invariance finding
+  (2026-07-05)** — `normalization/verified.py`: every camera-branch
+  correction is a proposal gated by a DBNet probe (PP-OCRv6 det @640px,
+  ~120ms; accept only on ≥2% confident-text-surface gain). Synthetic-defect
+  study (40 pages EN/ZH, GT block boxes valid, three protocols):
+  **PP-OCRv6 is nearly invariant to photometric defects** — a 0.18×
+  corner shadow + noise costs only +0.004 block edit; open-loop correction
+  taxes EVERY condition including clean (0.177→0.184); verified gating
+  tracks the no-correction baseline at page level (0.600 vs open 0.603
+  clean; 0.604 vs 0.608 glare). Conclusion adopted in the paper:
+  photometric normalization = verification-gated RESCUE (real defect set:
+  8 routing rescues, stroke-erasure rejections, receipts readable), not a
+  default enhancement. Three experiment iterations logged: block-level
+  mild (no signal), block-level harsh + strict accept (invariance
+  finding), page-level (verified≈none<open).
 
 ## OCR / language routing
 

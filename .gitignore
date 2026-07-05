@@ -41,3 +41,12 @@ benchmarks/compare/formula_eval/crops/
 benchmarks/compare/formula_eval/preds_*/
 benchmarks/compare/mineru_*/
 benchmarks/compare/preds_*/
+
+# LaTeX build artifacts
+paper/main.aux
+paper/main.bbl
+paper/main.blg
+paper/main.brf
+paper/main.log
+paper/main.out
+paper/main.pdf
