@@ -211,11 +211,34 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
                 print(f"  [norm] Pre-capped to {img.shape[1]}x{img.shape[0]} "
                       f"(shorter side 1800px)")
 
+            # Recognition-verified mode (product default): every correction
+            # below is a PROPOSAL, accepted only if the text-detection probe
+            # does not get worse (normalization/verified.py). Open-loop mode
+            # (PRISM_NORM_VERIFY=0, or probe model absent) applies them
+            # unconditionally as before.
+            from normalization import verified as _nv
+            _verify = (_nv.available()
+                       and os.environ.get('PRISM_NORM_STRICT', '0') != '1')
+            _score = None
+            if _verify:
+                _score = _nv.probe_score(img)
+                print(f"  [norm] Verified mode: base probe score {_score:.4f}")
+
             print("  [norm] Step 1: White balance correction")
-            img = white_balance_gray_world(img)
+            if _verify:
+                img, _score, _ = _nv.verified_apply(
+                    'white_balance', white_balance_gray_world, img, _score)
+            else:
+                img = white_balance_gray_world(img)
 
             print("  [norm] Step 2: Geometric rectification")
-            img = detect_and_rectify(input_path, img_override=img)
+            if _verify:
+                img, _score, _ = _nv.verified_apply(
+                    'rectify',
+                    lambda im: detect_and_rectify(input_path, img_override=im),
+                    img, _score)
+            else:
+                img = detect_and_rectify(input_path, img_override=img)
 
             import gc as _gc; _gc.collect()
             fidelity_img = img.copy()
@@ -226,10 +249,16 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             # mush. On the pre-flattened image real glare is still a distinct
             # local highlight.
             print("  [norm] Step 3: Glare removal (inpainting)")
-            img = remove_glare(img)
+            if _verify:
+                img, _score, _ = _nv.verified_apply('glare', remove_glare, img, _score)
+            else:
+                img = remove_glare(img)
 
             print("  [norm] Step 4: Shadow removal")
-            img = remove_shadows(img)
+            if _verify:
+                img, _score, _ = _nv.verified_apply('shadow', remove_shadows, img, _score)
+            else:
+                img = remove_shadows(img)
 
             # Moiré is a SCREEN-photo artifact; on paper photos the strongest
             # high-frequency FFT spikes are the text-line periodicity itself,
@@ -237,7 +266,10 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             # samples: text visibly faded). Opt-in for screen captures only.
             if os.environ.get('PRISM_MOIRE', '0') != '0':
                 print("  [norm] Step 5: Moiré removal (FFT notch)")
-                img = remove_moire(img)
+                if _verify:
+                    img, _score, _ = _nv.verified_apply('moire', remove_moire, img, _score)
+                else:
+                    img = remove_moire(img)
             else:
                 print("  [norm] Step 5: Moiré removal skipped (paper photo; PRISM_MOIRE=1 to enable)")
 
@@ -249,7 +281,10 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             _std = float(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).std())
             if _std < 45.0:
                 print(f"  [norm] Step 6: Contrast normalization (CLAHE, std={_std:.0f})")
-                img = normalize_contrast(img)
+                if _verify:
+                    img, _score, _ = _nv.verified_apply('clahe', normalize_contrast, img, _score)
+                else:
+                    img = normalize_contrast(img)
             else:
                 print(f"  [norm] Step 6: CLAHE skipped (contrast already good, std={_std:.0f})")
 

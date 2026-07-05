@@ -276,11 +276,25 @@
 |---|---|---|---|---|---|---|
 | v9 (baseline of record) | 2026-07-01 | 70.37 | 0.1575 | 56.90 | 69.96 | 0.3234 |
 | v10 (FML_V2+TBL_V2+rescues) | 2026-07-04 | 78.46 | 0.1419 | 78.11 | 71.46 | 0.2864 |
-| **v13 (fml_v4 answer-key + XY-cut + marginalia + plain emphasis + norm overhaul)** | 2026-07-05 | **80.43** | 0.1358 | 83.46 | 71.40 | 0.2409 |
+| v13 (fml_v4 answer-key + XY-cut + marginalia + plain emphasis + norm overhaul) | 2026-07-05 | 80.43 | 0.1358 | 83.46 | 71.40 | 0.2409 |
+| **v14 (RapidTable + PP-OCRv6 + formula sanitizer)** | 2026-07-05 | **83.55** | **0.1203** | **83.84** | **78.83** | **0.2383** |
 
 v13 deltas vs v10: CDM +5.35 (answer-key rule recovered the 124-formula pages),
 RO −0.046 (XY-cut), text −0.006; TEDS flat (no table change in v13 — RapidTable
 and PP-OCRv6 land in v14).
+
+v14 deltas vs v13: TEDS +7.43 (RapidTable — exactly the subset prediction),
+text −0.0155 (PP-OCRv6), CDM +0.38 (sanitizer), RO −0.003. Perf IMPROVED:
+median 3.04 s/pg (was 4.71 in v10), peak RAM 2.61 GB (dual-worker benchmark
+config). Weights ~283 MB (PPDL 124 + OCRv6 31 + Texo 79 + SLANet-plus 7.4 +
+TATR-fallback 30; en-v4 rec no longer loaded). Leaderboard position: between
+POINTS-Reader-3B (83.37) and Nanonets-OCR-s-3B (83.61); MinerU-Pipeline 86.47
+remains ahead. v9→v14 = +13.2 Overall in five days.
+
+**v14 on the v1.5 cut: 85.73** (text 0.1080, CDM 86.33, TEDS 81.67, RO
+0.2305; directional — v1.6/1.7 matcher on the v1.5 subset): second among all
+pipelines there, 1.0 behind PP-StructureV3 (8 GB / 58 s-page on CPU), ahead
+of Nanonets-OCR-s 85.59, MinerU2-VLM 85.56, GPT-5.2 85.50.
 
 Marker 78.44 / MinerU-Pipeline 85.75 on the same set. PRISM: 245 MB weights,
 CPU-only, median 4.71 s/page, peak RAM 2.24 GB.

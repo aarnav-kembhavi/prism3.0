@@ -1,13 +1,14 @@
 # PRISM — Results vs. State of the Art
 
-All PRISM numbers are from the **v10 run** (2026-07-04): full official
+All PRISM numbers are from the **v14 run** (2026-07-05): full official
 OmniDocBench dataset, official evaluation harness (`opendatalab/OmniDocBench`
 main branch), CDM rendered with TeX Live 2026. Predictions:
-`preds/odb_full_v10`; eval artifacts: `omnidocbench_eval/result/odb_full_v10_*`.
+`preds/odb_full_v14`; eval artifacts: `omnidocbench_eval/result/odb_full_v14_*`.
 
 PRISM configuration: PP-DocLayout_plus-L (sole layout detector) + RapidOCR
-PP-OCRv4 (EN/CJK) + Texo-distill 20M (formulas) + TATR INT8 (tables), CPU-only,
-~245 MB total weights. `Overall = ((1−TextEdit)·100 + CDM·100 + TEDS·100)/3`.
+PP-OCRv6-small (unified EN/CJK) + Texo-distill 20M (formulas) + SLANet-plus
+(tables; TATR INT8 fallback), CPU-only, ~283 MB total weights.
+`Overall = ((1−TextEdit)·100 + CDM·100 + TEDS·100)/3`.
 
 ---
 
@@ -46,19 +47,20 @@ by us on the identical dataset + harness + metric definitions.
 | Mistral OCR | Specialized VLM | 85.66 | 0.097 | 89.91 | 76.78 | 0.171 |
 | Kimi K2.5 | General VLM | 84.53 | 0.107 | 83.50 | 80.76 | 0.211 |
 | InternVL3.5-241B | General VLM | 83.76 | 0.130 | 89.95 | 74.35 | 0.215 |
-| Nanonets-OCR-s | Specialized VLM | 83.61 | 0.108 | 81.46 | 80.18 | 0.213 |
-| POINTS-Reader | Specialized VLM | 83.37 | 0.096 | 85.72 | 73.98 | 0.198 |
-| **PRISM (ours)** | **Pipeline — CPU, 245 MB** | **78.46** | 0.142 | 78.11 | 71.46 | 0.286 |
+| Nanonets-OCR-s | Specialized VLM (3B) | 83.61 | 0.108 | 81.46 | 80.18 | 0.213 |
+| **PRISM (ours, v14)** | **Pipeline — CPU, 283 MB** | **83.55** | 0.120 | 83.84 | 78.83 | 0.238 |
+| POINTS-Reader | Specialized VLM (3B) | 83.37 | 0.096 | 85.72 | 73.98 | 0.198 |
+| PRISM v10 (for reference) | Pipeline — CPU, 245 MB | 78.46 | 0.142 | 78.11 | 71.46 | 0.286 |
 | **Marker** | **Pipeline** | **78.44** | 0.157 | 85.24 | 65.77 | 0.243 |
 
-- PRISM is, to our knowledge, the only entry that runs **CPU-only with <250 MB
+- PRISM is, to our knowledge, the only entry that runs **CPU-only with <300 MB
   of weights** — every VLM above it is 0.9–241B parameters on GPUs; the
   pipeline peers (MinerU-Pipeline, Marker) run multi-GB GPU model stacks.
-- PRISM beats Marker on Overall, Text, and Tables (+5.7 TEDS); Marker leads on
-  formulas (its OCR is a 650M math-aware VLM) and reading order.
-- PRISM by language — Text: EN 0.113 / ZH 0.148; CDM: EN **84.7** / ZH 61.4
-  (EN formula quality is at Marker/MinerU-pipeline level; ZH is bounded by the
-  20M recognizer's CJK-in-formula ability).
+- v14 sits **at parity with the 3B-parameter VLM class** (between
+  POINTS-Reader 83.37 and Nanonets-OCR-s 83.61) and +5.1 over Marker.
+- PRISM v14 by language — Text: EN 0.101 / ZH 0.127 / trad-ZH 0.302;
+  TEDS: ZH 82.5 / EN 71.6 (EN tables are dominated by dense newspaper stats
+  layouts). Remaining CDM gap is CJK-embedded math (Texo capacity limit).
 
 ## 2. OmniDocBench v1.5 (1355 pages)
 
@@ -83,6 +85,7 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 | Qwen2.5-VL-72B | General VLM | 87.02 | 0.094 | 88.27 | 82.15 | 0.102 |
 | MonkeyOCR-pro-1.2B | VLM 1.9B | 86.96 | 0.084 | 85.02 | 84.24 | 0.130 |
 | **PP-StructureV3** | **Pipeline** | **86.73** | 0.073 | 85.79 | 81.68 | 0.073 |
+| **PRISM (ours, v14)†** | **Pipeline — CPU, 283 MB** | **85.73** | 0.108 | 86.33 | 81.67 | 0.231 |
 | Nanonets-OCR-s | VLM 3B | 85.59 | 0.093 | 85.90 | 80.14 | 0.108 |
 | MinerU2-VLM | VLM 0.9B | 85.56 | 0.078 | 80.95 | 83.54 | 0.086 |
 | GPT-5.2 | General VLM | 85.50 | 0.123 | 86.11 | 82.66 | 0.099 |
@@ -91,7 +94,7 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 | olmOCR-7B | VLM 7B | 81.79 | 0.096 | 86.04 | 68.92 | 0.121 |
 | POINTS-Reader | VLM 3B | 80.98 | 0.134 | 79.20 | 77.13 | 0.145 |
 | InternVL3-76B | General VLM | 80.33 | 0.131 | 83.42 | 70.64 | 0.113 |
-| **PRISM (ours)†** | **Pipeline — CPU, 245 MB** | **80.23** | 0.127 | ~79 | 72.35* | 0.29 |
+| PRISM v10 (reference)† | Pipeline — CPU, 245 MB | 80.23 | 0.127 | ~79 | 72.35 | 0.29 |
 | Mistral OCR | VLM | 78.83 | 0.164 | 82.84 | 70.03 | 0.144 |
 | **Mineru2-pipeline** | **Pipeline** | **75.51** | 0.209 | 76.55 | 70.90 | 0.225 |
 | GPT-4o | General VLM | 75.02 | 0.217 | 79.70 | 67.07 | 0.148 |
@@ -99,11 +102,13 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 | Dolphin | VLM 0.3B | 74.67 | 0.125 | 67.85 | 68.70 | 0.124 |
 | **Marker-1.8.2** | **Pipeline** | **71.30** | 0.206 | 76.66 | 57.88 | 0.250 |
 
-† PRISM v1.5 row = v1.5-subset cut of the v10 run, v1.6/1.7 matcher.
-\* TEDS from the v9 subset cut; v10 subset TEDS is slightly higher.
+† PRISM v1.5 rows = v1.5-subset cut of the v14/v10 runs scored with the
+v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly) —
+directional, not a leaderboard submission.
 
-On this snapshot PRISM lands between olmOCR-7B and GPT-4o, ahead of the
-Mineru2-pipeline and Marker versions scored there.
+On this snapshot PRISM v14 lands **second among all pipelines** (1.0 behind
+PP-StructureV3, which needs 8 GB and 58 s/page on CPU — see §5) and ahead of
+Nanonets-OCR-s, MinerU2-VLM and GPT-5.2.
 
 ## 3. Systems with no current official OmniDocBench score
 
@@ -119,15 +124,14 @@ numbers are from **older, non-comparable** versions (different matcher/pages):
 | GOT-OCR 2.0 | EN overall 0.287 | v1.0 | 580M, GPU |
 | PP-StructureV3 | Overall 86.73 | official v1.5 (see §2) | never re-scored on v1.6 |
 
-## 4. Efficiency — measured on the v10 full run (1651 pages)
+## 4. Efficiency — measured on the v14 full run (1651 pages)
 
-| Metric | PRISM v10 |
+| Metric | PRISM v14 |
 |---|---|
-| Wall time (1651 pages) | 2.58 h |
-| Latency median / mean / p90 | **4.71 s / 5.62 s / 10.6 s per page** |
-| Peak RAM, process tree (benchmark: dual OCR+math workers) | 2.24 GB |
-| Peak RAM (product config, single workers) | ~1.3 GB |
-| Total inference weights | **~245 MB** |
+| Wall time (1651 pages) | 1.67 h |
+| Latency median / mean / p90 | **3.04 s / 3.63 s / 6.39 s per page** |
+| Peak RAM, process tree (benchmark: dual OCR+math workers) | 2.61 GB |
+| Total inference weights | **~283 MB** |
 | Runtime | CPU-only (16 logical cores, Windows 11), onnxruntime; no torch in-process |
 
 Model size breakdown:
@@ -135,10 +139,12 @@ Model size breakdown:
 | Component | Model | Format | Size |
 |---|---|---|---|
 | Layout detection | PP-DocLayout_plus-L (RT-DETR, 800px) | ONNX FP32 | 124 MB |
-| Text OCR | RapidOCR PP-OCRv4 det + rec (EN & CJK) | ONNX | ~11 MB |
+| Text OCR | RapidOCR PP-OCRv6-small det + rec (unified EN/CJK) | ONNX | 31 MB |
 | Formula recognition | Texo-distill 20M (encoder + merged decoder) | ONNX FP32 | 79 MB |
-| Table structure | TATR structure-recognition v1.1-all | ONNX INT8 | 30 MB |
-| **Total** | | | **~245 MB** |
+| Table structure | SLANet-plus (RapidTable) | ONNX | 7.4 MB |
+| Table structure fallback | TATR structure-recognition v1.1-all | ONNX INT8 | 30 MB |
+| Angle cls + dicts | ch_ppocr_mobile cls etc. | ONNX | ~1 MB |
+| **Total** | | | **~283 MB** |
 
 For scale: Marker's OCR alone (Surya) is a ~650M-param VLM; MinerU-Pipeline
 ships a multi-model GPU stack; the leaderboard VLMs are 0.9B–241B.
@@ -171,6 +177,15 @@ and 8.5× the latency.
 | run | date | Overall | TextEdit↓ | CDM↑ | TEDS↑ | ReadOrd↓ | median s/pg |
 |---|---|---|---|---|---|---|---|
 | v9 | 2026-07-01 | 70.37 | 0.1575 | 56.90 | 69.96 | 0.3234 | 4.54 |
-| **v10** | 2026-07-04 | **78.46** | **0.1419** | **78.11** | **71.46** | **0.2864** | 4.71 |
+| v10 | 2026-07-04 | 78.46 | 0.1419 | 78.11 | 71.46 | 0.2864 | 4.71 |
+| v13 | 2026-07-05 | 80.43 | 0.1358 | 83.46 | 71.40 | 0.2409 | 5.21* |
+| **v14** | 2026-07-05 | **83.55** | **0.1203** | **83.84** | **78.83** | **0.2383** | **3.04** |
 
-The +8.1 came entirely from code fixes (no new models): see `paper.md`.
+\* v13 ran under CPU contention from concurrent experiments.
+
+v9→v10 (+8.1) was pure code fixes; v10→v13 (+2.0) answer-key formula rule +
+XY-cut reading order; v13→v14 (+3.1) RapidTable/SLANet-plus tables (TEDS
++7.4), PP-OCRv6 text (−0.0155 edit), formula LaTeX sanitizer. Full history
+and negative results: `paper.md`. Weights v14: PPDL 124 + OCRv6 31 + Texo 79
++ SLANet-plus 7.4 + TATR-fallback 30 ≈ **283 MB**; v14 is also the FASTEST
+run to date (PP-OCRv6 rec is ~2× quicker than v4).

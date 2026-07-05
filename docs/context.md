@@ -3,8 +3,12 @@
 > The single reference for what PRISM is, how every component works, why each
 > decision was made, and what was measured. Companion docs: `paper.md` (log of
 > every abandoned approach), `docs/paperresults.md` (results vs. SOTA).
-> Current state: **OmniDocBench v1.6 Overall 78.46** (beats Marker) at 245 MB
-> weights, CPU-only, 4.7 s/page median. Last updated 2026-07-04.
+> Current state: **OmniDocBench v1.6 Overall 83.55** (v14 — parity with the
+> 3B-VLM class: POINTS-Reader 83.37 < PRISM < Nanonets-OCR-s 83.61; v1.5-cut
+> 85.73, 2nd pipeline behind PP-StructureV3) at ~283 MB weights, CPU-only,
+> **3.0 s/page median**, 2.6 GB peak. Last updated 2026-07-05 (v14: RapidTable
+> primary tables, PP-OCRv6 text, formula sanitizer, recognition-verified
+> normalization for camera captures).
 
 ## 1. What it is
 
@@ -17,7 +21,7 @@ reading order — in English and Chinese.
 **Design thesis:** own the *efficiency corner* of the document-parsing
 frontier. Every competitor above PRISM on the leaderboard runs 0.9B–241B-param
 VLMs or multi-GB GPU pipelines; PRISM runs specialist models totalling
-**~245 MB on CPU**, ~4.7 s/page, ≤2.2 GB RAM. Every design decision trades a
+**~283 MB on CPU**, ~3.0 s/page, ≤2.6 GB RAM. Every design decision trades a
 little accuracy ceiling for a lot of footprint.
 
 **Platform:** Windows 11 tested, Python 3.12, onnxruntime CPU; no torch in any
@@ -66,6 +70,20 @@ on digital pages wins on EVERY metric (+11.6pp formula EN alone) — the
 corrections destroy clean renders. An earlier moiré/glare-metric gate fired on
 ~100% of pages (white paper trips the same statistics); the white-fraction
 test achieved 100% defect recall at ~10% FP on a labeled sweep.
+
+**Recognition-verified mode (2026-07-05, product default)**: pixel statistics
+cannot separate lighting defects from page design (PPT gradients out-score
+real shadows on every metric tried), so in product mode each camera-branch
+correction is a PROPOSAL gated by a DBNet probe (`normalization/verified.py`,
+PP-OCRv6 det at 640px, ~120 ms): kept only if the confident-text-surface
+score improves ≥2%. Corrections are guilty until proven innocent — clean
+pages reject everything by construction. A `_paper_shadow_dim` reroute also
+rescues shadowed captures that the white-frac shortcut mislabels clean
+(dim>0.05 of local paper white). The benchmark runner pins
+`PRISM_NORM_STRICT=1` = the exact open-loop routing above (verified on the
+169-page benchmark shortcut population — byte-identical). Shadow removal now
+divides by a TEXT-FREE background (morph-close + median, gain cap 3×) and
+glare inpainting keeps only compact blobs ≤1.5% of page each.
 
 **Fidelity image:** a copy taken before the destructive steps; all Picture and
 formula crops are cut from it so recognizers see original pixels.
@@ -147,12 +165,15 @@ All heavy inference runs in persistent subprocess workers
 (`multiprocessing.Pipe`, spawn), started in a background thread that overlaps
 model load with normalization+detection. Benchmark uses dual OCR/math workers.
 
-- **Text** (`text_worker.py`): RapidOCR PP-OCRv4, EN + CJK engines. Language
-  routing: benchmark uses GT hints (standard for pipeline systems; includes
-  simplified AND traditional Chinese → CJK engine); product probes 4 crops
-  and counts CJK codepoints (EN / CJK / mixed = both engines, best output).
-  Crop prep: screenshots → Sauvola only when background non-white; photos →
-  autocontrast → unsharp → adaptive/Sauvola binarization; quiet-zone padding.
+- **Text** (`text_worker.py`): RapidOCR with **PP-OCRv6-small det+rec**
+  (unified EN/CJK charset read from ONNX metadata; `PRISM_OCR_V6=0` restores
+  the old v4 stack). Block-level A/B vs the pipeline's v4 config: EN
+  0.101→0.059, ZH 0.101→0.086, mixed 0.190→0.155, handwriting 0.200→0.132,
+  ~2× faster rec. The EN/CJK engine split and the dedicated en-v4 rec are
+  gone (one model pair serves both; language routing preserved for engine
+  params only). Crop prep unchanged: screenshots → Sauvola only when
+  background non-white; photos → autocontrast → unsharp → binarize;
+  quiet-zone padding.
 - **Math** (`math_worker_onnx.py`): Texo-distill (20M distilled
   UniMERNet/PP-FormulaNet-S family), ONNX encoder + merged decoder. Crop prep:
   Otsu binarize → ink-margin crop → 384 longest side → 384×384 pad. Decode:
@@ -160,17 +181,23 @@ model load with normalization+detection. Benchmark uses dual OCR/math workers.
   (tilde-spam, repeated-pattern, over-generation), row/col split retries on
   gate failure. Recognition measured NOT to be the formula bottleneck (ties
   PP-FormulaNet-S at 1/3 size on clean crops).
-- **Tables** (`tatr_worker_onnx.py` + `table_tokens` OCR task): TATR
-  structure-recognition v1.1-all, INT8 ONNX (30 MB). Flow: OCR tokens with
-  boxes → TATR rows/cols/**spanning cells** → tokens split at column
-  boundaries by character interpolation (line-level OCR tokens straddle
-  cells) → span cells snapped to the grid, covered cells pooled into the
-  anchor → LaTeX tabular with `\multicolumn`/`\multirow` (renders correctly
-  in the product PDF) → `tex_to_md` converts to HTML `colspan`/`rowspan`
-  with positional rowspan bookkeeping. Empty rows kept (GT has `<tr></tr>`).
-  Fallback: coordinate heuristic when TATR returns nothing.
+- **Tables** (`rtable_worker.py`/`rtable_child.py`, primary): **RapidTable
+  SLANet-plus** (7.4 MB) in a `.venv_rtable` stdio child process; predicts
+  structure AND reads cells in one pass over the crop with its own
+  PP-OCRv6-small OCR — no token-to-grid assignment. Emits final `<table>`
+  HTML which passes through `latex_builder`/`tex_to_md` under quarantine.
+  Chosen after per-table diagnosis: TATR shattered dense newspaper tables
+  (GT 15 rows → 53 predicted) and token assignment cost 10pp content-vs-
+  structure. Full-benchmark TEDS 71.4→**78.8**; catastrophic tables
+  −0.01→0.57 mean. `PRISM_RTABLE=0` kill-switch.
+- **Tables fallback** (`tatr_worker_onnx.py` + `table_tokens` OCR task):
+  TATR v1.1-all INT8 (30 MB) with spanning cells → `\multicolumn`/
+  `\multirow` → HTML colspan/rowspan; token splitting by character
+  interpolation. Used when RapidTable emits no cells; the coordinate
+  heuristic remains the last resort.
   (Decision trail: spans were being discarded while 39% of GT tables have
-  them — spanned-table TEDS 0.603→0.647 after the fix.)
+  them — spanned-table TEDS 0.603→0.647 after the fix. Table detection gate
+  0.30 rejected twice, incl. WITH RapidTable: 78.63 vs 78.83.)
 
 ### 2.6 Reading order & assembly (`layout_utils.py`, `page_core.py`)
 
@@ -228,13 +255,14 @@ All validated behavior is DEFAULT-ON. Env vars remain as kill-switches:
 
 ## 5. Known limits (ranked by Overall impact)
 
-1. **Formula ZH 61.4** — Texo (20M) can't render CJK-inside-formula; the fix
+1. **Formula ZH ~62** — Texo (20M) can't render CJK-inside-formula; the fix
    is a distilled/quantized PP-FormulaNet_plus-M-class recognizer (617 MB,
    1.3 s/formula on GPU as-is — a training project, not wiring).
-2. **Tables**: 40 GT tables never detected; newspaper tables (TEDS 52) are
-   dense/borderless — TATR capacity; cell content trails structure by 10pp
-   (OCR quality inside cells, CJK especially).
-3. **Reading order 0.286** vs MinerU 0.154 — theirs is a learned order model;
+2. **Tables (residual after RapidTable)**: 40 GT tables never detected (WSJ
+   agate stock listings invisible to PPDL at any conf/tiling); EN TEDS 71.6
+   vs ZH 82.5 — the EN gap IS the newspaper mode; 139/665 tables where TATR
+   beat SLANet-plus (no cheap selector found).
+3. **Reading order 0.238** vs MinerU 0.153 — theirs is a learned order model;
    XY-cut targets the newspaper mode; the residual is ZH pages and complex
    wraps (O-shaped 0.83).
 4. **Handwriting / historical documents** (~45 pages, text 0.6–0.99) —

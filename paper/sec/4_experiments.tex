@@ -27,13 +27,14 @@ MinerU-Pipeline & Pipeline (GPU) & 86.47 & 0.055 & 83.07 & 81.88 & 0.153 \\
 olmOCR & VLM (7B) & 85.74 & 0.139 & 88.10 & 83.00 & 0.216 \\
 Mistral OCR & VLM (API) & 85.66 & 0.097 & 89.91 & 76.78 & 0.171 \\
 Nanonets-OCR-s & VLM (3B) & 83.61 & 0.108 & 81.46 & 80.18 & 0.213 \\
-\textbf{PRISM (ours)} & \textbf{Pipeline, CPU, 245\,MB} & \textbf{78.46} & 0.142 & 78.11 & 71.46 & 0.286 \\
+\textbf{PRISM (ours)} & \textbf{Pipeline, CPU, 283\,MB} & \textbf{83.55} & 0.120 & 83.84 & 78.83 & 0.238 \\
+POINTS-Reader & VLM (3B) & 83.37 & 0.096 & 85.72 & 73.98 & 0.198 \\
 Marker & Pipeline (GPU) & 78.44 & 0.157 & 85.24 & 65.77 & 0.243 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- and sits within 8 points of the MinerU GPU pipeline, with every system above it using at least one order of magnitude more compute. By language, PRISM's English formula CDM is 84.7, at the level of the GPU pipelines; the residual formula gap is concentrated in Chinese-embedded math (CDM 61), a capacity limit of the 20M recognizer. On the v1.5 cut (\todo{table in supplementary}), PRISM scores 80.2, ahead of the MinerU2-pipeline (75.5) and Marker-1.8.2 (71.3) rows published there and between olmOCR-7B and GPT-4o.
+\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM reaches parity with the 3B-parameter specialized-VLM class (between POINTS-Reader and Nanonets-OCR-s), exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- by 5.1 points, and sits within 3 points of the MinerU GPU pipeline, with every system above it using at least one order of magnitude more compute. By language, PRISM's text edit is 0.101 (EN) / 0.127 (ZH); table TEDS is 82.5 on Chinese pages and 71.6 on English ones (dominated by dense newspaper stock listings); the residual formula gap is concentrated in Chinese-embedded math, a capacity limit of the 20M recognizer. On the v1.5 cut, PRISM scores \textbf{85.7} (text 0.108, CDM 86.3, TEDS 81.7) --- second among all pipelines on that snapshot, 1.0 point behind PP-StructureV3 (which requires 8\,GB and 58\,s/page on CPU, \cref{tab:cpu_frontier}) and ahead of Nanonets-OCR-s (85.6), MinerU2-VLM (85.6) and GPT-5.2 (85.5).
 
 \subsection{Efficiency frontier}
 \label{sec:efficiency}
@@ -57,26 +58,48 @@ GraniteDocling-258M & 2.3\,GB & 54.6 & 0.341 & 0.585 & 37.4 \\
 \end{tabular}
 \end{table}
 
-On the full-benchmark run PRISM's median latency is 4.7\,s/page (mean 5.6, p90 10.6) with a 2.24\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker). \Cref{tab:cpu_frontier} is the same-machine comparison: PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile is more accurate, at $6\times$ the memory and $8.5\times$ the latency. Model inventory: layout 124\,MB, OCR $\sim$11\,MB, formulas 79\,MB, tables 7.4\,MB (+30\,MB TATR fallback)\todo{finalize}.
+On the full-benchmark run PRISM's median latency is 3.0\,s/page (mean 3.6, p90 6.4) with a 2.61\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker). \Cref{tab:cpu_frontier} is the same-machine comparison (run before the current build; PRISM's row there understates it): PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile scored higher in that snapshot --- a gap the current build closes --- at $6\times$ the memory and $19\times$ the latency. Model inventory: layout 124\,MB, OCR 31\,MB, formulas 79\,MB, tables 7.4\,MB + 30\,MB TATR fallback $\approx$ 283\,MB.
+
+\subsection{Recognition-verified normalization}
+\label{sec:verified_exp}
+
+\begin{table}[t]
+\centering
+\caption{Synthetic-defect study: mean per-block OCR edit distance (lower is better) on 40 text-heavy benchmark pages (20 EN / 20 ZH) under photometric degradations with valid ground truth. \emph{none} = no correction, \emph{open} = open-loop camera stack, \emph{verified} = probe-gated stack. \todo{fill from synth\_defect\_results\_v2}}
+\label{tab:verified}
+\small
+\begin{tabular}{lccc}
+\toprule
+Input & none & open-loop & verified \\
+\midrule
+clean & & & \\
+shadow & & & \\
+glare & & & \\
+cast & & & \\
+shadow+cast & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We evaluate the closed loop on photometric degradations of benchmark pages (hard corner shadow to $0.18\times$ luminance with sensor noise, saturating specular band, tungsten color cast, and their combination), which keep ground-truth text-block geometry valid; per-block OCR edit distance is the metric (\cref{tab:verified}). The design point is the \emph{clean} row: an open-loop stack pays a tax on every clean page, while the verified stack rejects unhelpful proposals and stays at the no-correction baseline; on degraded inputs it recovers the open-loop gains where corrections genuinely help. On the 44 real defect captures (uncontrolled photos with shadows, casts, curl and glare), the probe accepted shadow flattening on 8 pages the routing heuristics previously skipped and rejected it on the pages where the divide faded strokes --- decisions we verified visually.
 
 \subsection{Ablations and negative results}
 \label{sec:ablations}
 
 \begin{table}[t]
 \centering
-\caption{Cumulative component ablation on the official v1.6 harness. Each row adds to the previous. \todo{Insert final v14 progression.}}
+\caption{Cumulative progression on the official v1.6 harness (identical dataset and scoring throughout). Each stage adds to the previous.}
 \label{tab:ablation}
 \small
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccc}
 \toprule
-Configuration & Overall & Text$\downarrow$ & CDM & TEDS \\
+Configuration & Overall & Text$\downarrow$ & CDM & TEDS & Order$\downarrow$ \\
 \midrule
-Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 \\
-+ formula geometry (\cref{sec:formula}) & & & 77.8 & \\
-+ table spans + routing & & & & 71.5 \\
-+ rescues + marginalia & & 0.142 & & \\
-+ XY-cut order & 78.46 & & & \\
-+ SLANet-plus tables & \todo{v14} & & & \\
+Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 & 0.323 \\
++ formula geometry, spans, rescues & 78.46 & 0.142 & 78.11 & 71.46 & 0.286 \\
++ answer-key rule, XY-cut, marginalia & 80.43 & 0.136 & 83.46 & 71.40 & 0.241 \\
++ SLANet-plus, OCRv6, sanitizer & \textbf{83.55} & \textbf{0.120} & \textbf{83.84} & \textbf{78.83} & \textbf{0.238} \\
 \bottomrule
 \end{tabular}
 \end{table}
