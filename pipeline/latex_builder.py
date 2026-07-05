@@ -199,9 +199,13 @@ LATEX_WRAPPERS = {
         else f"\n\\begin{{center}}\n{c}\n\\end{{center}}\n"
     ),
     "Table": lambda c: (
-        f"\n\\begin{{center}}\n"
-        f"\\resizebox{{\\columnwidth}}{{!}}{{\n{c}\n}}\n"
-        f"\\end{{center}}\n"
+        # RapidTable emits final HTML directly — pass it through untouched so
+        # tex_to_md's tabular conversion never sees it.
+        f"\n{c}\n"
+        if c.lstrip().startswith("<table")
+        else f"\n\\begin{{center}}\n"
+             f"\\resizebox{{\\columnwidth}}{{!}}{{\n{c}\n}}\n"
+             f"\\end{{center}}\n"
     ),
     "Picture": lambda c: (
         f"\n\\begin{{center}}\n"

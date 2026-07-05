@@ -111,15 +111,9 @@ _rapid_ocr       = None
 _texo_model      = None
 _texo_tokenizer  = None
 _texo_processor  = None
-_got_model       = None
-_got_tokenizer   = None
 _table_solver    = None
-_yolo_model      = None
-_yolo_model_path = None
 # Texo runs on CPU — avoids a 400-500 MB CUDA context for a 76 MB model.
-# GOT-OCR2 still uses the GPU when available (it's 1.4 GB; CPU would be impractical).
 _texo_device = None  # set on first Texo load (always CPU)
-_got_device  = None  # set on first GOT load (GPU if available)
 
 
 def _get_rapidocr():
@@ -132,14 +126,20 @@ def _get_rapidocr():
             det_limit_side_len=1280,
         )
 
-        # Use English PP-OCRv4 rec model if available — smaller char set,
-        # better accuracy on English-only academic text than the default
-        # Chinese-dominant model.
-        # en_dict.txt (190 bytes) is shipped locally to avoid `import paddleocr`
-        # which costs ~211 MB of RAM just to resolve the file path.
+        # PP-OCRv6-small det+rec if shipped (unified EN/CJK charset from ONNX
+        # metadata; block-level A/B: EN 0.128->0.059, notes 0.200->0.132).
+        # Falls back to the English PP-OCRv4 rec (smaller char set) else the
+        # default Chinese-dominant v4 stack. PRISM_OCR_V6=0 restores v4.
+        v6_det = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx')
+        v6_rec = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx')
         en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
         en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
-        if os.path.exists(en_rec) and os.path.exists(en_dict):
+        if (os.environ.get('PRISM_OCR_V6', '1') != '0'
+                and os.path.exists(v6_det) and os.path.exists(v6_rec)):
+            kwargs['det_model_path'] = v6_det
+            kwargs['rec_model_path'] = v6_rec
+            print('[*] RapidOCR: using PP-OCRv6-small det+rec')
+        elif os.path.exists(en_rec) and os.path.exists(en_dict):
             kwargs['rec_model_path'] = en_rec
             kwargs['rec_keys_path']  = en_dict
             print('[*] RapidOCR: using English PP-OCRv4 rec model (local dict)')
@@ -190,83 +190,28 @@ def _get_texo():
     return _texo_model, _texo_tokenizer, _texo_processor
 
 
-def get_yolo_model(model_path: str):
-    global _yolo_model, _yolo_model_path
-    if _yolo_model is None or _yolo_model_path != model_path:
-        from ultralytics import YOLO
-        print(f"[*] Loading YOLO model: {model_path}")
-        try:
-            _yolo_model = YOLO(model_path, task='detect')
-        except Exception as e:
-            print(f"[!] Falling back to .pt: {e}")
-            _yolo_model = YOLO("yolov11n-doclaynet.pt")
-        _yolo_model_path = model_path
-    return _yolo_model
+# PP-DocLayout_plus-L (RT-DETR) — single detector replacing YOLOv11n+DocLayout.
+# Validated to beat the two-detector combo on every OmniDocBench category while
+# netting only +42 MB. Torch/paddle-free (raw onnxruntime, ONNX exported once).
+_ppdoclayout_detector = None
+_PPDOCLAYOUT_MODEL_PATH = os.path.join(ROOT_DIR, 'models', 'ppdoclayout', 'ppdoclayout_plus_l.onnx')
 
 
-def unload_yolo():
-    global _yolo_model, _yolo_model_path
-    if _yolo_model is not None:
-        del _yolo_model
-        _yolo_model      = None
-        _yolo_model_path = None
-        import gc as _gc; _gc.collect()
-        print("[*] YOLO unloaded")
-
-
-# ── Raw onnxruntime detectors (no ultralytics / no torch in main process) ──────
-_yolo_detector      = None
-_yolo_detector_path = None
-_doclayout_detector = None
-
-
-def get_yolo_detector(model_path: str, imgsz: int = 640):
-    """Torch-free layout detector. Returns a YoloOnnxDetector singleton."""
-    global _yolo_detector, _yolo_detector_path
-    if _yolo_detector is None or _yolo_detector_path != model_path:
-        from pipeline.yolo_onnx import YoloOnnxDetector
-        print(f"[*] Loading YOLO detector (raw ONNX): {model_path}")
-        _yolo_detector = YoloOnnxDetector(model_path, imgsz=imgsz)
-        _yolo_detector_path = model_path
-    return _yolo_detector
-
-
-def get_doclayout_detector(model_path: str, imgsz: int = 1024):
-    """Torch-free DocLayout (YOLOv10) detector singleton."""
-    global _doclayout_detector
-    if _doclayout_detector is None:
-        from pipeline.yolo_onnx import YoloOnnxDetector
-        print(f"[*] Loading DocLayout detector (raw ONNX): {model_path}")
-        _doclayout_detector = YoloOnnxDetector(model_path, imgsz=imgsz)
-    return _doclayout_detector
-
-
-# Dedicated Math Formula Detection (MFD) — yolo_v8_ft, classes {0:embedding,
-# 1:isolated}. Run at imgsz=1280: dense-math pages lose small formulas at 640,
-# and this lifts display-formula recall from ~29% (general layout detectors) to
-# ~78%. This was the entire formula bottleneck — recognition (Texo) is fine.
-_mfd_detector = None
-_MFD_MODEL_PATH = os.path.join(ROOT_DIR, 'models', 'MFD', 'YOLO', 'yolo_v8_ft_640_dyn.onnx')
-
-
-def get_mfd_detector(imgsz: int = 1280):
-    """Torch-free math-formula detector singleton (None if model absent)."""
-    global _mfd_detector
-    if _mfd_detector is None:
-        if not os.path.exists(_MFD_MODEL_PATH):
+def get_ppdoclayout_detector(imgsz: int = 800):
+    """Torch-free PP-DocLayout_plus-L detector singleton (None if model absent)."""
+    global _ppdoclayout_detector
+    if _ppdoclayout_detector is None:
+        if not os.path.exists(_PPDOCLAYOUT_MODEL_PATH):
             return None
-        from pipeline.yolo_onnx import YoloOnnxDetector
-        print(f"[*] Loading MFD formula detector (raw ONNX @ {imgsz}px)")
-        _mfd_detector = YoloOnnxDetector(_MFD_MODEL_PATH, imgsz=imgsz)
-    return _mfd_detector
+        from pipeline.ppdoclayout_onnx import PPDocLayoutOnnxDetector
+        print(f"[*] Loading PP-DocLayout_plus-L detector (raw ONNX @ {imgsz}px)")
+        _ppdoclayout_detector = PPDocLayoutOnnxDetector(_PPDOCLAYOUT_MODEL_PATH, imgsz=imgsz)
+    return _ppdoclayout_detector
 
 
-def unload_yolo_detector():
-    global _yolo_detector, _yolo_detector_path, _doclayout_detector, _mfd_detector
-    _yolo_detector = None
-    _yolo_detector_path = None
-    _doclayout_detector = None
-    _mfd_detector = None
+def unload_layout_detector():
+    global _ppdoclayout_detector
+    _ppdoclayout_detector = None
     import gc as _gc; _gc.collect()
 
 
@@ -280,54 +225,6 @@ def unload_texo():
         import gc as _gc
         _gc.collect()
         print("[*] Texo unloaded")
-
-
-def _get_got():
-    global _got_model, _got_tokenizer, _got_device
-    if _got_model is None:
-        import torch
-        _ensure_torch_dlls()
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        _got_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        GOT_PATH = os.path.join(ROOT_DIR, 'GOT-OCR2')
-        print(f"[*] Loading GOT-OCR2 from {GOT_PATH} ...")
-        _got_tokenizer = AutoTokenizer.from_pretrained(
-            GOT_PATH, trust_remote_code=True
-        )
-        _got_model = AutoModelForCausalLM.from_pretrained(
-            GOT_PATH,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=True,
-        )
-        _got_model = _got_model.to(_got_device).eval()
-        print(f"[*] GOT-OCR2 loaded on {_got_device}")
-    return _got_model, _got_tokenizer
-
-
-def unload_got():
-    global _got_model, _got_tokenizer
-    if _got_model is not None:
-        import torch
-        del _got_model, _got_tokenizer
-        _got_model     = None
-        _got_tokenizer = None
-        import gc as _gc
-        _gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        print("[*] GOT-OCR2 unloaded")
-
-
-def run_page_got(image_path: str) -> str:
-    """Run GOT-OCR2 on a full-page image; returns raw LaTeX string."""
-    model, tokenizer = _get_got()
-    try:
-        result = model.chat(tokenizer, image_path, ocr_type='format')
-    except Exception as e:
-        print(f"[!] GOT-OCR2 failed: {e}")
-        result = ""
-    return result or ""
 
 
 def _table_heuristic(tokens: list, img_w: int) -> str:
@@ -766,61 +663,6 @@ def _preprocess_formula_crop(crop: Image.Image) -> Image.Image:
     return Image.fromarray(binary).convert("RGB")
 
 
-_GOT_MATH_DELIMS = ("$$", "$", r"\[", r"\]", r"\(", r"\)")
-_GOT_EQ_NUM_RE   = re.compile(r'^\s*\(\d+\)\s*$', re.MULTILINE)
-_GOT_ENV_RE      = re.compile(
-    r'\\begin\{(equation|align|gather|multline)[*]?\}(.*?)\\end\{\1[*]?\}',
-    re.DOTALL,
-)
-
-
-def _clean_got_math(text: str) -> str:
-    """Extract clean LaTeX from GOT-OCR2 format output for a formula crop.
-
-    GOT in format mode wraps equations in \\begin{equation}...\\end{equation}
-    and may include equation numbers (1), (2) from the surrounding crop region.
-    We extract just the math content.
-    """
-    text = text.strip()
-
-    # 1. Extract from named environments (equation / align / gather / multline)
-    env_match = _GOT_ENV_RE.search(text)
-    if env_match:
-        text = env_match.group(2).strip()
-
-    # 2. Extract from \[ ... \] display math
-    if text.startswith(r'\[') and r'\]' in text:
-        text = text[2:text.rfind(r'\]')].strip()
-
-    # 3. Extract from $$ ... $$
-    if text.startswith('$$') and text.count('$$') >= 2:
-        text = text[2:text.rfind('$$')].strip()
-
-    # 4. Remove bare equation-number lines like "  (1)  " that GOT adds
-    text = _GOT_EQ_NUM_RE.sub('', text).strip()
-
-    # 5. If output is multi-line and starts with pure-text lines, drop them
-    # (GOT sometimes prepends surrounding caption text before the math)
-    lines = [l for l in text.split('\n') if l.strip()]
-    math_lines = []
-    found_math = False
-    for line in lines:
-        has_math = any(c in line for c in ('\\', '_', '^', '{', '}', '='))
-        if has_math:
-            found_math = True
-        if found_math:
-            math_lines.append(line)
-    if math_lines:
-        text = '\n'.join(math_lines).strip()
-
-    # 6. Strip stray outer delimiters
-    for d in _GOT_MATH_DELIMS:
-        if text.startswith(d): text = text[len(d):]
-        if text.endswith(d):   text = text[:-len(d)]
-
-    return text.strip()
-
-
 def run_math_recognition_batched(
     crops: list[Image.Image],
     fallback_figures_dir: str = None,
@@ -920,27 +762,32 @@ def _tokens_from_ocr_result(result, img_w: int) -> list:
 
 
 def run_table_extraction(crop: Image.Image) -> str:
-    """Extract table structure using RapidOCR (already-warm) + coordinate heuristic."""
+    """Extract table structure: RapidTable child if available, else RapidOCR
+    tokens + coordinate heuristic. (The old pipeline.tatr_worker import was
+    dead after cleanup — TATR now lives in tatr_worker_onnx as a Workers
+    member, not reachable from here.)"""
     global table_latencies
     try:
         t_start = time.perf_counter()
-        engine  = _get_rapidocr()
-        img_np  = np.array(crop.convert("RGB"))
-        img_w   = img_np.shape[1]
-        result, _ = engine(img_np)
-        tokens = _tokens_from_ocr_result(result, img_w)
         latex = ""
-        if tokens:
-            try:
-                from pipeline.tatr_worker import build_table_html
-                latex = build_table_html(crop, tokens, img_w) or ""
-            except Exception:
-                pass
-            if not latex:
+        try:
+            from pipeline.page_core import _get_rtable
+            rtable = _get_rtable()
+            if rtable is not None:
+                latex = rtable.build_table_html(crop) or ""
+        except Exception:
+            latex = ""
+        if not latex:
+            engine  = _get_rapidocr()
+            img_np  = np.array(crop.convert("RGB"))
+            img_w   = img_np.shape[1]
+            result, _ = engine(img_np)
+            tokens = _tokens_from_ocr_result(result, img_w)
+            if tokens:
                 latex = _table_heuristic(tokens, img_w)
         latency_ms = (time.perf_counter() - t_start) * 1000
         table_latencies.append(latency_ms)
-        print(f"    [table] Table (RapidOCR): {latency_ms:.2f} ms")
+        print(f"    [table] Table: {latency_ms:.2f} ms")
         return latex
     except Exception as e:
         print(f"    [table] Table extraction failed: {e}")
@@ -957,6 +804,22 @@ def run_table_extraction_batched(crops: list[Image.Image]) -> list[str]:
     if not crops:
         return []
     try:
+        from pipeline.page_core import _get_rtable
+        rtable = _get_rtable()
+    except Exception:
+        rtable = None
+    if rtable is not None:
+        t_start = time.perf_counter()
+        results = [rtable.build_table_html(c) or "" for c in crops]
+        if all(results):
+            latency_ms = (time.perf_counter() - t_start) * 1000
+            table_latencies.append(latency_ms)
+            print(f"    [table] Table batch ({len(crops)} table(s), RapidTable): {latency_ms:.2f} ms")
+            return results
+        rtable_partial = results
+    else:
+        rtable_partial = [""] * len(crops)
+    try:
         t_start = time.perf_counter()
         engine = _get_rapidocr()
         nps = [np.array(c.convert("RGB")) for c in crops]
@@ -966,17 +829,13 @@ def run_table_extraction_batched(crops: list[Image.Image]) -> list[str]:
         print(f"    [table] Table batch ({len(crops)} table(s), RapidOCR): {latency_ms:.2f} ms")
 
         results = []
-        for np_img, crop, crop_result in zip(nps, crops, per_crop):
+        for np_img, crop, crop_result, pre in zip(nps, crops, per_crop, rtable_partial):
+            if pre:
+                results.append(pre)
+                continue
             img_w  = np_img.shape[1]
             tokens = _tokens_from_ocr_result(crop_result, img_w)
-            html   = None
-            if tokens:
-                try:
-                    from pipeline.tatr_worker import build_table_html
-                    html = build_table_html(crop, tokens, img_w)
-                except Exception:
-                    pass
-            results.append(html if html else (_table_heuristic(tokens, img_w) if tokens else ""))
+            results.append(_table_heuristic(tokens, img_w) if tokens else "")
         return results
     except Exception as e:
         print(f"    [table] Table batch failed ({e}), falling back to per-crop")

@@ -54,6 +54,14 @@ def _sanitize(text: str) -> str:
         return text
     for pat, rep in _ARROW_SUBS:
         text = pat.sub(rep, text)
+    # KaTeX-isms Texo emits that pdflatex cannot compile — a single bad macro
+    # scores the whole formula CDM 0 even when everything else is right.
+    text = re.sub(r'\\infin(?![a-zA-Z])', r'\\infty', text)
+    text = re.sub(r'\\(?:gt|lt)(?![a-zA-Z])',
+                  lambda m: '>' if m.group(0) == r'\gt' else '<', text)
+    # Display-math delimiters inside the content nest illegally once the
+    # pipeline wraps the formula in its own display environment.
+    text = text.replace(r'\[', ' ').replace(r'\]', ' ').replace('$$', ' ')
     text = _REPEAT_TILDE_RE.sub('~ ', text)
     text = _REPEAT_NEG_RE.sub(r'\\! ', text)
     text = _REPEAT_QQUAD_RE.sub(r'\\qquad ', text)

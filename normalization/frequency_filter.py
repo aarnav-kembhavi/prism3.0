@@ -71,7 +71,32 @@ def remove_glare(image_bgr, lightness_threshold=230, inpaint_radius=5):
         print(f"  [norm] No significant glare detected (<0.1%)")
         return image_bgr
 
-    print(f"  [norm] Glare detected: {glare_pct:.1f}% of image, inpainting...")
+    if glare_pct > 20.0:
+        # Real specular glare is a LOCAL highlight. A mask covering a large
+        # fraction of the frame means the detector latched onto bright paper
+        # itself — inpainting would erase the document (observed: 99.7% mask
+        # -> whole page inpainted to mush).
+        print(f"  [norm] Glare mask covers {glare_pct:.0f}% — bright paper, skipping inpaint")
+        return image_bgr
+
+    # Per-blob gate: true specular glare is a COMPACT highlight. On matte
+    # paper photos the L-threshold also catches ordinary bright paper patches;
+    # inpainting those smears ghost blotches through the text (observed on the
+    # hand-shadow defect samples). Keep only blobs each smaller than 1.5% of
+    # the page.
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(glare_mask, connectivity=8)
+    max_blob = 0.015 * total_pixels
+    kept = np.zeros_like(glare_mask)
+    kept_px = 0
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] <= max_blob:
+            kept[labels == i] = 255
+            kept_px += stats[i, cv2.CC_STAT_AREA]
+    if kept_px / total_pixels * 100 < 0.1:
+        print(f"  [norm] Glare blobs all page-scale bright paper — skipping inpaint")
+        return image_bgr
+    glare_mask = kept
+    print(f"  [norm] Glare detected: {kept_px / total_pixels * 100:.1f}% of image (compact blobs), inpainting...")
 
     # Inpaint: Telea method (fast marching) works well for document images
     result = cv2.inpaint(image_bgr, glare_mask, inpaint_radius, cv2.INPAINT_TELEA)
@@ -102,38 +127,42 @@ def normalize_contrast(image_bgr, clip_limit=2.0, tile_grid=(8, 8)):
 # Shadow removal — difference-of-Gaussians
 # ----------------------------------------------------------------
 
-def remove_shadows(image_bgr, blur_large=51, blur_small=5):
+def remove_shadows(image_bgr, blur_small=5, max_gain=3.0):
     """
-    Remove uneven shadows using difference-of-Gaussians (DoG).
+    Remove uneven shadows by dividing out a TEXT-FREE illumination estimate.
 
-    Idea: a heavily blurred version of the image captures the
-    low-frequency lighting pattern (shadows). Dividing the original
-    by this estimate normalizes the illumination.
+    The previous version divided by a plain 51px Gaussian blur. That
+    background estimate still contained the text ink, so in dense paragraphs
+    under a shadow the estimate was dark from BOTH the shadow and the ink —
+    the division then brightened text and paper alike and visibly erased
+    strokes (measured on the hand-shadow defect samples). The fix is the
+    classic document trick: morphologically CLOSE the image with a kernel
+    larger than a text stroke (removes dark ink, keeps the illumination
+    field), median-smooth the result, and divide by that.
 
-    This is very effective for phone photos with desk lamp shadows,
-    window light gradients, etc.
+    Camera-branch only; never runs on screenshots / clean digital pages.
     """
-    # Work in float to avoid overflow
     img_float = image_bgr.astype(np.float32)
+    h, w = image_bgr.shape[:2]
 
-    # Ensure kernel sizes are odd
-    blur_large = blur_large | 1
+    # Kernel must comfortably exceed stroke width; scale with resolution.
+    k = max(15, (min(h, w) // 50) | 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    bg_gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+    med = min(51, (k * 2) | 1)
+    bg_gray = cv2.medianBlur(bg_gray, med).astype(np.float32)
+
+    # Per-pixel gain from the gray illumination field, applied to all
+    # channels (preserves ink/paper color relationships). Cap the gain so
+    # deep shadow cores don't blow up sensor noise.
+    gain = 255.0 / (bg_gray + 1e-6)
+    gain = np.clip(gain, 1.0, max_gain)
+    normalized = img_float * gain[:, :, None]
+
     blur_small = blur_small | 1
-
-    # Heavy blur captures the illumination pattern
-    bg = cv2.GaussianBlur(img_float, (blur_large, blur_large), 0)
-
-    # Divide original by background illumination, rescale to [0, 255]
-    # Add small epsilon to avoid division by zero
-    normalized = (img_float / (bg + 1e-6)) * 128.0
-
-    # Light blur to smooth any artifacts
     normalized = cv2.GaussianBlur(normalized, (blur_small, blur_small), 0)
-
-    # Clip and convert back
-    result = np.clip(normalized, 0, 255).astype(np.uint8)
-
-    return result
+    return np.clip(normalized, 0, 255).astype(np.uint8)
 
 
 # ----------------------------------------------------------------
@@ -183,6 +212,13 @@ def remove_moire(image_bgr, notch_radius=30, threshold_percentile=97):
     """
     result = np.zeros_like(image_bgr, dtype=np.float32)
 
+    rows, cols = image_bgr.shape[:2]
+    crow, ccol = rows // 2, cols // 2
+    # Distance grid computed once (was rebuilt per channel)
+    Y, X = np.ogrid[:rows, :cols]
+    dist_from_center = np.sqrt((X - ccol) ** 2 + (Y - crow) ** 2)
+    mask_region = dist_from_center > notch_radius
+
     for ch in range(3):
         channel = image_bgr[:, :, ch].astype(np.float32)
 
@@ -190,15 +226,6 @@ def remove_moire(image_bgr, notch_radius=30, threshold_percentile=97):
         fshift = np.fft.fftshift(f)
         magnitude = np.abs(fshift)
 
-        rows, cols = channel.shape
-        crow, ccol = rows // 2, cols // 2
-
-        # Distance grid from DC center
-        Y, X = np.ogrid[:rows, :cols]
-        dist_from_center = np.sqrt((X - ccol)**2 + (Y - crow)**2)
-
-        # Only look at frequencies beyond the notch radius
-        mask_region = dist_from_center > notch_radius
         if not np.any(mask_region):
             result[:, :, ch] = channel
             continue

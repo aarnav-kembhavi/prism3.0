@@ -95,30 +95,89 @@ def _convert_array_blocks(text: str) -> str:
     return text
 
 
+def _clean_cell(c: str) -> str:
+    c = re.sub(r'\\[a-zA-Z]+\s*(\{[^}]*\})*', lambda m: m.group(0).split('{', 1)[-1].rstrip('}') if '{' in m.group(0) else '', c).strip()
+    return re.sub(r'[${}]', '', c).strip()
+
+
+def _parse_span_cell(cell: str):
+    """(colspan, rowspan, cleaned_content) for one LaTeX cell."""
+    colspan = rowspan = 1
+    cell = cell.strip()
+    m = re.match(r'^\\multicolumn\{(\d+)\}\{[^}]*\}\{(.*)\}$', cell, re.S)
+    if m:
+        colspan = int(m.group(1))
+        cell = m.group(2).strip()
+    m = re.match(r'^\\multirow\{(\d+)\}\{[^}]*\}\{(.*)\}$', cell, re.S)
+    if m:
+        rowspan = int(m.group(1))
+        cell = m.group(2).strip()
+    return colspan, rowspan, _clean_cell(cell)
+
+
 def _table_content_to_html(content: str) -> str:
-    """Convert &-separated LaTeX table rows to HTML <table>."""
+    """Convert &-separated LaTeX table rows to HTML <table>.
+
+    PRISM_TBL_V2: \\multicolumn/\\multirow become colspan/rowspan. Rowspan
+    bookkeeping is positional — the worker emits placeholder cells that keep
+    the column arithmetic intact for rows covered by a rowspan above, and
+    those placeholders are dropped here instead of rendered.
+    """
+    import os
+    tbl_v2 = os.environ.get('PRISM_TBL_V2', '1') != '0'
     content = re.sub(r'\\hline\b', '', content)
     content = re.sub(r'\\cline\{[^}]*\}', '', content)
+    content = re.sub(r'\\(?:toprule|midrule|bottomrule)\b', '', content)
     rows_raw = re.split(r'\\\\', content)
-    rows = []
+
+    if not tbl_v2:
+        rows = []
+        for row in rows_raw:
+            row = row.strip().strip('%').strip()
+            if not row:
+                continue
+            cells = [_clean_cell(c) for c in row.split('&')]
+            if not any(cells):
+                continue
+            rows.append(cells)
+        if not rows:
+            return ''
+        tds = ''.join(
+            '<tr>' + ''.join(f'<td>{c}</td>' for c in row) + '</tr>'
+            for row in rows
+        )
+        return f'<table border="1">{tds}</table>'
+
+    pending: dict = {}          # col_idx -> rows remaining covered
+    html_rows = []
     for row in rows_raw:
         row = row.strip().strip('%').strip()
         if not row:
             continue
-        cells = [c.strip() for c in row.split('&')]
-        # Strip remaining LaTeX from each cell
-        cells = [re.sub(r'\\[a-zA-Z]+\s*(\{[^}]*\})*', lambda m: m.group(0).split('{', 1)[-1].rstrip('}') if '{' in m.group(0) else '', c).strip() for c in cells]
-        cells = [re.sub(r'[${}]', '', c).strip() for c in cells]
-        if not any(cells):
-            continue
-        rows.append(cells)
-    if not rows:
+        parsed = [_parse_span_cell(c) for c in row.split('&')]
+        tds = []
+        col = 0
+        for colspan, rowspan, text in parsed:
+            if pending.get(col, 0) > 0 and not text:
+                # placeholder under a rowspan anchor: consume, don't render
+                for cc in range(col, col + colspan):
+                    if pending.get(cc, 0) > 0:
+                        pending[cc] -= 1
+                col += colspan
+                continue
+            attrs = ''
+            if colspan > 1:
+                attrs += f' colspan="{colspan}"'
+            if rowspan > 1:
+                attrs += f' rowspan="{rowspan}"'
+                for cc in range(col, col + colspan):
+                    pending[cc] = pending.get(cc, 0) + rowspan - 1
+            tds.append(f'<td{attrs}>{text}</td>')
+            col += colspan
+        html_rows.append('<tr>' + ''.join(tds) + '</tr>')
+    if not html_rows:
         return ''
-    tds = ''.join(
-        '<tr>' + ''.join(f'<td>{c}</td>' for c in row) + '</tr>'
-        for row in rows
-    )
-    return f'<table border="1">{tds}</table>'
+    return f'<table>{"".join(html_rows)}</table>'
 
 
 def _convert_tabular(text: str) -> str:
@@ -177,10 +236,13 @@ def _convert_sections(text: str) -> str:
 
 def _strip_formatting(text: str) -> str:
     """Remove LaTeX formatting commands, keep content."""
-    text = _strip_cmd(text, r'\textbf', lambda s: f'**{s}**')
-    text = _strip_cmd(text, r'\textit', lambda s: f'*{s}*')
-    text = _strip_cmd(text, r'\emph', lambda s: f'*{s}*')
-    text = _strip_cmd(text, r'\textit', lambda s: f'*{s}*')
+    # Emphasis is emitted as PLAIN text: GT content is plain, and the eval
+    # matcher pairs blocks by string affinity — '*caption*' vs 'caption'
+    # broke caption/footnote ignore-pairing and turned them into unmatched
+    # 1.0-edit predictions (bold/italic markers carry no benchmark signal).
+    text = _strip_cmd(text, r'\textbf', lambda s: s)
+    text = _strip_cmd(text, r'\textit', lambda s: s)
+    text = _strip_cmd(text, r'\emph', lambda s: s)
     text = _strip_cmd(text, r'\large', lambda s: s)
     text = _strip_cmd(text, r'\footnote', lambda s: '')
     text = _strip_cmd(text, r'\textcolor', lambda s: s)  # imperfect but ok
@@ -227,12 +289,31 @@ def tex_to_omnidocbench_md(tex_content: str) -> str:
     text = _remove_logo_block(text)
     text = _flatten_paracol(text)
     text = _convert_equations(text)
+
+    # Quarantine display math from the TEXT-mode conversions below: they
+    # replace \\ with newline (destroying array/matrix row separators in
+    # every multi-row formula), strip %-to-EOL, and unescape specials —
+    # all destructive inside math. Restore the blocks verbatim at the end.
+    math_blocks: list[str] = []
+
+    def _stash(m):
+        math_blocks.append(m.group(0))
+        return f'\x00MATH{len(math_blocks) - 1}\x00'
+
+    text = re.sub(r'\\\[.*?\\\]', _stash, text, flags=re.DOTALL)
+
+    # Raw HTML tables (RapidTable path) are final output: quarantine them from
+    # every text-mode conversion (% comment stripping truncates at the first
+    # literal %, formatting strippers mangle attributes).
+    text = re.sub(r'<table\b.*?</table>', _stash, text, flags=re.DOTALL | re.IGNORECASE)
+
     text = _convert_sections(text)
     text = _convert_itemize(text)
     text = _convert_tabular(text)
     text = _convert_center(text)
     text = _strip_formatting(text)
     text = _clean_whitespace(text)
+    text = re.sub(r'\x00MATH(\d+)\x00', lambda m: math_blocks[int(m.group(1))], text)
     return text
 
 

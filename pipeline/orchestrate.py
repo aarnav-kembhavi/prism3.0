@@ -52,11 +52,7 @@ from PIL import Image
 from normalization import normalize_image_pil, normalize_image_pil_skip_stage1
 from pipeline.models_interface import (
     run_text_ocr_batched, run_math_recognition_batched,
-    run_page_got,
-    run_table_extraction, run_table_extraction_batched, get_yolo_model,
-    unload_yolo, unload_texo, unload_got, unload_rapidocr,
-    get_math_latencies, get_math_batch_latencies,
-    get_text_latencies, get_table_latencies, get_text_batch_latencies,
+    run_table_extraction_batched, unload_texo,
 )
 from pipeline.text_worker import TextOCRWorker
 from pipeline.math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
@@ -78,38 +74,11 @@ except ImportError:
     HAS_PROFILER = False
 
 
-YOLO_MODEL_PATH      = str(Path(__file__).resolve().parent.parent / 'weights' / 'yolov11n-doclaynet.onnx')
-DOCLAYOUT_MODEL_PATH = str(Path(__file__).resolve().parent.parent / 'models' / 'doclayout_yolo_docstructbench_imgsz1024.onnx')
-
-# Backend switch: raw onnxruntime detectors (no torch) by default; set
-# PRISM_RAW_YOLO=0 to fall back to ultralytics.
-_USE_RAW_YOLO = os.environ.get('PRISM_RAW_YOLO', '1') != '0'
-
-_doclayout_model = None
-
-def _get_doclayout_model():
-    global _doclayout_model
-    if _doclayout_model is None:
-        from ultralytics import YOLO as _YOLO
-        _doclayout_model = _YOLO(DOCLAYOUT_MODEL_PATH, task='detect')
-    return _doclayout_model
-
-
-def _doclayout_detect(norm_path, conf=0.15):
-    """Uniform DocLayout detection → list of {bbox, class_name, confidence}."""
-    if _USE_RAW_YOLO:
-        from pipeline.models_interface import get_doclayout_detector
-        return get_doclayout_detector(DOCLAYOUT_MODEL_PATH, imgsz=1024).detect(norm_path, conf=conf)
-    r = _get_doclayout_model()(norm_path, conf=conf, verbose=False)[0]
-    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
-             'confidence': float(b.conf[0])} for b in r.boxes]
-
-
-def _iou(a, b):
-    ix1=max(a[0],b[0]); iy1=max(a[1],b[1]); ix2=min(a[2],b[2]); iy2=min(a[3],b[3])
-    iw=max(0,ix2-ix1); ih=max(0,iy2-iy1); inter=iw*ih
-    ua=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-inter
-    return inter/ua if ua>0 else 0.0
+# PP-DocLayout_plus-L (RT-DETR) is the SOLE layout detector (validated to
+# beat the former YOLOv11n + DocLayout-YOLO combo on every OmniDocBench
+# category; see paper.md). The model file is required.
+_PPDL_MODEL_PATH = str(Path(__file__).resolve().parent.parent / 'models' / 'ppdoclayout' / 'ppdoclayout_plus_l.onnx')
+_PPDL_FORMULA_CONF = float(os.environ.get('PRISM_PPDL_CONF', '0.30'))
 
 TEXT_CLASSES   = {"Text", "Title", "Section-header", "Caption",
                   "Footnote", "Page-footer", "Page-header", "List-item"}
@@ -128,40 +97,40 @@ def _is_likely_logo(crop_pil: Image.Image) -> bool:
     return non_white < 0.15 and color_std > 8.0
 
 
-def run_detection(model, image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
-    if _USE_RAW_YOLO:
-        from pipeline.models_interface import get_yolo_detector
-        raw = get_yolo_detector(YOLO_MODEL_PATH, imgsz=640).detect(image_path, conf=0.25, iou=0.7)
-    else:
-        result = model(image_path, verbose=False)[0]
-        raw = [{'bbox': b.xyxy[0].tolist(), 'class_name': result.names[int(b.cls[0])],
-                'confidence': float(b.conf[0])} for b in result.boxes]
-
-    detections = []
-    for d in raw:
-        x1, y1, x2, y2 = d['bbox']
-        class_name = d['class_name']
-        confidence = d['confidence']
-
-        if class_name in IMAGE_CLASSES:
-            crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
-        else:
-            crop = xyxy_to_pil_crop(image_norm, [x1, y1, x2, y2])
-
-        if class_name == "Page-header":
-            fidelity_crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
-            if _is_likely_logo(fidelity_crop):
-                class_name = "Picture"
-                crop       = fidelity_crop
-
-        detections.append({
-            "bbox": [x1, y1, x2, y2],
-            "class_id": 0,
-            "class_name": class_name,
-            "confidence": confidence,
-            "crop": crop,
-        })
-    return detections
+def run_detection(image_norm: Image.Image, image_fidelity: Image.Image, image_path: str):
+    from pipeline.models_interface import get_ppdoclayout_detector
+    det = get_ppdoclayout_detector(800)
+    if det is None:
+        raise RuntimeError(f'PP-DocLayout model missing: {_PPDL_MODEL_PATH}')
+    if True:
+        detections = []
+        # Detect down to the class-specific gates (Formula/Table 0.30,
+        # validated); everything else still requires the 0.50 base.
+        _tbl_conf = float(os.environ.get('PRISM_PPDL_TBL_CONF', '0.50'))
+        for d in det.detect(image_path, conf=min(0.50, _PPDL_FORMULA_CONF, _tbl_conf)):
+            class_name = d['class_name']; confidence = d['confidence']
+            x1, y1, x2, y2 = d['bbox']
+            if class_name in MATH_CLASSES:
+                if confidence < _PPDL_FORMULA_CONF:
+                    continue
+            elif class_name in TABLE_CLASSES:
+                if confidence < _tbl_conf:
+                    continue
+            elif confidence < 0.50:
+                continue
+            if class_name in IMAGE_CLASSES:
+                crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
+            else:
+                crop = xyxy_to_pil_crop(image_norm, [x1, y1, x2, y2])
+            if class_name == "Page-header":
+                fidelity_crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
+                if _is_likely_logo(fidelity_crop):
+                    class_name = "Picture"; crop = fidelity_crop
+            detections.append({
+                "bbox": [x1, y1, x2, y2], "class_id": 0,
+                "class_name": class_name, "confidence": confidence, "crop": crop,
+            })
+        return detections
 
 
 class _InProcessOCR:
@@ -212,8 +181,6 @@ def main():
     parser.add_argument("image_paths", type=str, nargs="+",
                         help="One or more images to process (workers shared across all)")
     parser.add_argument("--profile",          action="store_true")
-    parser.add_argument("--high-quality",     action="store_true",
-                        help="Use GOT-OCR2 for full-page LaTeX (slower, higher quality)")
     parser.add_argument("--no-ocr-worker",    action="store_true",
                         help="Run RapidOCR in-process instead of a subprocess worker")
     parser.add_argument("--skip-stage1",      action="store_true",
@@ -223,7 +190,7 @@ def main():
     # Optimization 1: start workers in a background thread so Texo loads
     # concurrently with normalization and YOLO inference (~3s saved per run).
     _worker_thread = None
-    if not args.no_ocr_worker and not args.high_quality:
+    if not args.no_ocr_worker:
         _worker_thread = threading.Thread(target=_launch_workers, daemon=True)
         _worker_thread.start()
 
@@ -264,32 +231,6 @@ def _process_one(image_path_str: str, args, worker_thread):
     import psutil
     process = psutil.Process(os.getpid())
 
-    # ── High-quality mode: GOT-OCR2 full-page ───────────────────
-    if args.high_quality:
-        print("[*] High-quality mode: GOT-OCR2 full-page OCR")
-        t0 = time.perf_counter()
-        image_norm, _, _ = normalize_image_pil(image_path_str)
-        norm_path = str(assets_dir / "normalized.png")
-        image_norm.save(norm_path)
-        del image_norm
-
-        raw_latex = run_page_got(norm_path)
-        unload_got()
-
-        if not raw_latex.strip().startswith("\\documentclass"):
-            from pipeline.latex_builder import assemble_document
-            document = assemble_document([raw_latex], set(), False)
-        else:
-            document = raw_latex
-
-        save_tex(document, str(tex_path))
-        t_total = time.perf_counter() - t0
-        peak_mb = process.memory_info().rss / 1024 / 1024
-        if args.profile:
-            print(f"\n    TOTAL           | {t_total:6.2f}s | {peak_mb:7.1f} MB")
-        print("\n[OK] Done (high-quality mode).")
-        return
-
     # ── Stage 1: Normalization ───────────────────────────────────
     t_stage1_start = time.perf_counter()
     if args.skip_stage1:
@@ -307,47 +248,10 @@ def _process_one(image_path_str: str, args, worker_thread):
 
     # ── Stage 2: Layout Detection ────────────────────────────────
     t_stage2_start = time.perf_counter()
-    # Raw-ONNX detector needs no torch/ultralytics model object; pass None.
-    model      = None if _USE_RAW_YOLO else get_yolo_model(YOLO_MODEL_PATH)
-    yolo_input = str(assets_dir / "normalized.png")
-    detections = run_detection(model, image_norm, image_fidelity, yolo_input)
+    detector_input = str(assets_dir / "normalized.png")
+    detections = run_detection(image_norm, image_fidelity, detector_input)
     img_width, img_height = image_norm.width, image_norm.height
     detections = postprocess_detections(detections, img_width, img_height)
-
-    # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
-    if Path(DOCLAYOUT_MODEL_PATH).exists():
-        try:
-            existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-            existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
-            n_fml = n_tbl = 0
-            for box in _doclayout_detect(yolo_input, conf=0.15):
-                    cls   = box['class_name']
-                    conf_ = box['confidence']
-                    bbox  = box['bbox']
-                    if cls == 'isolate_formula':
-                        # 0.20 floor: drop the lowest-confidence formula boxes
-                        # that overlap text and feed Texo garbage.
-                        if conf_ < 0.20:
-                            continue
-                        if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
-                            continue
-                        detections.append({
-                            'bbox': bbox, 'class_id': -2,
-                            'class_name': 'Formula', 'confidence': conf_,
-                        })
-                        existing_fml.append(bbox); n_fml += 1
-                    elif cls == 'table' and conf_ >= 0.30:
-                        if any(_iou(bbox, et) > 0.4 for et in existing_tbl):
-                            continue
-                        detections.append({
-                            'bbox': bbox, 'class_id': -3,
-                            'class_name': 'Table', 'confidence': conf_,
-                        })
-                        existing_tbl.append(bbox); n_tbl += 1
-            if n_fml or n_tbl:
-                print(f'  [DL] +{n_fml} formula(s), +{n_tbl} table(s)')
-        except Exception as _e:
-            print(f'  [DL] skipped: {_e}')
 
     t_stage2_end  = time.perf_counter()
     mem_stage2_end = process.memory_info().rss / 1024 / 1024
@@ -407,8 +311,6 @@ def _process_one(image_path_str: str, args, worker_thread):
     # Free full-resolution images — all crops are now extracted into det['crop']
     del image_norm, image_fidelity
     gc.collect()
-    # Change A: YOLO not needed again for this image; free its session (~520 MB)
-    unload_yolo()
 
     t_stage15_end  = time.perf_counter()
     mem_stage15_end = process.memory_info().rss / 1024 / 1024
@@ -459,6 +361,31 @@ def _process_one(image_path_str: str, args, worker_thread):
         is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
         header_logo_fname=header_logo_fname,
     )
+
+    # Empty-output rescue (same as the benchmark path): when layout detection
+    # finds no usable regions (receipts, stylized pages), whole-page OCR is
+    # strictly better than an empty document.
+    if os.environ.get('PRISM_PAGE_OCR_FALLBACK', '1') != '0':
+        import re as _re
+        _m = _re.search(r'\\begin\{document\}(.*?)\\end\{document\}', document, _re.DOTALL)
+        _body = _m.group(1) if _m else document
+        _body = _re.sub(r'\\includegraphics\[[^\]]*\]\{[^}]*\}|\\[a-zA-Z]+\*?(\{[^}]*\})?|\s+', '', _body)
+        if len(_body) < 30:
+            try:
+                _page_img = Image.open(assets_dir / "normalized.png").convert('RGB')
+                if is_cjk and hasattr(workers.ocr, 'run_text_batch_cjk'):
+                    _lines = workers.ocr.run_text_batch_cjk([_page_img], is_screenshot=is_screenshot)
+                else:
+                    _lines = workers.ocr.run_text_batch([_page_img], is_screenshot=is_screenshot)
+                _page_text = (_lines[0] or '').strip() if _lines else ''
+                if _page_text:
+                    from pipeline.latex_builder import assemble_document
+                    document = assemble_document([_page_text], set(), False,
+                                                 header_logo=header_logo_fname,
+                                                 has_cjk=is_cjk or is_mixed)
+                    print(f"  [PAGE-OCR-FALLBACK] +{len(_page_text)} chars")
+            except Exception as _e:
+                print(f"  [PAGE-OCR-FALLBACK] failed: {_e}")
 
     if _math_worker is None:
         unload_texo()

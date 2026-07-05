@@ -250,7 +250,10 @@ def _tokens_full(result, img_w):
                 continue
             xs = [pt[0] for pt in bbox]; ys = [pt[1] for pt in bbox]
             x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
-            if (x2 - x1) > 0.8 * img_w:
+            # PRISM_TBL_V2: keep full-width tokens — dropping them deleted
+            # header rows / long cells in narrow tables; the TATR path now
+            # splits tokens across column boundaries instead.
+            if os.environ.get('PRISM_TBL_V2', '1') == '0' and (x2 - x1) > 0.8 * img_w:
                 continue
             tokens.append({'text': text, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2})
         except (TypeError, IndexError, ValueError):
@@ -288,12 +291,27 @@ def _worker_main(conn):
 
     from rapidocr_onnxruntime import RapidOCR
     base_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
-    en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
-    en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
-    if os.path.exists(en_rec) and os.path.exists(en_dict):
-        base_kwargs['rec_model_path'] = en_rec
-        base_kwargs['rec_keys_path']  = en_dict
     cjk_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
+
+    # PP-OCRv6-small det+rec (unified charset, reads its dict from ONNX
+    # metadata). Block-level A/B vs the v4 stack on 1354 GT text blocks:
+    # EN 0.128->0.059, ZH 0.101->0.086, mixed 0.190->0.155, notes
+    # 0.200->0.132, and ~2x faster. One engine pair serves EN and CJK, so
+    # the dedicated en_PP-OCRv4 rec is bypassed. PRISM_OCR_V6=0 restores v4.
+    v6_det = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx')
+    v6_rec = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx')
+    use_v6 = (os.environ.get('PRISM_OCR_V6', '1') != '0'
+              and os.path.exists(v6_det) and os.path.exists(v6_rec))
+    if use_v6:
+        v6 = dict(det_model_path=v6_det, rec_model_path=v6_rec)
+        base_kwargs.update(v6)
+        cjk_kwargs.update(v6)
+    else:
+        en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
+        en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
+        if os.path.exists(en_rec) and os.path.exists(en_dict):
+            base_kwargs['rec_model_path'] = en_rec
+            base_kwargs['rec_keys_path']  = en_dict
 
     # Build the 4 engine variants lazily: most pages use only one. Eagerly
     # constructing all four (× 2 dual workers = 8) holds ~4× the RapidOCR
@@ -444,13 +462,15 @@ def _worker_main(conn):
                 results.append(_table_heuristic(tokens, np_img.shape[1]) if tokens else '')
             conn.send(results)
 
-        elif task == 'table_tokens':
+        elif task in ('table_tokens', 'table_tokens_cjk'):
             # Like 'table' but returns raw token dicts (x1/x2/y1/y2/text) so
             # the caller can pass them to TATR for structure recognition.
+            # CJK pages must use the CJK engine or Chinese cell text is garbage.
             crop_arrays = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
             nps   = [np.array(c.convert('RGB')) for c in crops]
-            per_crop = _stitch_and_run(_get_engine('en', False), nps)
+            lang  = 'cjk' if task == 'table_tokens_cjk' else 'en'
+            per_crop = _stitch_and_run(_get_engine(lang, False), nps)
             results = []
             for np_img, crop_result in zip(nps, per_crop):
                 results.append(_tokens_full(crop_result, np_img.shape[1]))
@@ -545,6 +565,13 @@ class TextOCRWorker:
         self._conn.send(('table_tokens', self._serialize(crops)))
         return self._conn.recv()
 
+    def run_table_tokens_batch_cjk(self, crops):
+        """table_tokens with the CJK engine (Chinese/mixed table cell content)."""
+        if not crops:
+            return []
+        self._conn.send(('table_tokens_cjk', self._serialize(crops)))
+        return self._conn.recv()
+
 
 class TextOCRWorkerDual:
     """Two TextOCRWorker subprocesses that split crops in parallel.
@@ -595,3 +622,6 @@ class TextOCRWorkerDual:
 
     def run_table_tokens_batch(self, crops):
         return self._split(crops, self._w1.run_table_tokens_batch, self._w2.run_table_tokens_batch)
+
+    def run_table_tokens_batch_cjk(self, crops):
+        return self._split(crops, self._w1.run_table_tokens_batch_cjk, self._w2.run_table_tokens_batch_cjk)

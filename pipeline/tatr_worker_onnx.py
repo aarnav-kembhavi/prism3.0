@@ -153,26 +153,66 @@ class TATROnnxWorker:
             raise RuntimeError(result)
         labels, xyxy = result
 
-        rows, cols = [], []
+        rows, cols, spans = [], [], []
         for lbl, box in zip(labels, xyxy):
             cls = _ID2LABEL.get(lbl, "").lower()
             if "row" in cls and "header" not in cls:
                 rows.append(box)
             elif "column" in cls:
                 cols.append(box)
+            elif "spanning" in cls:
+                spans.append(box)
 
         rows.sort(key=lambda b: b[1])
         cols.sort(key=lambda b: b[0])
 
         crop_w = crop.size[0]
-        cols = [c for c in cols if (c[2] - c[0]) < 0.85 * crop_w]
-        return rows, cols
+        if len(cols) > 1:
+            # single-column tables ARE nearly full-width; only filter when the
+            # near-full-width box duplicates a multi-column layout
+            cols = [c for c in cols if (c[2] - c[0]) < 0.85 * crop_w]
+        return rows, cols, spans
+
+    @staticmethod
+    def _split_token_by_cols(tok, cols):
+        """Split an OCR token that straddles column boundaries.
+
+        RapidOCR det boxes are line-level: tightly spaced adjacent cells come
+        back as ONE token, which the old best-overlap assignment dumped whole
+        into a single cell. Characters are apportioned by linear interpolation
+        of the token's x-extent across the column edges it crosses.
+        """
+        hit = [c for c in range(len(cols))
+               if _overlap_1d(tok["x1"], tok["x2"], cols[c][0], cols[c][2]) > 0
+               and min(tok["x2"], cols[c][2]) - max(tok["x1"], cols[c][0])
+               > 0.15 * (tok["x2"] - tok["x1"])]
+        if len(hit) <= 1:
+            return [tok]
+        text = tok["text"]
+        w = tok["x2"] - tok["x1"]
+        if not text or w <= 0:
+            return [tok]
+        pieces = []
+        for c in hit:
+            lo = max(tok["x1"], cols[c][0])
+            hi = min(tok["x2"], cols[c][2])
+            i0 = int(round((lo - tok["x1"]) / w * len(text)))
+            i1 = int(round((hi - tok["x1"]) / w * len(text)))
+            part = text[i0:i1].strip()
+            if part:
+                pieces.append({"text": part, "x1": lo, "x2": hi,
+                               "y1": tok["y1"], "y2": tok["y2"]})
+        return pieces if pieces else [tok]
 
     def build_table_html(self, crop: Image.Image, tokens: list, img_w: int):
-        """Same interface as tatr_worker.build_table_html."""
+        """Same interface as tatr_worker.build_table_html. Returns a LaTeX
+        tabular; with PRISM_TBL_V2=1 spanning cells become \\multicolumn /
+        \\multirow (tex_to_md converts those to colspan/rowspan HTML)."""
+        import os
         from pipeline.models_interface import escape_latex_chars
+        tbl_v2 = os.environ.get('PRISM_TBL_V2', '1') != '0'
         try:
-            rows, cols = self._detect_structure(crop)
+            rows, cols, spans = self._detect_structure(crop)
         except Exception as e:
             print(f"  [TATR-ONNX] error: {e}")
             return None
@@ -182,6 +222,12 @@ class TATROnnxWorker:
 
         n_rows, n_cols = len(rows), len(cols)
         grid = [[[] for _ in range(n_cols)] for _ in range(n_rows)]
+
+        if tbl_v2:
+            split_tokens = []
+            for tok in tokens:
+                split_tokens.extend(self._split_token_by_cols(tok, cols))
+            tokens = split_tokens
 
         for tok in tokens:
             best_r = max(range(n_rows),
@@ -196,20 +242,82 @@ class TATROnnxWorker:
             for cell in row:
                 cell.sort(key=lambda t: t["x1"])
 
-        cell_grid = []
-        for r in range(n_rows):
-            row = [escape_latex_chars(" ".join(t["text"] for t in grid[r][c]))
-                   for c in range(n_cols)]
-            if any(c.strip() for c in row):
-                cell_grid.append(row)
+        # spanning cells -> (r0, r1, c0, c1) anchor map
+        span_of = {}       # (r, c) anchor -> (rspan, cspan)
+        consumed = set()   # (r, c) covered by an anchor's span
+        if tbl_v2 and spans:
+            def _covered(cells_boxes, s, axis):
+                out = []
+                for i, b in enumerate(cells_boxes):
+                    lo, hi = (b[1], b[3]) if axis == 'y' else (b[0], b[2])
+                    if _overlap_1d(lo, hi, s[1] if axis == 'y' else s[0],
+                                   s[3] if axis == 'y' else s[2]) >= 0.5:
+                        out.append(i)
+                return out
+            for s in spans:
+                rr = _covered(rows, s, 'y')
+                cc = _covered(cols, s, 'x')
+                if not rr or not cc or (len(rr) == 1 and len(cc) == 1):
+                    continue
+                r0, r1, c0, c1 = min(rr), max(rr), min(cc), max(cc)
+                if (r0, c0) in consumed or (r0, c0) in span_of:
+                    continue
+                span_of[(r0, c0)] = (r1 - r0 + 1, c1 - c0 + 1)
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
+                        if (r, c) != (r0, c0):
+                            consumed.add((r, c))
+            # pool consumed cells' tokens into their anchor
+            for (r0, c0), (rs, cs) in span_of.items():
+                pooled = []
+                for r in range(r0, r0 + rs):
+                    for c in range(c0, c0 + cs):
+                        pooled.extend(grid[r][c])
+                        if (r, c) != (r0, c0):
+                            grid[r][c] = []
+                pooled.sort(key=lambda t: (t["y1"], t["x1"]))
+                grid[r0][c0] = pooled
 
-        if not cell_grid:
-            return None
+        def cell_text(r, c):
+            return escape_latex_chars(" ".join(t["text"] for t in grid[r][c]))
 
         lines = [f"\\begin{{tabular}}{{{'l' * n_cols}}}", "\\toprule"]
-        for i, row in enumerate(cell_grid):
-            lines.append(" & ".join(row) + " \\\\")
-            if i == 0:
+        emitted = 0
+        for r in range(n_rows):
+            parts = []
+            row_has_content = any(grid[r][c] for c in range(n_cols))
+            if not tbl_v2 and not row_has_content:
+                continue   # legacy behaviour: skip empty rows
+            c = 0
+            while c < n_cols:
+                if (r, c) in span_of:
+                    rs, cs = span_of[(r, c)]
+                    inner = cell_text(r, c)
+                    if rs > 1:
+                        inner = f"\\multirow{{{rs}}}{{*}}{{{inner}}}"
+                    if cs > 1:
+                        parts.append(f"\\multicolumn{{{cs}}}{{l}}{{{inner}}}")
+                    else:
+                        parts.append(inner)
+                    c += cs
+                elif (r, c) in consumed:
+                    # covered by a rowspan anchor above: placeholder
+                    anchor = next(((ar, ac) for (ar, ac), (ars, acs) in span_of.items()
+                                   if ar <= r < ar + ars and ac <= c < ac + acs), None)
+                    cs = span_of[anchor][1] if anchor else 1
+                    if cs > 1:
+                        parts.append(f"\\multicolumn{{{cs}}}{{l}}{{}}")
+                    else:
+                        parts.append("")
+                    c += cs
+                else:
+                    parts.append(cell_text(r, c))
+                    c += 1
+            lines.append(" & ".join(parts) + " \\\\")
+            emitted += 1
+            if emitted == 1:
                 lines.append("\\midrule")
+        if emitted == 0:
+            return None
         lines += ["\\bottomrule", "\\end{tabular}"]
         return "\n".join(lines)

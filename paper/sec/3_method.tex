@@ -1,0 +1,63 @@
+\section{Method}
+\label{sec:method}
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{\input{fig/arch}}
+  \caption{PRISM overview. Four ONNX specialists (blue; $\leq$124\,MB each) run in persistent CPU worker subprocesses; every stage between them (orange) is deterministic geometry --- no generative model exceeds 20M parameters.}
+  \label{fig:arch}
+\end{figure}
+
+PRISM processes a page image in five stages (\cref{fig:arch}): (1)~input normalization, (2)~layout detection and post-processing, (3)~specialist recognition (text, formula, table, figure), (4)~reading-order assembly, and (5)~format emission (\LaTeX{} $\rightarrow$ Markdown/HTML). All models run as ONNX graphs on CPU; recognizers live in persistent worker subprocesses so that no PyTorch or Paddle runtime is ever resident. We describe each stage and the design decisions that matter, with the ablation numbers that justify them deferred to \cref{sec:experiments}.
+
+\subsection{Input normalization}
+\label{sec:normalization}
+
+Scanned or born-digital pages pass through untouched except for a resolution cap. Camera captures --- detected by a cheap classifier over EXIF presence, border statistics and illumination gradients --- receive a correction stack: specular-glare inpainting, illumination flattening by background division, perspective rectification, and conditional contrast enhancement. Three details are load-bearing:
+\begin{itemize}
+\item \textbf{Order and guards.} Glare inpainting must precede shadow flattening (flattening whitens the page and a global-brightness glare detector would then inpaint the entire page), and is skipped when the detected mask exceeds 20\% of the page --- true specular glare is local, so a page-sized mask indicates the detector latched onto paper.
+\item \textbf{Rectification validation.} A candidate document quadrilateral is warped only if it is convex, has corner angles in $[50^\circ,130^\circ]$, and \emph{contains the document}: at least 55\% of the bright-region mass must fall inside and the interior must be at least 35\% bright. Without the containment gate, high-contrast background texture (wood grain) produces confident quads that destroy the page.
+\item \textbf{Do-no-harm defaults.} Frequency-domain moir\'e removal is disabled by default: on photographed paper the dominant high-frequency spikes \emph{are} the text-line periodicity, and notch filtering partially erases the text it is meant to protect. It is enabled only for photographed screens.
+\end{itemize}
+The stack is photometrically conservative: recognizer crops are always taken from a pre-destructive copy of the image, so OCR sees original pixels even when normalization was applied for detection.
+
+\subsection{Layout detection}
+\label{sec:layout}
+
+A single PP-DocLayout\_plus-L detector (RT-DETR, 800\,px, 124\,MB ONNX) provides all regions. We found detector ensembling strictly harmful under our budget (\cref{sec:ablations}): a second detector adds latency and its extra recall arrives as duplicate, conflicting boxes that the downstream must re-suppress. Instead we invest in \emph{class-aware post-processing} of the single detector's output:
+
+\begin{itemize}
+\item \textbf{Per-class confidence gates.} Formulas are accepted at confidence $\geq 0.30$ while other classes require $\geq 0.50$: formula false negatives are catastrophic (the region is then OCR'd as garbled text, hurting both metrics), while formula false positives are cheap (the recognizer emits short spans that either compile or are gated). Tables use $0.30$\todo{confirm final gate} now that the table recognizer degrades gracefully on marginal detections.
+\item \textbf{Containment resolution with exemptions.} Nested and overlapping boxes are resolved by containment suppression, with three exemptions learned from failure analysis: a Formula inside a Text block is never consumed (the text block will be masked instead); a near-page-sized Picture ($>$70\% of the page) never consumes others (it is almost always a background/decoration detection); and an outer Formula containing two or more higher-confidence Formulas loses to the chips (the detector sometimes wraps a whole equation group in one giant box).
+\item \textbf{Marginalia suppression.} Running headers, footers and page numbers are dropped before assembly. On OmniDocBench these are annotated but never scored; emitting them risks unmatched-prediction penalties when the matcher fails to pair them with their ignored ground-truth counterparts.
+\end{itemize}
+
+\subsection{Formula processing by ink-mass geometry}
+\label{sec:formula}
+
+The formula recognizer is Texo~\cite{texo}, a 20M-parameter distilled encoder--decoder (79\,MB ONNX). Naively cropping each detected Formula box and decoding is the single largest error source in the naive pipeline --- not because recognition fails, but because \emph{detection geometry and recognizer expectations mismatch}. PRISM inserts a deterministic geometric layer (``formula~v2'') between detection and recognition:
+
+\begin{itemize}
+\item \textbf{Row-band splitting.} A detected box often covers a multi-line derivation. We binarize ink (Otsu), project onto rows, and split at gaps $\geq \max(6\,\mathrm{px},\, 0.25\times$ band height$)$ --- \emph{unless} a vertical ink bridge spans the gap, which indicates a matrix or a tall delimiter that must stay whole.
+\item \textbf{Fraction-bar fusion.} A thin band wider than both its neighbors is a fraction bar; the triple is re-fused into one crop.
+\item \textbf{Column splitting and equation-number trimming.} Bands are split at horizontal gaps $\geq \max(28\,\mathrm{px},\,1.4\times$ band height$)$, and a trailing chunk narrower than $\max(50\,\mathrm{px},\,8\%$ width$)$ --- an equation number --- is trimmed rather than decoded.
+\item \textbf{Inline-guard with dense-grid exemption.} A Formula box whose row also contains substantial non-formula ink inside an enclosing Text region is inline math and is left to OCR (decoding it as display math double-emits it). The critical refinement: ink belonging to \emph{other} formula boxes is blanked before this test, and a Text region containing $\geq 4$ formulas with $\geq 50$\% of its ink inside them is a math-dense grid (textbook answer keys), for which the guard is skipped entirely. Both conditions are necessary; the count alone misfires on presentation slides.
+\item \textbf{Emission sanitation.} The recognizer occasionally emits macros that its training distribution (KaTeX-rendered web math) accepts but pdflatex does not (\verb|\infin|, \verb|\gt|, \verb|\lt|), plus display delimiters that would nest illegally once wrapped. Since the CDM metric compiles predictions with pdflatex, one bad token zeroes an otherwise-correct formula. A rewrite table plus delimiter stripping closes this class.
+\end{itemize}
+
+This layer moves display-formula CDM from 56.9 to 79.0 with zero new parameters and no measurable latency cost, and is the paper's clearest evidence that orchestration substitutes for capacity.
+
+\subsection{Tables}
+\label{sec:tables}
+
+Table structure is predicted by SLANet-plus (7.4\,MB)~\cite{slanet} on the detected table crop, with cell content from a small OCR pass over the same crop\todo{finalize after v14: describe TATR fallback + numbers}. Two failure modes drove this choice over the more common TATR~\cite{tatr}: on dense small-type tables (newspaper statistics), TATR's row proposals shatter (predicting $3\times$ the true row count with mostly empty cells), and assigning externally detected OCR tokens to a predicted grid loses cell content even when the structure is right --- a 10-point gap between content TEDS and structure-only TEDS. SLANet-plus predicts structure and reads cells in one pass over the crop, eliminating the assignment step. TATR with our token-interpolation assignment (tokens straddling column boundaries are split by character-position interpolation; spanning cells are emitted as \verb|\multicolumn|/\verb|\multirow| and converted to colspan/rowspan HTML) is retained as fallback.
+
+\subsection{Reading order and assembly}
+\label{sec:assembly}
+
+Pages with one or two detected columns are ordered by a column-aware top-down sort with a DAG-based two-column splitter. Pages with three or more columns --- and ``one-column'' pages with $\geq 8$ regions, which are frequently mis-columned newspapers --- use recursive XY-cut: alternate horizontal/vertical gap cuts over the region boxes, with near-page-sized boxes excluded from cutting and emitted first. Assembled regions are wrapped into a \LaTeX{} document which a deterministic converter lowers to OmniDocBench-style Markdown. The converter quarantines math blocks and raw HTML tables from text-mode rewrites --- comment stripping, line-break normalization and emphasis removal are destructive inside both --- which repaired a class of silent corruption affecting one third of matched formula pairs.
+
+\subsection{Failure-mode rescues}
+\label{sec:rescues}
+
+Two cheap global guards recover pathological pages: if the assembled body contains fewer than 30 content characters, the full normalized page is OCR'd as a single block (rescuing stylized covers and pages where layout detection collapses); and near-page-size Formula/Picture detections are dropped before containment resolution (they previously consumed every real region on 56 pages, emitting empty documents).

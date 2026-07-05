@@ -20,6 +20,10 @@ import threading
 from pathlib import Path
 
 os.environ.setdefault('NO_ALBUMENTATIONS_UPDATE', 'NO_ALBUMENTATIONS_UPDATE')
+# Pin the benchmark-validated normalization routing: the product-mode
+# shadowed-capture rescue (normalization/pipeline.py) must never fire on
+# benchmark pages (PPT design gradients mimic the shadow signature).
+os.environ.setdefault('PRISM_NORM_STRICT', '1')
 
 # UTF-8 stdout/stderr: the pipeline prints Unicode (→, 【】, CJK). On Windows
 # the default console codec is cp1252 and raises UnicodeEncodeError. Previously
@@ -45,65 +49,67 @@ DEMO_IMAGES = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'images'
 DEMO_GT = EVAL_DIR / 'demo_data' / 'omnidocbench_demo' / 'OmniDocBench_demo.json'
 DEFAULT_PRED = ROOT / 'preds' / 'omnidocbench'
 
-YOLO_MODEL_PATH      = str(ROOT / 'weights' / 'yolov11n-doclaynet.onnx')
-DOCLAYOUT_MODEL_PATH = str(ROOT / 'models' / 'doclayout_yolo_docstructbench_imgsz1024.onnx')
+# Replace-both: PP-DocLayout_plus-L (RT-DETR) as the SOLE layout detector.
+# Native raw-onnxruntime path (PRISM_USE_PPDL_LAYOUT) — replaces YOLOv11n +
+# DocLayout + MFD. Validated to beat the two-detector combo on every category.
+# The PRISM_LAYOUT_CACHE path (pre-computed boxes) is kept for offline A/B only.
+_PPDL_MODEL_PATH = str(ROOT / 'models' / 'ppdoclayout' / 'ppdoclayout_plus_l.onnx')
+_USE_PPDL_LAYOUT = os.environ.get(
+    'PRISM_USE_PPDL_LAYOUT', '1' if os.path.exists(_PPDL_MODEL_PATH) else '0') != '0'
+_LAYOUT_CACHE_PATH = os.environ.get('PRISM_LAYOUT_CACHE', '')
+_LAYOUT_CACHE_DATA = None
 
-# Backend switch: raw onnxruntime detectors (no torch) by default; set
-# PRISM_RAW_YOLO=0 to fall back to ultralytics for A/B comparison.
-_USE_RAW_YOLO = os.environ.get('PRISM_RAW_YOLO', '1') != '0'
+def _layout_boxes(norm_path, stem):
+    """Full-layout boxes (PRISM vocab) from PP-DocLayout — native ONNX or cache."""
+    global _LAYOUT_CACHE_DATA
+    if _USE_PPDL_LAYOUT:
+        from pipeline.models_interface import get_ppdoclayout_detector
+        det = get_ppdoclayout_detector(800)
+        if det is None:
+            raise RuntimeError('PP-DocLayout ONNX model not found')
+        base = float(os.environ.get('PRISM_PPDL_BASE_CONF', '0.50'))
+        fml = float(os.environ.get('PRISM_PPDL_CONF', '0.30'))
+        tbl = float(os.environ.get('PRISM_PPDL_TBL_CONF', '0.50'))
+        low = min(base, fml, tbl)
+        if low >= base:
+            return det.detect(norm_path, conf=base)  # match paddle draw_threshold
+        # Detect low; keep sub-base boxes only for the classes with their own
+        # validated lower gates (Formula 0.30, Table 0.30 — recall 91.7->94.4%
+        # at 0.13 FP/page for tables; see paper.md).
+        from pipeline.page_core import MATH_CLASSES, TABLE_CLASSES
+        out = []
+        for b in det.detect(norm_path, conf=low):
+            c = b['confidence']
+            if b['class_name'] in MATH_CLASSES:
+                if c >= fml:
+                    out.append(b)
+            elif b['class_name'] in TABLE_CLASSES:
+                if c >= tbl:
+                    out.append(b)
+            elif c >= base:
+                out.append(b)
+        return out
+    if _LAYOUT_CACHE_DATA is None:
+        with open(_LAYOUT_CACHE_PATH, encoding='utf-8') as f:
+            _LAYOUT_CACHE_DATA = json.load(f)
+    return _LAYOUT_CACHE_DATA.get(stem, [])
 
-# DocLayout YOLO singleton — loaded once, shared across all pages
-_doclayout_model = None
-
-def _get_doclayout_model():
-    global _doclayout_model
-    if _doclayout_model is None:
-        from ultralytics import YOLO as _YOLO
-        _doclayout_model = _YOLO(DOCLAYOUT_MODEL_PATH, task='detect')
-    return _doclayout_model
-
-
-def _yolo_detect(norm_path, conf=0.25, iou=0.7):
-    """Uniform layout detection → list of {bbox, class_name, confidence}."""
-    if _USE_RAW_YOLO:
-        from pipeline.models_interface import get_yolo_detector
-        return get_yolo_detector(YOLO_MODEL_PATH, imgsz=640).detect(norm_path, conf=conf, iou=iou)
-    from pipeline.models_interface import get_yolo_model
-    r = get_yolo_model(YOLO_MODEL_PATH)(norm_path, verbose=False)[0]
-    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
-             'confidence': float(b.conf[0])} for b in r.boxes]
-
-
-def _doclayout_detect(norm_path, conf=0.15):
-    """Uniform DocLayout detection → list of {bbox, class_name, confidence}."""
-    if _USE_RAW_YOLO:
-        from pipeline.models_interface import get_doclayout_detector
-        return get_doclayout_detector(DOCLAYOUT_MODEL_PATH, imgsz=1024).detect(norm_path, conf=conf)
-    r = _get_doclayout_model()(norm_path, conf=conf, verbose=False)[0]
-    return [{'bbox': b.xyxy[0].tolist(), 'class_name': r.names[int(b.cls[0])],
-             'confidence': float(b.conf[0])} for b in r.boxes]
-
-
-_USE_MFD = os.environ.get('PRISM_USE_MFD', '0') != '0'   # opt-in: modest gain, +167MB/+2s
-
-def _mfd_detect(norm_path, conf=0.25):
-    """Dedicated math-formula detection (MFD @ 1280px) → 'isolated' formula boxes.
-    Lifts display-formula recall ~29%->78% vs the general layout detectors."""
-    if not _USE_MFD:
-        return []
-    from pipeline.models_interface import get_mfd_detector
-    det = get_mfd_detector(1280)
-    if det is None:
-        return []
-    return [d for d in det.detect(norm_path, conf=conf, iou=0.5)
-            if d['class_name'] == 'isolated']
-
-
-def _iou(a, b):
-    ix1=max(a[0],b[0]); iy1=max(a[1],b[1]); ix2=min(a[2],b[2]); iy2=min(a[3],b[3])
-    iw=max(0,ix2-ix1); ih=max(0,iy2-iy1); inter=iw*ih
-    ua=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-inter
-    return inter/ua if ua>0 else 0.0
+def _layout_from_cache(stem, image_norm, image_fidelity, formula_from_fidelity, norm_path=None):
+    from pipeline.layout_utils import xyxy_to_pil_crop
+    from pipeline.page_core import IMAGE_CLASSES, MATH_CLASSES
+    formula_conf = float(os.environ.get('PRISM_PPDL_CONF', '0.30'))
+    dets = []
+    for b in _layout_boxes(norm_path, stem):
+        cls = b['class_name']; conf = b.get('confidence', 1.0); bbox = b['bbox']
+        if cls in MATH_CLASSES and conf < formula_conf:
+            continue
+        if cls in IMAGE_CLASSES or (formula_from_fidelity and cls in MATH_CLASSES):
+            crop = xyxy_to_pil_crop(image_fidelity, bbox)
+        else:
+            crop = xyxy_to_pil_crop(image_norm, bbox)
+        dets.append({'bbox': bbox, 'class_id': 0, 'class_name': cls,
+                     'confidence': conf, 'crop': crop})
+    return dets
 
 
 def parse_args():
@@ -142,7 +148,6 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from pipeline.text_worker import TextOCRWorkerDual
     from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual
     from pipeline.tatr_worker_onnx import TATROnnxWorker
-    from pipeline.models_interface import unload_yolo
     from pipeline.page_core import Workers, build_document, MATH_CLASSES, IMAGE_CLASSES
     from pipeline.tex_to_md import tex_to_omnidocbench_md
 
@@ -154,6 +159,35 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     math_worker.start()
     tatr_worker.start()
     print('[*] Workers ready.')
+
+    # ── Perf instrumentation: peak process-tree RSS + per-page latency ────────
+    # Samples the main process + all worker subprocesses (spawned as children)
+    # every 0.3s and tracks the peak summed RSS. This is the "peak RAM (process
+    # tree)" number reported for the paper — comparable to how the competitor
+    # head-to-head measured PP-StructureV3 / SmolDocling.
+    import psutil, threading, json as _json
+    _perf_latencies: list = []
+    _peak_rss = {'mb': 0.0}
+    _perf_stop = threading.Event()
+
+    def _ram_sampler():
+        me = psutil.Process(os.getpid())
+        while not _perf_stop.is_set():
+            try:
+                rss = me.memory_info().rss
+                for ch in me.children(recursive=True):
+                    try:
+                        rss += ch.memory_info().rss
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                _peak_rss['mb'] = max(_peak_rss['mb'], rss / 1024 / 1024)
+            except Exception:
+                pass
+            _perf_stop.wait(0.3)
+
+    _sampler = threading.Thread(target=_ram_sampler, daemon=True)
+    _sampler.start()
+    _wall_t0 = time.perf_counter()
 
     results: dict[str, str] = {}
 
@@ -178,80 +212,11 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             # Stage 2: YOLO detection (raw onnxruntime by default; no torch)
             img_width, img_height = image_norm.width, image_norm.height
-            detections = []
-            for d in _yolo_detect(norm_path, conf=0.25, iou=0.7):
-                x1, y1, x2, y2 = d['bbox']
-                class_name = d['class_name']
-                if class_name in IMAGE_CLASSES or (formula_from_fidelity and class_name in MATH_CLASSES):
-                    crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
-                else:
-                    crop = xyxy_to_pil_crop(image_norm, [x1, y1, x2, y2])
-                detections.append({
-                    'bbox': [x1, y1, x2, y2],
-                    'class_id': 0,
-                    'class_name': class_name,
-                    'confidence': d['confidence'],
-                    'crop': crop,
-                })
+            # PP-DocLayout_plus-L is the sole layout detector.
+            detections = _layout_from_cache(stem, image_norm, image_fidelity, formula_from_fidelity, norm_path=norm_path)
+            print(f'  [PPDL-LAYOUT] {len(detections)} boxes')
 
             detections = postprocess_detections(detections, img_width, img_height)
-
-            # DocLayout YOLO boost: supplement nano YOLO for formulas AND tables.
-            # conf=0.15 for broader formula recall; tables use 0.30 (higher precision needed).
-            try:
-                existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-                existing_tbl = [d['bbox'] for d in detections if d['class_name'] == 'Table']
-                n_fml = n_tbl = 0
-                for box in _doclayout_detect(norm_path, conf=0.15):
-                        cls = box['class_name']
-                        conf_ = box['confidence']
-                        bbox = box['bbox']
-                        if cls == 'isolate_formula':
-                            # 0.20 floor: the raw 0.15 recall level adds very
-                            # low-confidence formula boxes that overlap text and
-                            # feed Texo garbage the quality gate must discard.
-                            if conf_ < 0.20:
-                                continue
-                            if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
-                                continue
-                            crop = xyxy_to_pil_crop(image_fidelity if formula_from_fidelity else image_norm, bbox)
-                            detections.append({
-                                'bbox': bbox, 'class_id': -2,
-                                'class_name': 'Formula', 'confidence': conf_, 'crop': crop,
-                            })
-                            existing_fml.append(bbox); n_fml += 1
-                        elif cls == 'table' and conf_ >= 0.30:
-                            if any(_iou(bbox, et) > 0.4 for et in existing_tbl):
-                                continue
-                            crop = xyxy_to_pil_crop(image_norm, bbox)
-                            detections.append({
-                                'bbox': bbox, 'class_id': -3,
-                                'class_name': 'Table', 'confidence': conf_, 'crop': crop,
-                            })
-                            existing_tbl.append(bbox); n_tbl += 1
-                if n_fml or n_tbl:
-                    print(f'  [DL] +{n_fml} formula(s), +{n_tbl} table(s)')
-            except Exception as _e:
-                print(f'  [DL] skipped: {_e}')
-
-            # MFD boost: dedicated formula detector @1280px (recall ~29%->78%).
-            try:
-                existing_fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-                n_mfd = 0
-                for box in _mfd_detect(norm_path, conf=0.25):
-                    bbox = box['bbox']
-                    if any(_iou(bbox, ef) > 0.4 for ef in existing_fml):
-                        continue
-                    crop = xyxy_to_pil_crop(image_fidelity if formula_from_fidelity else image_norm, bbox)
-                    detections.append({
-                        'bbox': bbox, 'class_id': -4,
-                        'class_name': 'Formula', 'confidence': box['confidence'], 'crop': crop,
-                    })
-                    existing_fml.append(bbox); n_mfd += 1
-                if n_mfd:
-                    print(f'  [MFD] +{n_mfd} formula(s)')
-            except Exception as _e:
-                print(f'  [MFD] skipped: {_e}')
 
             # Header suppress
             HEADER_SUPPRESS_H_FRAC = 0.12
@@ -293,6 +258,34 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             # Convert LaTeX → Markdown
             md_text = tex_to_omnidocbench_md(document)
+
+            # Empty-page fallback: 36/1651 pages (PPT slides, colorful
+            # textbooks, magazines) come out empty because the whole page is
+            # detected as one Picture. An empty pred scores ~1.0 edit
+            # distance; whole-page OCR is strictly better than nothing.
+            if os.environ.get('PRISM_PAGE_OCR_FALLBACK', '1') != '0':
+                import re as _re
+                _content = _re.sub(r'!\[[^\]]*\]\([^)]*\)|\s+', '', md_text)
+                if len(_content) < 30:
+                    try:
+                        _page_img = Image.open(img_path_str).convert('RGB')
+                        if max(_page_img.size) > 1800:
+                            _sc = 1800 / max(_page_img.size)
+                            _page_img = _page_img.resize(
+                                (int(_page_img.width * _sc), int(_page_img.height * _sc)))
+                        if is_cjk:
+                            _lines = ocr_worker.run_text_batch_cjk([_page_img], is_screenshot=is_screenshot)
+                        elif is_mixed:
+                            _lines = ocr_worker.run_text_batch_mixed([_page_img], is_screenshot=is_screenshot)
+                        else:
+                            _lines = ocr_worker.run_text_batch([_page_img], is_screenshot=is_screenshot)
+                        _page_text = (_lines[0] or '').strip() if _lines else ''
+                        if len(_page_text) > len(_content):
+                            md_text = (md_text.rstrip() + '\n\n' + _page_text).strip()
+                            print(f'  [PAGE-OCR-FALLBACK] +{len(_page_text)} chars')
+                    except Exception as _e:
+                        print(f'  [PAGE-OCR-FALLBACK] failed: {_e}')
+
             results[stem] = md_text
 
             # Save .tex and .md for inspection
@@ -302,20 +295,49 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             md_path.write_text(md_text, encoding='utf-8')
 
             elapsed = time.perf_counter() - t0
+            _perf_latencies.append((stem, round(elapsed, 3)))
             print(f'    done in {elapsed:.1f}s → {md_path.name}')
 
         except Exception as e:
             import traceback
+            _perf_latencies.append((stem, round(time.perf_counter() - t0, 3)))
             print(f'    ERROR: {e}')
             traceback.print_exc()
             results[stem] = ''
             md_path = Path(pred_dir) / f'{stem}.md'
             md_path.write_text('', encoding='utf-8')
 
+    # ── Finalize perf: stop sampler, aggregate, dump perf.json ────────────────
+    _wall_s = time.perf_counter() - _wall_t0
+    _perf_stop.set()
+    _sampler.join(timeout=2)
+    _lat = sorted(v for _, v in _perf_latencies)
+    def _pct(p):
+        if not _lat:
+            return 0.0
+        return round(_lat[min(len(_lat) - 1, int(p / 100 * len(_lat)))], 3)
+    _mean = round(sum(_lat) / len(_lat), 3) if _lat else 0.0
+    _median = round(_lat[len(_lat) // 2], 3) if _lat else 0.0
+    perf = {
+        'n_pages': len(_perf_latencies),
+        'wall_s': round(_wall_s, 1),
+        'latency_s_per_page': {
+            'mean': _mean, 'median': _median,
+            'p90': _pct(90), 'p99': _pct(99),
+            'min': _lat[0] if _lat else 0.0, 'max': _lat[-1] if _lat else 0.0,
+        },
+        'peak_ram_mb_process_tree': round(_peak_rss['mb'], 1),
+        'per_page': dict(_perf_latencies),
+    }
+    with open(Path(pred_dir) / 'perf.json', 'w', encoding='utf-8') as _pf:
+        _json.dump(perf, _pf, indent=2)
+    print(f"\n[PERF] {perf['n_pages']} pages | wall {perf['wall_s']}s | "
+          f"median {_median}s/pg mean {_mean}s/pg p90 {_pct(90)}s | "
+          f"peak RAM {perf['peak_ram_mb_process_tree']} MB (process tree)")
+
     ocr_worker.stop()
     math_worker.stop()
     tatr_worker.stop()
-    unload_yolo()
     return results
 
 
@@ -333,7 +355,7 @@ def _write_eval_config(gt_json: str, pred_dir: str, no_cdm: bool) -> str:
                 },
                 'table': {
                     'metric': ['Edit_dist', 'TEDS'],
-                    'teds_workers': 2,
+                    'teds_workers': int(os.environ.get('PRISM_EVAL_TEDS_WORKERS', '12')),
                 },
                 'reading_order': {'metric': ['Edit_dist']},
             },
@@ -342,7 +364,7 @@ def _write_eval_config(gt_json: str, pred_dir: str, no_cdm: bool) -> str:
                 'ground_truth': {'data_path': gt_json},
                 'prediction': {'data_path': pred_dir},
                 'match_method': 'quick_match',
-                'match_workers': 4,
+                'match_workers': int(os.environ.get('PRISM_EVAL_MATCH_WORKERS', '12')),
                 'quick_match_truncated_timeout_sec': 120,
                 'match_timeout_sec': 180,
                 'timeout_fallback_max_chunk_span': 10,
@@ -400,7 +422,9 @@ def main():
             if lang_filter and lang != lang_filter:
                 continue
             image_paths.append(str(img_path))
-            if lang == 'simplified_chinese':
+            if lang in ('simplified_chinese', 'traditional_chinese'):
+                # traditional_chinese was falling through to the ENGLISH OCR
+                # engine (text edit 0.913, table TEDS 44 on those pages)
                 cjk_pages.add(Path(img_name).stem)
             elif lang == 'en_ch_mixed':
                 mixed_pages.add(Path(img_name).stem)

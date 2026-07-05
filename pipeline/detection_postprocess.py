@@ -68,7 +68,19 @@ def filter_by_confidence(
     detections: List[Dict[str, Any]],
     threshold: float = 0.3
 ) -> List[Dict[str, Any]]:
-    """Remove detections below confidence threshold."""
+    """Remove detections below confidence threshold.
+
+    PRISM_FML_V2: Formula dets are kept down to the formula gate
+    (PRISM_PPDL_CONF) when it sits below the generic threshold — otherwise
+    this filter silently re-clamps the lowered formula operating point.
+    """
+    import os
+    if os.environ.get('PRISM_FML_V2', '1') != '0':
+        fml_thr = min(threshold, float(os.environ.get('PRISM_PPDL_CONF', '0.30')))
+        tbl_thr = min(threshold, float(os.environ.get('PRISM_PPDL_TBL_CONF', '0.50')))
+        per_class = {'Formula': fml_thr, 'Table': tbl_thr}
+        return [d for d in detections
+                if d['confidence'] >= per_class.get(d['class_name'], threshold)]
     return [d for d in detections if d['confidence'] >= threshold]
 
 
@@ -124,7 +136,8 @@ def class_aware_nms(
 def resolve_overlaps(
     detections: List[Dict[str, Any]],
     containment_threshold: float = 0.80,
-    partial_iou_threshold: float = 0.3
+    partial_iou_threshold: float = 0.3,
+    page_area: float = None
 ) -> List[Dict[str, Any]]:
     """
     Resolve remaining cross-class overlaps.
@@ -146,10 +159,31 @@ def resolve_overlaps(
     # Classes that should NEVER be silently consumed by a containing box.
     _PROTECTED_CLASSES = {"Section-header", "Page-header", "Title", "Caption"}
 
+    # PRISM_FML_V2: a Formula contained in a bigger Text box is a display
+    # equation inside a paragraph region — keep it (formula_v2 masks it out of
+    # the text crop). Same-class Formula-in-Formula containment still dedupes.
+    import os
+    _fml_v2 = os.environ.get('PRISM_FML_V2', '1') != '0'
+
     # Sort by area descending (larger boxes first)
     dets = sorted(detections, key=lambda d: bbox_area(d['bbox']), reverse=True)
 
     to_remove = set()
+
+    # PRISM_FML_V2 pre-pass: an outer Formula containing >=2 HIGHER-conf
+    # Formulas is a spurious merged block — the containment rule below would
+    # keep it and delete the precise chips (it always keeps the larger box).
+    if _fml_v2:
+        fml_idx = [i for i, d in enumerate(dets) if d['class_name'] == 'Formula']
+        for i in fml_idx:
+            better_inside = sum(
+                1 for j in fml_idx
+                if j != i
+                and dets[j]['confidence'] > dets[i]['confidence']
+                and compute_containment(dets[j]['bbox'], dets[i]['bbox']) >= containment_threshold
+            )
+            if better_inside >= 2:
+                to_remove.add(i)
 
     for i in range(len(dets)):
         if i in to_remove:
@@ -167,6 +201,17 @@ def resolve_overlaps(
                 # Never drop protected classes regardless of containment
                 if dets[j]['class_name'] in _PROTECTED_CLASSES:
                     continue
+                if (_fml_v2 and dets[j]['class_name'] == 'Formula'
+                        and dets[i]['class_name'] != 'Formula'):
+                    continue
+                # A near-page-sized Picture is a background (PPT slide,
+                # colorful textbook): letting it consume the Text/Table boxes
+                # inside produced 30+ completely empty pages. Chart labels
+                # inside NORMAL-sized figures are still consumed as before.
+                if (_fml_v2 and dets[i]['class_name'] == 'Picture' and page_area
+                        and bbox_area(bbox_i) > 0.70 * page_area
+                        and dets[j]['class_name'] != 'Picture'):
+                    continue
                 # j is inside i — remove the contained box
                 to_remove.add(j)
                 continue
@@ -174,6 +219,12 @@ def resolve_overlaps(
             # Check partial overlap between different classes
             iou = compute_iou(bbox_i, bbox_j)
             if iou > partial_iou_threshold:
+                cls_i, cls_j = dets[i]['class_name'], dets[j]['class_name']
+                if _fml_v2 and (cls_i == 'Formula') != (cls_j == 'Formula'):
+                    # Leave both boxes intact: clipping a bbox here would desync
+                    # it from its already-cut crop. formula_v2 masks the formula
+                    # region out of the text CROP instead.
+                    continue
                 # Clip the lower-confidence box
                 if dets[j]['confidence'] <= dets[i]['confidence']:
                     dets[j] = _clip_box(dets[j], dets[i])
@@ -382,11 +433,21 @@ def postprocess_detections(
     # Stage 1: Confidence filter
     dets = filter_by_confidence(detections, threshold=conf_threshold)
 
+    # Stage 1.5 (PRISM_FML_V2): a "Formula" covering most of the page is a
+    # background FP (PPT slides). It must go BEFORE overlap resolution or it
+    # containment-consumes the real formula chips inside it.
+    import os as _os
+    if _os.environ.get('PRISM_FML_V2', '1') != '0':
+        _page_area = float(image_width) * float(image_height)
+        dets = [d for d in dets
+                if d['class_name'] != 'Formula'
+                or bbox_area(d['bbox']) <= 0.5 * _page_area]
+
     # Stage 2: Class-aware NMS
     dets = class_aware_nms(dets, iou_threshold=nms_iou_threshold)
 
     # Stage 3: Resolve remaining overlaps (cross-class)
-    dets = resolve_overlaps(dets)
+    dets = resolve_overlaps(dets, page_area=float(image_width) * float(image_height))
 
     # Stage 4: Refine boxes (merge, pad, clamp)
     dets = refine_boxes(dets, image_width, image_height)

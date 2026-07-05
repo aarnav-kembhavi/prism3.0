@@ -73,6 +73,47 @@ def _is_valid_quad(pts, img_area, min_ratio=0.15):
     return _quad_area(pts) >= img_area * min_ratio
 
 
+def _quad_geometry_ok(pts, min_angle=50.0, max_angle=130.0):
+    """Reject non-convex or heavily skewed quads (a real page photographed at
+    document-scanning angles keeps corners reasonably close to 90°)."""
+    rect = order_points(pts)
+    n = 4
+    signs = []
+    for i in range(n):
+        p0, p1, p2 = rect[i - 1], rect[i], rect[(i + 1) % n]
+        v1 = p0 - p1
+        v2 = p2 - p1
+        cross = v1[0] * v2[1] - v1[1] * v2[0]
+        signs.append(np.sign(cross))
+        n1 = np.linalg.norm(v1); n2 = np.linalg.norm(v2)
+        if n1 < 1e-3 or n2 < 1e-3:
+            return False
+        ang = np.degrees(np.arccos(np.clip(np.dot(v1, v2) / (n1 * n2), -1, 1)))
+        if not (min_angle <= ang <= max_angle):
+            return False
+    return abs(sum(signs)) == 4     # all turns same direction = convex
+
+
+def _quad_captures_document(pts, gray):
+    """The document is the bright region of a camera capture (paper vs desk).
+    A candidate quad that does NOT contain that region is background texture
+    (measured failure: wood-grain quads on a receipt photo warped the table
+    across the canvas and destroyed the page). Requires the quad to hold most
+    of the bright mass and to be mostly bright inside."""
+    thr = max(120.0, float(np.percentile(gray, 75)) * 0.8)
+    bright = gray > thr
+    total = int(bright.sum())
+    if total < 0.02 * gray.size:
+        return True     # no distinct bright blob — nothing to validate against
+    mask = np.zeros(gray.shape, np.uint8)
+    cv2.fillPoly(mask, [order_points(pts).astype(np.int32)], 1)
+    inside = int(bright[mask.astype(bool)].sum())
+    quad_px = int(mask.sum())
+    contains = inside / total
+    fill = inside / max(quad_px, 1)
+    return contains >= 0.55 and fill >= 0.35
+
+
 def _find_largest_quad_contour(binary_img, img_area):
     """
     Find the largest quadrilateral contour in a binary image.
@@ -385,7 +426,9 @@ def detect_and_rectify(image_path, img_override=None):
     if img_override is not None:
         img = img_override
     else:
-        img = cv2.imread(image_path)
+        # Unicode-safe read: cv2.imread returns None on non-ASCII Windows paths
+        # (e.g. Chinese filenames with full-width parens), so decode via numpy.
+        img = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             raise FileNotFoundError(f"Cannot read image: {image_path}")
 
@@ -402,15 +445,22 @@ def detect_and_rectify(image_path, img_override=None):
     for name, strategy_fn in strategies:
         try:
             pts = strategy_fn(gray, img_area)
-            if pts is not None:
-                print(f"  [norm] Document detected via: {name}")
-                warped = four_point_transform(img, pts)
-                # Sanity check: warped should not be drastically smaller
-                wh, ww = warped.shape[:2]
-                if wh * ww >= img_area * 0.10:
-                    return warped
-                else:
-                    print(f"  [norm] Warning: {name} produced too-small result, trying next...")
+            if pts is None:
+                continue
+            if not _quad_geometry_ok(pts):
+                print(f"  [norm] {name}: quad rejected (non-convex/skewed), trying next...")
+                continue
+            if not _quad_captures_document(pts, gray):
+                print(f"  [norm] {name}: quad rejected (misses document region), trying next...")
+                continue
+            print(f"  [norm] Document detected via: {name}")
+            warped = four_point_transform(img, pts)
+            # Sanity check: warped should not be drastically smaller
+            wh, ww = warped.shape[:2]
+            if wh * ww >= img_area * 0.10:
+                return warped
+            else:
+                print(f"  [norm] Warning: {name} produced too-small result, trying next...")
         except Exception as e:
             print(f"  [norm] Warning: {name} failed ({e}), trying next...")
             continue

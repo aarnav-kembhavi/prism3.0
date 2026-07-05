@@ -58,10 +58,66 @@ def _adjust_figure_paths(parts: list[str]) -> list[str]:
     ]
 
 
-def _extract_tables(table_crops, workers: Workers) -> list[str]:
-    """Table structure recognition via TATR, with coordinate-heuristic fallback."""
+_rtable = None
+
+
+def _get_rtable():
+    """Lazy singleton for the RapidTable child worker (None if unavailable)."""
+    global _rtable
+    if _rtable is None:
+        from pipeline import rtable_worker
+        if rtable_worker.available():
+            try:
+                w = rtable_worker.RapidTableWorker()
+                w.start()
+                _rtable = w
+            except Exception as e:
+                print(f"  [rtable] unavailable, using TATR: {e}")
+                _rtable = False
+        else:
+            _rtable = False
+    return _rtable or None
+
+
+def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
+    """Table structure recognition via RapidTable (SLANet-plus), TATR fallback.
+
+    SLANet-plus predicts structure and runs its own cell OCR on the crop
+    (validated: catastrophic tables -0.01 -> 0.57 TEDS, good tables unchanged).
+    TATR + token assignment remains the fallback path, and after that the
+    coordinate heuristic.
+
+    CJK pages route the TATR-path cell OCR through the CJK engine — otherwise
+    Chinese cell text is recognized by the English model and collapses full
+    TEDS (structure stays fine, content is garbage).
+    """
+    rtable = _get_rtable()
+    if rtable is not None:
+        results = []
+        pending = []  # indices that need the TATR fallback
+        for i, crop in enumerate(table_crops):
+            html = rtable.build_table_html(crop)
+            if html and html.count('<td') >= 1:
+                results.append(html)
+            else:
+                results.append(None)
+                pending.append(i)
+        if pending:
+            fallback = _extract_tables_tatr(
+                [table_crops[i] for i in pending], workers, is_cjk=is_cjk)
+            for i, res in zip(pending, fallback):
+                results[i] = res
+        return [r or '' for r in results]
+    return _extract_tables_tatr(table_crops, workers, is_cjk=is_cjk)
+
+
+def _extract_tables_tatr(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
+    _cjk_tbl = os.environ.get('PRISM_CJK_TABLE_OCR', '1') != '0'  # A/B toggle
     if workers.tatr is not None:
-        tokens_list = workers.ocr.run_table_tokens_batch(table_crops)
+        if is_cjk and _cjk_tbl and hasattr(workers.ocr, 'run_table_tokens_batch_cjk'):
+            tokens_list = workers.ocr.run_table_tokens_batch_cjk(table_crops)
+        else:
+            tokens_list = workers.ocr.run_table_tokens_batch(table_crops)
         results = []
         for crop, tokens in zip(table_crops, tokens_list):
             result = None
@@ -138,7 +194,7 @@ def route_and_extract(detections, workers: Workers, figures_dir: str,
 
     if table_indices:
         table_crops = [detections[i]["crop"] for i in table_indices]
-        table_results = _extract_tables(table_crops, workers)
+        table_results = _extract_tables(table_crops, workers, is_cjk=(is_cjk or is_mixed))
         for idx, raw in zip(table_indices, table_results):
             detections[idx]["raw_content"] = raw
 
@@ -168,6 +224,18 @@ def build_document(detections, img_width, img_height, workers: Workers,
                    is_cjk: bool = False, is_mixed: bool = False,
                    header_logo_fname: str = None) -> str:
     """Column-aware dispatch + assembly. Returns a complete LaTeX document."""
+    from pipeline import formula_v2
+    if formula_v2.enabled():
+        detections = formula_v2.apply_formula_v2(detections, img_width, img_height)
+
+    # Marginalia (running headers/footers/page numbers) are abandon-category
+    # in OmniDocBench GT: never scored, but every EMITTED one that fails the
+    # matcher's ignore-pairing counts as a full unmatched-pred penalty
+    # (measured: report/PPT pages with 0 GT text blocks scoring 1.0 because
+    # of a disclaimer footer). MinerU/Marker drop them too.
+    if os.environ.get('PRISM_DROP_MARGINALIA', '1') != '0':
+        detections = [d for d in detections
+                      if d['class_name'] not in ('Page-footer', 'Page-header')]
     has_cjk   = is_cjk or is_mixed
     col_count = detect_column_count(detections, img_width)
     lang_kwargs = dict(is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed)
@@ -188,7 +256,31 @@ def build_document(detections, img_width, img_height, workers: Workers,
             full_parts, full_idx, True, left_parts, left_idx,
             right_parts, right_idx, header_logo_fname, has_cjk=has_cjk)
 
+    # XY-cut ordering for complex layouts: 3+ detected columns, OR pages the
+    # gutter detector calls "1 column" despite many regions — half the
+    # newspapers land there (touching boxes hide the gutters) and got plain
+    # top-down ordering. On a genuinely single-column page XY-cut degenerates
+    # to the same top-down order, so the extension is safe.
+    _xycut_page = col_count >= 3 or (col_count == 1 and len(detections) >= 8)
+    if _xycut_page and os.environ.get('PRISM_RO_V2', '1') != '0':
+        from pipeline.layout_utils import xycut_order
+        ordered = xycut_order(detections, img_width, img_height)
+        parts, list_idx, _, _ = route_and_extract(
+            ordered, workers, figures_dir, **lang_kwargs)
+        parts = _adjust_figure_paths(parts)
+        return assemble_document(parts, list_idx, False,
+                                 header_logo=header_logo_fname, has_cjk=has_cjk)
+
     if col_count >= 3:
+        if os.environ.get('PRISM_RO_V2', '1') != '0':
+            # (unreachable when RO_V2 on; kept for the kill-switch path)
+            from pipeline.layout_utils import xycut_order
+            ordered = xycut_order(detections, img_width, img_height)
+            parts, list_idx, _, _ = route_and_extract(
+                ordered, workers, figures_dir, **lang_kwargs)
+            parts = _adjust_figure_paths(parts)
+            return assemble_document(parts, list_idx, False,
+                                     header_logo=header_logo_fname, has_cjk=has_cjk)
         full_dets, col_lists = split_detections_n_columns(
             detections, img_width, img_height, use_dag=True)
         all_parts: list = []

@@ -29,3 +29,15 @@ _web_uploads/
 .venv_ppocr/
 .venv_smol/
 .paddlex/
+
+# Local venvs (experiment sandboxes; .venv_rtable is recreated via pip install rapid-table rapidocr apted lxml Levenshtein)
+.venv_gpu/
+.venv_mineru/
+.venv_p2o/
+.venv_rtable/
+
+# Experiment caches / per-run eval artifacts (regenerable)
+benchmarks/compare/formula_eval/crops/
+benchmarks/compare/formula_eval/preds_*/
+benchmarks/compare/mineru_*/
+benchmarks/compare/preds_*/

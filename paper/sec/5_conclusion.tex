@@ -1,0 +1,9 @@
+\section{Limitations}
+\label{sec:limitations}
+
+PRISM's residual gap to GPU systems is concentrated where model capacity is genuinely required: Chinese-embedded formulas (CDM 61 vs.\ 85 English --- the 20M recognizer's CJK coverage), handwriting (notes text edit $\sim$0.20), agate-type newspaper listings that the 800\,px detector cannot resolve, and cell-content fidelity in visually dense tables. These would be addressed by a larger recognizer or higher-resolution detection, both of which trade directly against the budget that defines the system. Our evaluation is also benchmark-centric: OmniDocBench's matcher-based scoring shapes some design choices (marginalia suppression, plain-text emphasis) that a different downstream consumer might weigh differently, though we keep all such behaviors behind flags.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented PRISM, a CPU-only document parsing pipeline with under 250\,MB of models that reaches an OmniDocBench overall score of 78.5\todo{v14}, ahead of a widely deployed GPU pipeline and dominating the sub-300M VLM class on accuracy and efficiency simultaneously. The central lesson is that the orchestration layer --- geometric reasoning over ink, class-aware detection post-processing, evaluation-aware emission --- recovers most of the accuracy commonly attributed to scale, and that rigorous per-failure measurement (including of the evaluation pipeline itself) is the highest-leverage tool in building such systems. We release code, configuration and the full experiment log, including all negative results.

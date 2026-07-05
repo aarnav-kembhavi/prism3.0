@@ -10,6 +10,79 @@ from typing import List, Dict, Any
 import numpy as np
 
 
+def xycut_order(detections: List[Dict[str, Any]], img_width: int,
+                img_height: int) -> List[Dict[str, Any]]:
+    """Recursive XY-cut reading order for complex (3+ column) layouts.
+
+    The flat "full-width elements, then column 1..N top-to-bottom" model
+    scrambles newspapers: their structure is vertical REGIONS (masthead,
+    article blocks separated by banners/photos), each with its own columns.
+    XY-cut expresses that: recursively split at the widest empty horizontal
+    band (top block first), else at empty vertical gutters (left to right),
+    else fall back to geometric order.
+
+    Boxes spanning nearly the whole page (background pictures) are excluded
+    from cut computation — a full-page box would otherwise block every cut —
+    and are emitted first within their group.
+    """
+    if not detections:
+        return []
+    min_gap_y = max(8.0, 0.006 * img_height)
+    min_gap_x = max(8.0, 0.006 * img_width)
+
+    def gaps(intervals, min_gap):
+        """Empty gaps >= min_gap between merged [lo, hi] intervals."""
+        ivs = sorted(intervals)
+        merged = [list(ivs[0])]
+        for lo, hi in ivs[1:]:
+            if lo <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], hi)
+            else:
+                merged.append([lo, hi])
+        return [(merged[i][1], merged[i + 1][0]) for i in range(len(merged) - 1)
+                if merged[i + 1][0] - merged[i][1] >= min_gap]
+
+    def rec(dets, depth):
+        if len(dets) <= 1 or depth > 12:
+            return sort_detections_geometric(dets)
+        # background boxes don't participate in cuts
+        cuttable = [d for d in dets
+                    if not ((d['bbox'][2] - d['bbox'][0]) > 0.9 * img_width
+                            and (d['bbox'][3] - d['bbox'][1]) > 0.9 * img_height)]
+        _cut_ids = {id(d) for d in cuttable}
+        bg = [d for d in dets if id(d) not in _cut_ids]
+        if not cuttable:
+            return sort_detections_geometric(dets)
+
+        ycuts = gaps([(d['bbox'][1], d['bbox'][3]) for d in cuttable], min_gap_y)
+        if ycuts:
+            bands: List[list] = [[] for _ in range(len(ycuts) + 1)]
+            for d in cuttable:
+                cy = (d['bbox'][1] + d['bbox'][3]) / 2
+                k = sum(1 for g0, g1 in ycuts if cy > (g0 + g1) / 2)
+                bands[k].append(d)
+            out = list(bg)
+            for band in bands:
+                out.extend(rec(band, depth + 1))
+            return out
+
+        xcuts = gaps([(d['bbox'][0], d['bbox'][2]) for d in cuttable], min_gap_x)
+        if xcuts:
+            cols: List[list] = [[] for _ in range(len(xcuts) + 1)]
+            for d in cuttable:
+                cx = (d['bbox'][0] + d['bbox'][2]) / 2
+                k = sum(1 for g0, g1 in xcuts if cx > (g0 + g1) / 2)
+                cols[k].append(d)
+            out = list(bg)
+            for col in cols:
+                out.extend(rec(col, depth + 1))
+            return out
+
+        return sort_detections_geometric(dets)
+
+    return rec(list(detections), 0)
+
+
 def apply_semantic_reading_order(
     detections: List[Dict[str, Any]],
     image_width: int,

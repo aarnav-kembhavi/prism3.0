@@ -1,0 +1,92 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Setup}
+\textbf{Benchmark.} OmniDocBench v1.6~\cite{omnidocbench}: 1651 page images spanning books, textbooks, exam papers, magazines, academic literature, notes, newspapers, research reports and slides, in English and Chinese. We run the \emph{official} evaluation harness unmodified (quick-match matcher; text and reading order scored by normalized edit distance, display formulas by CDM~\cite{cdm} compiled with TeX~Live, tables by TEDS~\cite{teds}). The composite follows the leaderboard convention $\mathrm{Overall}=\big((1-\mathrm{TextEdit})\cdot 100+\mathrm{CDM}+\mathrm{TEDS}\big)/3$. We additionally report the v1.5 subset cut for comparability with rows published against v1.5.
+
+\textbf{Hardware.} All PRISM measurements: a 16-logical-core consumer Windows 11 machine, CPU only, onnxruntime; no quantization beyond TATR INT8. Latency is end-to-end per page including all workers; peak RAM is the maximum working set of the whole process tree.
+
+\subsection{Main results}
+\label{sec:main_results}
+
+\begin{table*}[t]
+\centering
+\caption{OmniDocBench v1.6\_full (1651 pages), official harness. Leaderboard rows from the official repository; PRISM measured by us on the identical dataset, harness and metrics. Abbreviated: the full 32-row table is in the supplementary. \todo{Update PRISM row to v14.}}
+\label{tab:v16}
+\small
+\begin{tabular}{llccccc}
+\toprule
+Model & Type & Overall$\uparrow$ & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+\midrule
+MinerU2.5-Pro & VLM (1.2B) & 95.75 & 0.036 & 97.45 & 93.42 & 0.120 \\
+PaddleOCR-VL & VLM (0.9B) & 94.18 & 0.040 & 95.91 & 90.65 & 0.135 \\
+Gemini 3 Pro & General VLM & 92.91 & 0.064 & 95.99 & 89.15 & 0.165 \\
+dots.ocr & VLM (3B) & 90.77 & 0.048 & 89.95 & 87.18 & 0.138 \\
+GPT-5.2 & General VLM & 86.59 & 0.114 & 88.21 & 82.95 & 0.193 \\
+MinerU-Pipeline & Pipeline (GPU) & 86.47 & 0.055 & 83.07 & 81.88 & 0.153 \\
+olmOCR & VLM (7B) & 85.74 & 0.139 & 88.10 & 83.00 & 0.216 \\
+Mistral OCR & VLM (API) & 85.66 & 0.097 & 89.91 & 76.78 & 0.171 \\
+Nanonets-OCR-s & VLM (3B) & 83.61 & 0.108 & 81.46 & 80.18 & 0.213 \\
+\textbf{PRISM (ours)} & \textbf{Pipeline, CPU, 245\,MB} & \textbf{78.46} & 0.142 & 78.11 & 71.46 & 0.286 \\
+Marker & Pipeline (GPU) & 78.44 & 0.157 & 85.24 & 65.77 & 0.243 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- and sits within 8 points of the MinerU GPU pipeline, with every system above it using at least one order of magnitude more compute. By language, PRISM's English formula CDM is 84.7, at the level of the GPU pipelines; the residual formula gap is concentrated in Chinese-embedded math (CDM 61), a capacity limit of the 20M recognizer. On the v1.5 cut (\todo{table in supplementary}), PRISM scores 80.2, ahead of the MinerU2-pipeline (75.5) and Marker-1.8.2 (71.3) rows published there and between olmOCR-7B and GPT-4o.
+
+\subsection{Efficiency frontier}
+\label{sec:efficiency}
+
+\begin{table}[t]
+\centering
+\caption{Controlled CPU head-to-head: same 20 pages, same machine, isolated runs, 8-thread budget. PRISM row predates its current accuracy (conservative). $^{*}$format mismatch; $^{\dagger}$config artifact.}
+\label{tab:cpu_frontier}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+System & RAM & s/pg & Text$_{EN}\downarrow$ & Formula$_{EN}\downarrow$ & TEDS$\uparrow$ \\
+\midrule
+\textbf{PRISM} & \textbf{1.3\,GB} & \textbf{6.8} & 0.165 & 0.491 & 46.1 \\
+PP-Struct.V3 (server) & 8.0\,GB & 58.2 & 0.081 & 0.320 & 56.5 \\
+PP-Struct.V3 (mobile) & 3.6\,GB & 6.3 & 0.156 & 1.000$^{\dagger}$ & 43.5 \\
+SmolDocling-256M & 2.3\,GB & 92.2 & 0.461 & 1.000$^{*}$ & 0.0$^{*}$ \\
+GraniteDocling-258M & 2.3\,GB & 54.6 & 0.341 & 0.585 & 37.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the full-benchmark run PRISM's median latency is 4.7\,s/page (mean 5.6, p90 10.6) with a 2.24\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker). \Cref{tab:cpu_frontier} is the same-machine comparison: PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile is more accurate, at $6\times$ the memory and $8.5\times$ the latency. Model inventory: layout 124\,MB, OCR $\sim$11\,MB, formulas 79\,MB, tables 7.4\,MB (+30\,MB TATR fallback)\todo{finalize}.
+
+\subsection{Ablations and negative results}
+\label{sec:ablations}
+
+\begin{table}[t]
+\centering
+\caption{Cumulative component ablation on the official v1.6 harness. Each row adds to the previous. \todo{Insert final v14 progression.}}
+\label{tab:ablation}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Configuration & Overall & Text$\downarrow$ & CDM & TEDS \\
+\midrule
+Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 \\
++ formula geometry (\cref{sec:formula}) & & & 77.8 & \\
++ table spans + routing & & & & 71.5 \\
++ rescues + marginalia & & 0.142 & & \\
++ XY-cut order & 78.46 & & & \\
++ SLANet-plus tables & \todo{v14} & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What did not work.} We report failed directions with measurements, as they carry as much information as the successes:
+\begin{itemize}
+\item \textbf{Detector ensembling / dedicated formula detector.} Adding a YOLO-based math-formula detector raised CDM by 3.3 on formula pages but its false positives cost more text-edit than the CDM gained; net negative on the composite.
+\item \textbf{Global confidence relaxation.} Lowering all detection gates to 0.15 raised recall but the marginal fragments stole matches from correct predictions; net negative. (Class-aware gates, \cref{sec:layout}, capture the benefit without the cost.)
+\item \textbf{Frequency-domain moir\'e removal} erases text-line frequencies on paper photographs (\cref{sec:normalization}); enabled only for screen photographs.
+\item \textbf{Emphasis markup.} Emitting bold/italic markers broke the matcher's caption pairing and turned matched blocks into unmatched 1.0-edit predictions; plain text scores strictly better.
+\end{itemize}
+
+\paragraph{Where the evaluation, not the model, was the bottleneck.} Three of our largest single improvements were pipeline--evaluation interaction fixes, not modeling: math-block quarantine in the Markdown lowering (a line-break rewrite was corrupting matrix row separators in 28\% of matched formula pairs), marginalia suppression (unmatched running headers penalized as full-weight predictions), and pdflatex-compatibility sanitation of recognizer output (\cref{sec:formula}). We suggest these classes of failure are endemic in benchmark submissions and deserve routine auditing.
