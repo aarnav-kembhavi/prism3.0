@@ -121,7 +121,12 @@ def _drop_inline_fps(detections):
             if _inter_frac(b, t['bbox']) >= 0.8 and _area(b) < 0.9 * _area(t['bbox']):
                 host = t
                 break
-        if host is None or id(host) in dense_hosts:
+        # Dets converted from V3's inline_formula class don't get the
+        # dense-grid free pass: their own count is what tips a paragraph
+        # over the density threshold, and waving them through eats the
+        # paragraph's text (measured +0.004 full-set text edit). The
+        # ink-blanking below already keeps legitimate side-by-side grids.
+        if host is None or (id(host) in dense_hosts and not d.get('from_inline')):
             out.append(d)
             continue
         tb = host['bbox']

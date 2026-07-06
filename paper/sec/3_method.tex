@@ -26,6 +26,8 @@ Three open-loop details remain load-bearing inside the accepted corrections:
 \end{itemize}
 The stack is photometrically conservative: recognizer crops are always taken from a pre-destructive copy of the image, so OCR sees original pixels even when normalization was applied for detection.
 
+Verification-gating is not a preprocessing trick but the system's organizing principle, and it recurs at every level of the pipeline: corrections are probe-verified here, formula recognition is OCR-probe-routed around the recognizer's out-of-distribution inputs (\cref{sec:formula}), and empty-page rescue re-reads the whole page only when assembly produced nothing (\cref{sec:rescues}). In each case a cheap read of the evidence decides between two processing paths, in place of a threshold on input statistics.
+
 \subsection{Layout detection}
 \label{sec:layout}
 

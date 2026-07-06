@@ -132,6 +132,8 @@ def run_detection(image_norm: Image.Image, image_fidelity: Image.Image, image_pa
             }
             if d.get('read_order') is not None:
                 det_out['read_order'] = d['read_order']
+            if d.get('from_inline'):
+                det_out['from_inline'] = True
             detections.append(det_out)
         return detections
 

@@ -111,6 +111,8 @@ def _layout_from_cache(stem, image_norm, image_fidelity, formula_from_fidelity, 
              'confidence': conf, 'crop': crop}
         if b.get('read_order') is not None:
             d['read_order'] = b['read_order']
+        if b.get('from_inline'):
+            d['from_inline'] = True
         dets.append(d)
     return dets
 

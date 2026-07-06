@@ -79,7 +79,245 @@ def _sanitize(text: str) -> str:
     lc = text.count(r'\left'); rc = text.count(r'\right')
     if lc > rc:
         text = text.rstrip() + r'\right.' * (lc - rc)
+    text = _render_repair(text.strip())
     return text.strip()
+
+
+_LEFTRIGHT_RE = re.compile(r'\\(left|right)\s*(\\[a-zA-Z]+|\\?[^a-zA-Z\s]|\s|$)')
+_ENV_RE = re.compile(r'\\(begin|end)\{(array|aligned|cases|[bpvBV]?matrix|smallmatrix|gathered)\*?\}')
+_VALID_DELIMS = {'(', ')', '[', ']', '|', '.', '<', '>', '/',
+                 r'\{', r'\}', r'\|', r'\langle', r'\rangle', r'\lbrace',
+                 r'\rbrace', r'\lbrack', r'\rbrack', r'\lfloor', r'\rfloor',
+                 r'\lceil', r'\rceil', r'\vert', r'\Vert', r'\backslash',
+                 r'\uparrow', r'\downarrow', r'\updownarrow'}
+
+
+def _render_repair(text: str) -> str:
+    """Repair the structural failures that zero an otherwise-correct formula
+    in the CDM renderer (measured: 8/12 sampled zero-CDM predictions were OUR
+    pdflatex failures — mismatched \\left/\\right, stray }, & outside arrays).
+
+    Repairs preserve glyphs: unpaired \\left/\\right are DEMOTED to \\big
+    (same symbol, no pairing requirement), stray closing braces are dropped
+    where they occur, stray & becomes explicit space.
+    """
+    if not text:
+        return text
+    # 1. \left/\right must name a delimiter — insert '.' when missing.
+    def _fix_delim(m):
+        kind, nxt = m.group(1), m.group(2)
+        if nxt.strip() in _VALID_DELIMS and nxt.strip():
+            return m.group(0)
+        return '\\' + kind + '.' + (nxt if nxt.strip() else ' ')
+    text = _LEFTRIGHT_RE.sub(_fix_delim, text)
+
+    # 2. Stack scan: brace balance at position level, stray & outside envs.
+    out = []
+    depth = 0
+    i, n = 0, len(text)
+    env_depth = 0
+    while i < n:
+        c = text[i]
+        if c == '\\' and i + 1 < n:
+            nxt2 = text[i:i+2]
+            if nxt2 in ('\\{', '\\}', '\\&', '\\\\'):
+                out.append(nxt2); i += 2; continue
+            m = _ENV_RE.match(text[i:])
+            if m:
+                env_depth += 1 if m.group(1) == 'begin' else -1
+                env_depth = max(env_depth, 0)
+                out.append(m.group(0)); i += m.end(); continue
+            m = re.match(r'\\[a-zA-Z]+', text[i:])
+            if m:
+                out.append(m.group(0)); i += m.end(); continue
+            out.append(text[i:i+2]); i += 2; continue
+        if c == '{':
+            depth += 1; out.append(c)
+        elif c == '}':
+            if depth > 0:
+                depth -= 1; out.append(c)
+            # else: stray closing brace — drop it
+        elif c == '&' and env_depth == 0:
+            out.append(' ')                    # alignment tab outside any env
+        else:
+            out.append(c)
+        i += 1
+    text = ''.join(out)
+    if depth > 0:
+        text += '}' * depth
+
+    # 3. \left/\right must pair within the same brace group AND array cell
+    # (pdflatex rejects pairs spanning & or \\). Demote violators to \big —
+    # same glyph, no pairing requirement.
+    demote = []          # (pos, 'left'|'right')
+    stack = []           # open \left: (pos, depth, cell-scope tuple)
+    depth = 0
+    cells = [0]
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '\\' and i + 1 < n:
+            nxt2 = text[i:i+2]
+            if nxt2 in ('\\{', '\\}', '\\&'):
+                i += 2; continue
+            if nxt2 == '\\\\':
+                cells[-1] += 1
+                i += 2; continue
+            m = _ENV_RE.match(text[i:])
+            if m:
+                # \begin{env}...\end{env} scopes like a group: cells inside
+                # belong to the env, and a \left(...\right) wrapped AROUND it
+                # must not be broken by the env's alignment tabs.
+                if m.group(1) == 'begin':
+                    depth += 1; cells.append(0)
+                else:
+                    if depth > 0:
+                        depth -= 1; cells.pop()
+                        while stack and stack[-1][1] > depth:
+                            demote.append((stack.pop()[0], 'left'))
+                i += m.end(); continue
+            m = re.match(r'\\left\b', text[i:])
+            if m:
+                stack.append((i, depth, tuple(cells)))
+                i += m.end(); continue
+            m = re.match(r'\\right\b', text[i:])
+            if m:
+                if stack and stack[-1][1] == depth and stack[-1][2] == tuple(cells):
+                    stack.pop()
+                else:
+                    demote.append((i, 'right'))
+                i += m.end(); continue
+            m = re.match(r'\\[a-zA-Z]+', text[i:])
+            if m:
+                i += m.end(); continue
+            i += 2; continue
+        if c == '{':
+            depth += 1; cells.append(0)
+        elif c == '}':
+            if depth > 0:
+                depth -= 1; cells.pop()
+                while stack and stack[-1][1] > depth:
+                    demote.append((stack.pop()[0], 'left'))
+        elif c == '&':
+            cells[-1] += 1
+            while stack and stack[-1][1] == depth and stack[-1][2] != tuple(cells):
+                demote.append((stack.pop()[0], 'left'))
+        i += 1
+    while stack:
+        demote.append((stack.pop()[0], 'left'))
+    for pos, kind in sorted(demote, reverse=True):
+        width = 5 if kind == 'left' else 6
+        text = text[:pos] + '\\big' + text[pos + width:]
+
+    # 4. Arrays whose rows carry more cells than the column spec declares
+    # ("Extra alignment tab" — Texo overshoots the spec): widen the spec.
+    text = _fix_array_colspecs(text)
+
+    # 5. Two-argument macros left with one argument by decode truncation
+    # (\binom{} } zeroes the formula): append an empty second group.
+    text = _fix_two_arg_macros(text)
+    return text
+
+
+_TWO_ARG_RE = re.compile(
+    r'\\(binom|tbinom|dbinom|frac|dfrac|tfrac|overset|underset|stackrel)\b')
+
+
+def _fix_two_arg_macros(text: str) -> str:
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        m = _TWO_ARG_RE.match(text, i)
+        if not m:
+            out.append(text[i]); i += 1
+            continue
+        out.append(m.group(0))
+        j = m.end()
+        groups = 0
+        while groups < 2:
+            while j < n and text[j] in ' \t\n':
+                out.append(text[j]); j += 1
+            if j < n and text[j] == '{':
+                depth = 0
+                while j < n:
+                    if text[j] == '\\' and j + 1 < n:
+                        out.append(text[j:j+2]); j += 2; continue
+                    out.append(text[j])
+                    if text[j] == '{':
+                        depth += 1
+                    elif text[j] == '}':
+                        depth -= 1
+                        if depth == 0:
+                            j += 1; break
+                    j += 1
+                groups += 1
+            elif j < n and text[j] == '\\':
+                mm = re.match(r'\\[a-zA-Z]+|\\.', text[j:])
+                if mm and mm.group(0) not in ('\\\\',) and not mm.group(0).startswith('\\end'):
+                    # control-sequence argument (e.g. \frac \alpha \beta)
+                    out.append(mm.group(0)); j += mm.end(); groups += 1
+                else:
+                    out.append('{}' * (2 - groups))
+                    break
+            elif j < n and text[j] not in '}&' and text[j].strip():
+                # single-token argument (e.g. \frac 1 2) — legal, keep as-is
+                out.append(text[j]); j += 1; groups += 1
+            else:
+                out.append('{}' * (2 - groups))
+                break
+        i = j
+    return ''.join(out)
+
+
+_ARRAY_BEGIN_RE = re.compile(r'\\begin\{array\}\s*(\{[^{}]*\})')
+
+
+def _fix_array_colspecs(text: str) -> str:
+    edits = []  # (spec_start, spec_end, new_spec)
+    stack = []  # (spec_start, spec_end, ncols, max_cells, cur_cells) per open array
+    depth = 0
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '\\' and i + 1 < n:
+            nxt2 = text[i:i+2]
+            if nxt2 in ('\\{', '\\}', '\\&'):
+                i += 2; continue
+            if nxt2 == '\\\\':
+                if stack and stack[-1][5] == depth:
+                    st = stack[-1]
+                    st[3] = max(st[3], st[4] + 1); st[4] = 0
+                i += 2; continue
+            m = _ARRAY_BEGIN_RE.match(text[i:])
+            if m:
+                spec = m.group(1)
+                ncols = sum(1 for ch in spec if ch in 'lcrp')
+                stack.append([i + m.start(1), i + m.end(1), ncols, 1, 0, depth])
+                i += m.end(); continue
+            m = re.match(r'\\end\{array\}', text[i:])
+            if m:
+                if stack:
+                    st = stack.pop()
+                    st[3] = max(st[3], st[4] + 1)
+                    if st[3] > st[2] and st[2] > 0:
+                        new_spec = text[st[0]:st[1]-1] + 'c' * (st[3] - st[2]) + '}'
+                        edits.append((st[0], st[1], new_spec))
+                i += m.end(); continue
+            m = re.match(r'\\[a-zA-Z]+', text[i:])
+            if m:
+                i += m.end(); continue
+            i += 2; continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth = max(0, depth - 1)
+        elif c == '&':
+            if stack and stack[-1][5] == depth:
+                stack[-1][4] += 1
+        i += 1
+    for s, e, new in sorted(edits, reverse=True):
+        text = text[:s] + new + text[e:]
+    return text
 
 
 # Variant-controlled thresholds (change these to run different variants)

@@ -456,3 +456,35 @@ had been pairing with GT). Perf: median 5.88 s/pg, mean 6.96, p90 11.50, RAM
 2.65 GB, weights ~283 MB. v14→v17 = +2.80 Overall in 24 hours. Defaults
 flipped in code: PRISM_PPDL_V3=1, PRISM_INLINE_FML_DISPLAY=1 (web UI serves
 the same build). Section tables: docs/section_scores_odb_full_v17.md.
+
+## 2026-07-06 night: v19 (render repair) — the last CDM tail
+
+Mining v17's 185 formulas <0.5 CDM: 117 wrong-content, 38 unmatched,
+17 truncated, 8 cjk-hybrid, 5 overlong. Inside the zero-CDM band, 32 had
+non-empty EN predictions; compiled 12 of them under the CDM template:
+**8/12 were OUR pdflatex failures** with visually correct content —
+mismatched \left/\right across array cells, stray closing braces, & outside
+environments, array colspec narrower than the emitted rows, and truncated
+two-arg macros (\binom{}}).
+
+**Fix: _render_repair in the math worker sanitizer** (pure Python, runs on
+every formula, idempotent on valid input — verified on valid matrix/aligned/
+cases constructions):
+1. \left/\right must name a delimiter — insert '.' when missing.
+2. Stack-based brace scan: drop stray }, close unclosed { at end; & outside
+   any environment becomes a space.
+3. \left/\right paired per brace-group AND array cell (env-scoped);
+   violators DEMOTED to \big — same glyph, no pairing requirement.
+4. Array colspecs widened to the widest row (Extra-alignment-tab class).
+5. Two-arg macros (\binom, \frac, ...) missing their second argument get {}.
+
+Compile test on the 12 sampled zero-CDM preds: 4/12 -> **11/12** compile.
+Estimated +0.8-1.0 CDM full-set. v18 (guard fix only) killed at 25% and
+folded into **v19 = v17 + inline dense-host guard fix + render repair**;
+full run in preds/odb_full_v19.
+
+Honest scope note (user asked for 88-89): remaining deficits after v19 are
+handwritten-table structure (note TEDS 0.58), newspaper agate structure
+(0.62), ZH handwriting OCR, and MinerU's text-edit lead (0.055 vs ~0.084) —
+all model-capacity walls under the 350MB budget. Realistic ceiling for this
+architecture tonight is ~86.5-87.0 v1.6.

@@ -157,5 +157,7 @@ class PPDocLayoutOnnxDetector:
                    'confidence': float(score)}
             if read_order is not None:
                 det['read_order'] = read_order
+            if label == 'inline_formula':
+                det['from_inline'] = True
             results.append(det)
         return results
