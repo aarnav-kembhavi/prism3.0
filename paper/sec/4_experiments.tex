@@ -35,7 +35,35 @@ Marker & Pipeline (GPU) & $\sim$3\,GB & 78.44 & 0.157 & 85.24 & 65.77 & 0.243 \\
 \end{tabular}
 \end{table*}
 
-\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM lands above the 7B-parameter VLM class (olmOCR-7B, Mistral OCR), exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- by 7.9 points, and sits within 0.12 of the MinerU GPU pipeline while beating its formula CDM by 4.5 points (87.6 vs.\ 83.1), with every system above it using at least one order of magnitude more compute. By language, PRISM's text edit is 0.074 (EN) / 0.100 (ZH); table TEDS is 82.8 on Chinese pages and 75.6 on English ones (the residual English deficit is dense newspaper stock listings). On the v1.5 cut, PRISM scores \textbf{88.1} (text 0.078, CDM 88.9, TEDS 83.3) --- the \emph{highest-scoring pipeline} on that snapshot, 1.4 above PP-StructureV3 (86.7, which requires 8\,GB and 58\,s/page on CPU, \cref{tab:cpu_frontier}), and above Gemini-2.5 Pro (88.0), Qwen2.5-VL-72B (87.0) and Deepseek-OCR (87.0); the systems above it are all GPU VLMs.
+\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM lands above the 7B-parameter VLM class (olmOCR-7B, Mistral OCR), exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- by 7.9 points, and sits within 0.12 of the MinerU GPU pipeline while beating its formula CDM by 4.5 points (87.6 vs.\ 83.1), with every system above it using at least one order of magnitude more compute. By language, PRISM's text edit is 0.074 (EN) / 0.100 (ZH); table TEDS is 82.8 on Chinese pages and 75.6 on English ones (the residual English deficit is dense newspaper stock listings). On the v1.5 cut (\cref{tab:v15}), PRISM scores \textbf{88.1} (text 0.078, CDM 88.9, TEDS 83.3) --- the \emph{highest-scoring pipeline} on that snapshot, 1.4 above PP-StructureV3 (which requires 8\,GB and 58\,s/page on CPU, \cref{tab:cpu_frontier}), and above Gemini-2.5 Pro, Qwen2.5-VL-72B and Deepseek-OCR; the systems above it are all GPU VLMs.
+
+\begin{table}[t]
+\centering
+\caption{OmniDocBench v1.5 cut. Reference rows from the GLM-OCR technical report; PRISM's row is the v1.5 subset of our v1.6 run scored with the v1.6/1.7 matcher (directional, not a leaderboard submission). Weights are fp16 bytes for open VLMs.}
+\label{tab:v15}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrccccc}
+\toprule
+Model & Weights & Overall$\uparrow$ & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+\midrule
+GLM-OCR & 1.8\,GB & 94.62 & 0.040 & 93.90 & 93.96 & 0.044 \\
+PaddleOCR-VL-1.5 & 1.8\,GB & 94.50 & 0.035 & 94.21 & 92.76 & 0.042 \\
+MinerU2.5 & 2.4\,GB & 90.67 & 0.047 & 88.46 & 88.22 & 0.044 \\
+Gemini-3 Pro & n/a (API) & 90.33 & 0.065 & 89.18 & 88.28 & 0.071 \\
+MonkeyOCR-pro-3B & 7.4\,GB & 88.85 & 0.075 & 87.25 & 86.78 & 0.128 \\
+dots.ocr & 6\,GB & 88.41 & 0.048 & 83.22 & 86.78 & 0.053 \\
+\textbf{PRISM (ours)} & \textbf{0.28\,GB (CPU)} & \textbf{88.10} & 0.078 & 88.75 & 83.29 & 0.149 \\
+Gemini-2.5 Pro & n/a (API) & 88.03 & 0.075 & 85.82 & 85.71 & 0.097 \\
+Qwen2.5-VL-72B & 144\,GB & 87.02 & 0.094 & 88.27 & 82.15 & 0.102 \\
+Deepseek-OCR & 6\,GB & 87.01 & 0.073 & 83.37 & 84.97 & 0.086 \\
+PP-StructureV3 & $\sim$1\,GB (GPU) & 86.73 & 0.073 & 85.79 & 81.68 & 0.073 \\
+Nanonets-OCR-s & 6\,GB & 85.59 & 0.093 & 85.90 & 80.14 & 0.108 \\
+GPT-5.2 & n/a (API) & 85.50 & 0.123 & 86.11 & 82.66 & 0.099 \\
+Marker-1.8.2 & $\sim$3\,GB (GPU) & 71.30 & 0.206 & 76.66 & 57.88 & 0.250 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Efficiency frontier}
 \label{sec:efficiency}
@@ -64,7 +92,31 @@ On the full-benchmark run PRISM's median latency is 6.0\,s/page (mean 7.1; tail:
 \subsection{Generalization: Fox benchmark}
 \label{sec:fox}
 
-To verify that the recipe is not tuned to one benchmark's conventions, we run the identical build --- no reconfiguration, no threshold changes --- on the Fox benchmark~\cite{fox} of focused document OCR (212 pages, EN+CN), scoring plain-text normalized edit distance against Fox's page-OCR ground truth after stripping our structural markup. PRISM reaches \textbf{0.074 (EN)} and \textbf{0.093 (CN)} edit distance ($\approx$92\% character accuracy overall) at 6.6\,s/page median and a 1.8\,GB working set. Specialized GPU page-OCR generators evaluated natively on Fox (GOT-OCR2.0, Fox's own model) report 0.03--0.05; PRISM is a structured parser emitting Markdown/LaTeX, evaluated here zero-shot on a plain-text protocol, so we read this as evidence of generalization rather than a leaderboard claim: accuracy degrades gracefully, and the same build serves both benchmarks unchanged.
+\begin{table}[t]
+\centering
+\caption{Fox benchmark~\cite{fox} page OCR, normalized edit distance. Comparison rows from the GOT-OCR2.0 paper~\cite{got}; all are GPU generative models evaluated natively. PRISM is a structured parser run \emph{zero-shot} (no reconfiguration from the OmniDocBench build) and scored on plain text after stripping its structural markup --- directional, not a leaderboard submission.}
+\label{tab:fox}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrcc}
+\toprule
+Model & Size & EN$\downarrow$ & ZH$\downarrow$ \\
+\midrule
+GOT-OCR2.0 & 580M (GPU) & 0.035 & 0.038 \\
+Fox & 1.8B (GPU) & 0.046 & 0.061 \\
+Qwen-VL-Max & $>$72B (GPU) & 0.057 & 0.091 \\
+\textbf{PRISM (ours)} & \textbf{283\,MB (CPU)} & 0.074 & 0.093 \\
+Vary-toy & 1.8B (GPU) & 0.082 & 0.142 \\
+Vary & 7B (GPU) & 0.092 & 0.113 \\
+Qwen-VL-Plus & --- & 0.096 & 0.121 \\
+Nougat & 250M (GPU) & 0.255 & --- \\
+DocOwl1.5 & 7B (GPU) & 0.258 & --- \\
+InternVL-ChatV1.5 & 26B (GPU) & 0.393 & 0.265 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+To verify that the recipe is not tuned to one benchmark's conventions, we run the identical build --- no reconfiguration, no threshold changes --- on the Fox benchmark~\cite{fox} of focused document OCR (212 pages, EN+CN), scoring plain-text normalized edit distance against Fox's page-OCR ground truth after stripping our structural markup (\cref{tab:fox}). PRISM reaches \textbf{0.074 (EN)} and \textbf{0.093 (CN)} ($\approx$92\% character accuracy overall) at 6.6\,s/page median in a 1.8\,GB working set --- between Qwen-VL-Max ($>$72B) and Vary-toy (1.8B), ahead of Vary (7B), Nougat and DocOwl1.5, and within $2\times$ of the specialized page-OCR generators (GOT-OCR2.0, Fox's own model), every one of which is a GPU model evaluated natively. Since our protocol strips structure a page-OCR model never emits, we read \cref{tab:fox} as evidence of generalization rather than a leaderboard claim: accuracy degrades gracefully, and the same 283\,MB build serves both benchmarks unchanged.
 
 \subsection{Recognition-verified normalization}
 \label{sec:verified_exp}
