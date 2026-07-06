@@ -1,313 +1,305 @@
-# PRISM — Full Project Context
+# PRISM — Full Context for a New Session
 
-> The single reference for what PRISM is, how every component works, why each
-> decision was made, and what was measured. Companion docs: `paper.md` (log of
-> every abandoned approach), `docs/paperresults.md` (results vs. SOTA).
-> Current state: **OmniDocBench v1.6 Overall 83.55** (v14 — parity with the
-> 3B-VLM class: POINTS-Reader 83.37 < PRISM < Nanonets-OCR-s 83.61; v1.5-cut
-> 85.73, 2nd pipeline behind PP-StructureV3) at ~283 MB weights, CPU-only,
-> **3.0 s/page median**, 2.6 GB peak. Last updated 2026-07-05 (v14: RapidTable
-> primary tables, PP-OCRv6 text, formula sanitizer, recognition-verified
-> normalization for camera captures).
+> **Read this before touching anything.** It tells you what the system is, where
+> every piece lives, what has been tried (with numbers), what is known NOT to
+> work, and the operational rules that keep this machine alive. The experiment
+> log with every measurement is `paper.md` (repo root); results vs. SOTA are in
+> `docs/paperresults.md`; per-section score tables in
+> `docs/section_scores_odb_full_v1{4,6,7,9}.md`.
 
-## 1. What it is
+---
 
-PRISM (Pipeline for Robust Image-to-Structured Markup) converts a document
-page image (photo/screenshot, PNG/JPG) into structured LaTeX (`main.tex` +
-compiled PDF) and OmniDocBench-style Markdown. It handles text, display math,
-tables (with row/col spans), pictures, captions, multi-column layouts, and
-reading order — in English and Chinese.
+## 1. What PRISM is and where it stands
 
-**Design thesis:** own the *efficiency corner* of the document-parsing
-frontier. Every competitor above PRISM on the leaderboard runs 0.9B–241B-param
-VLMs or multi-GB GPU pipelines; PRISM runs specialist models totalling
-**~283 MB on CPU**, ~3.0 s/page, ≤2.6 GB RAM. Every design decision trades a
-little accuracy ceiling for a lot of footprint.
+PRISM converts a document page image into structured LaTeX + OmniDocBench-style
+Markdown (text, display math, HTML tables with spans, figures, captions,
+reading order; EN + ZH). Design constraints that define the project: **CPU-only,
+~283 MB total weights, single-digit s/page, ≤~2.7 GB RAM**.
 
-**Platform:** Windows 11 tested, Python 3.12, onnxruntime CPU; no torch in any
-inference process.
+**Current confirmed results (v19 build, 2026-07-07, official harness):**
 
-## 2. Architecture (stage by stage)
+| Benchmark | Overall | text↓ | CDM↑ | TEDS↑ | RO↓ |
+|---|---|---|---|---|---|
+| OmniDocBench v1.6 full (1651 pg) | **86.37** | 0.0865 | 87.56 | 80.21 | 0.1636 |
+| OmniDocBench v1.5 cut | **88.10** | 0.0775 | 88.75 | 83.29 | 0.1486 |
 
-```
-image → [normalization] → [layout detection] → [detection postprocess]
-      → [formula_v2 pass] → [content extraction: OCR / math / tables]
-      → [reading order + assembly] → main.tex → (pdflatex/xelatex) PDF
-                                   → tex_to_md → OmniDocBench markdown
-```
+Position: v1.6 — 0.10 behind MinerU-Pipeline (86.47, multi-GB GPU stack), above
+olmOCR-7B (85.74) and Mistral OCR (85.66); our CDM beats MinerU's by 4.5.
+v1.5 — **top pipeline**, above PP-StructureV3 (86.73) and Gemini-2.5 Pro
+(88.03). `Overall = ((1−text)·100 + CDM·100 + TEDS·100)/3`; reading order is
+NOT part of Overall.
 
-Shared core: `pipeline/page_core.build_document()` is used by BOTH the product
-CLI (`pipeline/orchestrate.py`) and the benchmark runner
-(`benchmarks/run_omnidocbench.py`) — routing/column/assembly fixes land once.
-(Decision: the two paths drifted early on and produced divergent bugs; a
-shared core ended that.)
+**The 0.10 gap to MinerU is inside run-to-run matcher variance.** Two
+independent same-config runs differ by ~±0.05–0.1; ~10 borderline formulas flip
+>0.3 CDM either way between runs. Do NOT burn 3.5-hour full runs chasing
+sub-0.1 deltas — it is not measurable.
 
-### 2.1 Normalization (`normalization/`)
+Perf (v19 CPU, 16-core laptop): median 6.02 s/pg, mean 7.12, p90 11.81,
+p95 16.27, p99 22.68, p99.9 38.90, max 75.6; peak RAM 2.59 GB process tree.
+The speed-optimal config is v14 (83.55 @ 3.04 s median) — the last +2.8 points
+deliberately cost +3 s (formula decode budget + bigger layout model).
 
-Always: **deskew** (projection-profile angle search ±15°) + **modality
-detection** (256-bin grayscale histogram entropy; <0.55 → screenshot).
-Then a three-way gate decides whether the corrective stack runs:
+---
 
-1. **Screenshot** → skip all corrections (cap longest side 1800 px).
-2. **Phone-photo but pure-white background present** (`white_frac ≥ 0.02`,
-   LAB L>250) → clean digital doc mislabeled by entropy → skip corrections.
-3. **Genuine camera capture** (no pure white — real sensors never produce it)
-   → pre-cap to 1800px shorter side (heavy steps must not run on 9MP), then:
-   gray-world white balance → perspective rectification (morph gradient /
-   Hough / contour strategies, each candidate quad validated for convexity,
-   corner angles 50–130°, and containment of the bright document region —
-   background quads previously warped wood grain over the page) → glare
-   inpainting (LAB L>230, Telea; skipped when the mask exceeds 20% of the
-   frame — that's paper, not glare) → shadow removal (divide-by-blur, ratio
-   scaled ×255 so paper stays white — a ×128 bug had been collapsing every
-   capture to flat gray) → CLAHE only if contrast is still low (std<45) →
-   mild ≤1.5× upscale floor for tiny captures. Moiré FFT notch is opt-in
-   (`PRISM_MOIRE=1`): on paper photos it erased text-line frequencies.
-   cv2 applies JPEG EXIF orientation itself — no explicit handling needed.
+## 2. Operational rules (violating these has burned us)
 
-**Why the gate:** the ablation series (see paper.md) showed skipping Stage 1
-on digital pages wins on EVERY metric (+11.6pp formula EN alone) — the
-corrections destroy clean renders. An earlier moiré/glare-metric gate fired on
-~100% of pages (white paper trips the same statistics); the white-fraction
-test achieved 100% defect recall at ~10% FP on a labeled sweep.
+1. **SOLO execution.** The machine OOMs and has hard-crashed when two heavy
+   jobs run concurrently (two benchmark runs, or a run + WSL CDM eval). One
+   heavy job at a time, always. Tiny single-image inferences during a run are
+   tolerable; a second worker-spawning run is not.
+2. **Never point a subset eval at a full-run pred dir.** The eval's save_name
+   comes from the pred dir name, so a 59-page "baseline" eval **silently
+   overwrites the full run's result JSONs** (this destroyed odb_full_v15/v16
+   metric artifacts once). Always `cp` preds into a distinctly named dir for
+   baseline scoring (pattern: `preds/v18_base17`, `preds/odb_v19_v15cut`).
+3. **Git Bash heredocs mangle backslashes.** Multi-line Python with `\\` inside
+   `python - <<'EOF'` breaks silently (str.replace no-ops, SyntaxErrors on
+   backslash literals). Write scripts to files (scratchpad) or use the Edit
+   tool for anything containing backslashes.
+4. **Background PowerShell task output is buffered.** A missing print in the
+   log does NOT mean the code path didn't fire — verify by diffing outputs
+   (`cmp` pred files across arms). Two "different" arms scoring byte-identical
+   is how we caught read_order being silently dropped.
+5. **Benchmark determinism:** `PRISM_NORM_STRICT=1` is set by the benchmark
+   runner (keeps normalization byte-identical on benchmark pages).
+   `PRISM_SKIP_EXISTING=1` resumes an interrupted run.
+6. **A run leaves `_tmp_<page>/` LaTeX work dirs in its pred dir** (~20 MB
+   each; 23k of them once accumulated to 36 GB). Sweep them after runs finish.
+7. Timing budget: full 1651-page run ≈ 3–3.3 h; WSL v1.6 CDM eval ≈ 15 min;
+   subset run (60–200 pg) ≈ 10–45 min; Windows subset eval (no CDM) ≈ 5–10 min.
 
-**Recognition-verified mode (2026-07-05, product default)**: pixel statistics
-cannot separate lighting defects from page design (PPT gradients out-score
-real shadows on every metric tried), so in product mode each camera-branch
-correction is a PROPOSAL gated by a DBNet probe (`normalization/verified.py`,
-PP-OCRv6 det at 640px, ~120 ms): kept only if the confident-text-surface
-score improves ≥2%. Corrections are guilty until proven innocent — clean
-pages reject everything by construction. A `_paper_shadow_dim` reroute also
-rescues shadowed captures that the white-frac shortcut mislabels clean
-(dim>0.05 of local paper white). The benchmark runner pins
-`PRISM_NORM_STRICT=1` = the exact open-loop routing above (verified on the
-169-page benchmark shortcut population — byte-identical). Shadow removal now
-divides by a TEXT-FREE background (morph-close + median, gain cap 3×) and
-glare inpainting keeps only compact blobs ≤1.5% of page each.
-
-**Fidelity image:** a copy taken before the destructive steps; all Picture and
-formula crops are cut from it so recognizers see original pixels.
-
-### 2.2 Layout detection (`pipeline/ppdoclayout_onnx.py`)
-
-**PP-DocLayout_plus-L** (RT-DETR, 20 classes, 800×800 stretch-resize,
-NMS-free, 124 MB ONNX) run through raw onnxruntime — validated box-for-box
-against the Paddle reference. Labels map to the PRISM vocabulary
-(`PPDL2PRISM`); `formula_number` and `seal` are dropped.
-
-Thresholds (decision — measured, see paper.md): **0.50 for everything except
-Formula at 0.30**. Coverage recall of GT formulas is 92.4% at 0.30 vs 87% at
-0.50; 0.15 was also measured and rejected (no CDM gain, text cost).
-PP-StructureV3 ships the same model at formula-threshold 0.30.
-
-History: replaced a two-detector combo (YOLOv11n-DocLayNet + DocLayout-YOLO);
-a dedicated MFD formula detector was evaluated and rejected (paper.md).
-
-### 2.3 Detection postprocess (`pipeline/detection_postprocess.py`)
-
-conf filter (0.3 global; Formula exempt down to its own gate) → giant-Formula
-drop (>50% of page = background FP) → class-aware NMS (IoU 0.4) →
-chips-beat-blocks pre-pass (an outer Formula containing ≥2 higher-conf
-Formulas is a spurious merged block → dropped) → cross-class containment
-resolution with protections:
-
-- Section-header/Page-header/Title/Caption never consumed (bold headers get
-  double-detected inside Text boxes).
-- **Formula inside Text never consumed** (it's a display equation inside a
-  paragraph region; the formula_v2 pass masks it out of the text crop
-  instead). This rule alone was silently deleting recovered formulas.
-- **A Picture covering >70% of the page never consumes anything** — PPT
-  slides/colorful textbooks are detected as one background Picture that used
-  to swallow every real det (56 pages emitted nothing).
-- Partial cross-class overlaps: lower-confidence box clipped, EXCEPT
-  Formula-vs-Text (left intact; masking handles it — clipping desyncs the
-  bbox from its already-cut crop).
-
-Then same-class vertical merge (gap <8 px, x-overlap >50%; List-item and
-headers exempt), 2 px pad, clamp.
-
-### 2.4 Formula pass (`pipeline/formula_v2.py`) — the +21 CDM subsystem
-
-Runs at the top of `build_document`. Root cause it fixes: the detector boxes
-multi-equation stacks as ONE region while GT annotates per line (32% of GT
-formulas), it fires on inline math chips at high conf, and merged crops
-truncate Texo's 256-token decode.
-
-1. **Giant-FP drop** (belt-and-braces with postprocess).
-2. **Inline guard (ink-beside test):** a Formula ≥80% inside a Text det, with
-   width <60% of it, is inspected on the text det's binarized crop: if the
-   formula's horizontal band has prose ink beside it (>2% outside a 12%
-   margin) it's inline math → dropped (left to text OCR). Display equations
-   own their band. (Decision: pure geometry guards mis-killed 105 real
-   equations; ink decides cleanly.)
-3. **Text dedup/masking:** a Text det ≥85% covered by Formula dets duplicates
-   them → dropped; partial overlaps get the formula region whited out of the
-   text CROP (MinerU-style masking, no bbox surgery).
-4. **Block split:** each Formula crop is Otsu-binarized and split into
-   equation lines: candidate cuts at runs of ≥6 near-empty rows (emptiness
-   relative to the densest row — survives tinted scans); a cut is REJECTED if
-   a vertical ink run bridges it (matrix bracket / big paren: ink in ≥70% of
-   gap rows in some column touching both sides); a thin segment WIDER than
-   both neighbours is a fraction bar → numerator/bar/denominator fused; the
-   gap-merge threshold (0.25 × median line height) uses heights measured
-   BEFORE tiny-fragment merging (descender islets otherwise inflate it and
-   cascade the whole block into one band). Each band is then column-split at
-   horizontal gaps ≥ max(28 px, 1.4×band height) — GT annotates "equation,
-   qualifier" pairs separately — and a small (<max(50 px, 8% width))
-   first/last chunk across such a gap is an equation number → trimmed (GT
-   excludes eq numbers; their tokens were penalizing every matched formula).
-   Implementation notes: cv2 Otsu returns thr=0.0 on pure-b/w images (ink is
-   `<= thr`, not `<`); ≤12 sub-dets cap (more = not an equation stack).
-
-### 2.5 Content extraction (subprocess workers)
-
-All heavy inference runs in persistent subprocess workers
-(`multiprocessing.Pipe`, spawn), started in a background thread that overlaps
-model load with normalization+detection. Benchmark uses dual OCR/math workers.
-
-- **Text** (`text_worker.py`): RapidOCR with **PP-OCRv6-small det+rec**
-  (unified EN/CJK charset read from ONNX metadata; `PRISM_OCR_V6=0` restores
-  the old v4 stack). Block-level A/B vs the pipeline's v4 config: EN
-  0.101→0.059, ZH 0.101→0.086, mixed 0.190→0.155, handwriting 0.200→0.132,
-  ~2× faster rec. The EN/CJK engine split and the dedicated en-v4 rec are
-  gone (one model pair serves both; language routing preserved for engine
-  params only). Crop prep unchanged: screenshots → Sauvola only when
-  background non-white; photos → autocontrast → unsharp → binarize;
-  quiet-zone padding.
-- **Math** (`math_worker_onnx.py`): Texo-distill (20M distilled
-  UniMERNet/PP-FormulaNet-S family), ONNX encoder + merged decoder. Crop prep:
-  Otsu binarize → ink-margin crop → 384 longest side → 384×384 pad. Decode:
-  256-token cap (bounds hallucination cost), repetition guards, quality gate
-  (tilde-spam, repeated-pattern, over-generation), row/col split retries on
-  gate failure. Recognition measured NOT to be the formula bottleneck (ties
-  PP-FormulaNet-S at 1/3 size on clean crops).
-- **Tables** (`rtable_worker.py`/`rtable_child.py`, primary): **RapidTable
-  SLANet-plus** (7.4 MB) in a `.venv_rtable` stdio child process; predicts
-  structure AND reads cells in one pass over the crop with its own
-  PP-OCRv6-small OCR — no token-to-grid assignment. Emits final `<table>`
-  HTML which passes through `latex_builder`/`tex_to_md` under quarantine.
-  Chosen after per-table diagnosis: TATR shattered dense newspaper tables
-  (GT 15 rows → 53 predicted) and token assignment cost 10pp content-vs-
-  structure. Full-benchmark TEDS 71.4→**78.8**; catastrophic tables
-  −0.01→0.57 mean. `PRISM_RTABLE=0` kill-switch.
-- **Tables fallback** (`tatr_worker_onnx.py` + `table_tokens` OCR task):
-  TATR v1.1-all INT8 (30 MB) with spanning cells → `\multicolumn`/
-  `\multirow` → HTML colspan/rowspan; token splitting by character
-  interpolation. Used when RapidTable emits no cells; the coordinate
-  heuristic remains the last resort.
-  (Decision trail: spans were being discarded while 39% of GT tables have
-  them — spanned-table TEDS 0.603→0.647 after the fix. Table detection gate
-  0.30 rejected twice, incl. WITH RapidTable: 78.63 vs 78.83.)
-
-### 2.6 Reading order & assembly (`layout_utils.py`, `page_core.py`)
-
-- Column count via gutter analysis (histogram of zero-coverage vertical
-  slices, validated 3–8; ±tolerance 2-column heuristic for photographed
-  academic papers).
-- 1–2 columns: semantic DAG (geometric top-bottom/left-right baseline +
-  caption→figure pairing + footnote sinking), paracol assembly for 2-col.
-- **Complex pages: recursive XY-cut** (`xycut_order`) — applied when the
-  gutter detector reports 3+ columns OR a busy "1-column" page (≥8 dets;
-  half the newspapers land there because touching boxes hide the gutters;
-  safe because XY-cut degenerates to top-down on a true single column).
-  Newspapers are vertical REGIONS (masthead, article blocks separated by
-  banners) each with its own columns; the old flat "full-width first, then
-  columns" model scrambled them. Measured: newspaper RO 0.595→0.390 and
-  newspaper text 0.153→0.139; regression on 60 book/academic pages: RO
-  0.279→0.264 (no damage). XY-cut prefers horizontal cuts (top band first),
-  then vertical, falls back geometric; near-page boxes excluded from cuts.
-- Empty-output rescue: if the final markdown has <30 content chars, the whole
-  page is OCR'd directly (`PRISM_PAGE_OCR_FALLBACK=1` default).
-
-### 2.7 Output
-
-- `latex_builder.py`: class→environment mapping (Formula → `\[...\]`, tables
-  as booktabs tabular with spans, `xeCJK` preamble when Chinese detected).
-- `tex_to_md.py`: LaTeX → OmniDocBench Markdown. **Display-math blocks are
-  quarantined via placeholders through all text-mode conversions** — the
-  text-mode `\\→newline` rule was destroying array/matrix row separators in
-  every multi-row formula prediction (a long-standing score-suppressing bug).
-
-## 3. Configuration surface
-
-All validated behavior is DEFAULT-ON. Env vars remain as kill-switches:
-
-| Var | Default | Meaning |
-|---|---|---|
-| `PRISM_PPDL_CONF` | 0.30 | Formula-class detection threshold |
-| `PRISM_FML_V2` | 1 | formula pass + postprocess protections |
-| `PRISM_TBL_V2` | 1 | table spans + token splitting + converter |
-| `PRISM_RO_V2` | 1 | XY-cut ordering for 3+ column pages |
-| `PRISM_PAGE_OCR_FALLBACK` | 1 | whole-page OCR when output empty |
-| `PRISM_USE_PPDL_LAYOUT` | 1 | (PP-DocLayout is the sole detector) |
-
-## 4. Ablations & key measurements (details in paper.md)
-
-- Stage-1 normalization: skip-on-digital wins everywhere (formula EN +11.6pp).
-- Formula "detection ceiling" was a strict-IoU measurement artifact; coverage
-  recall 87→96% across thresholds; fixes above took CDM 56.90→78.11.
-- Formula conf: 0.30 optimal (0.15 = same CDM, worse text/RO).
-- MFD detector: +3.3 CDM for +167 MB/+2 s — rejected.
-- Table spans: TEDS 69.96→71.46 (spanned 0.603→0.647).
-- Empty-page rescue: text 0.749→0.308 on the 56 affected pages.
-- traditional_chinese routing: text 0.913→0.379 on those pages.
-- Latency cost of ALL v10 features vs v9: +0.17 s median (4.54→4.71).
-
-## 5. Known limits (ranked by Overall impact)
-
-1. **Formula ZH ~62** — Texo (20M) can't render CJK-inside-formula; the fix
-   is a distilled/quantized PP-FormulaNet_plus-M-class recognizer (617 MB,
-   1.3 s/formula on GPU as-is — a training project, not wiring).
-2. **Tables (residual after RapidTable)**: 40 GT tables never detected (WSJ
-   agate stock listings invisible to PPDL at any conf/tiling); EN TEDS 71.6
-   vs ZH 82.5 — the EN gap IS the newspaper mode; 139/665 tables where TATR
-   beat SLANet-plus (no cheap selector found).
-3. **Reading order 0.238** vs MinerU 0.153 — theirs is a learned order model;
-   XY-cut targets the newspaper mode; the residual is ZH pages and complex
-   wraps (O-shaped 0.83).
-4. **Handwriting / historical documents** (~45 pages, text 0.6–0.99) —
-   recognizer capacity, out of scope for the current model set.
-5. 19 stylized textbook covers where even raw OCR reads zero lines.
-
-## 6. Repo map
-
-```
-pipeline/
-  orchestrate.py         product CLI (per-image), worker lifecycle
-  page_core.py           shared extraction + assembly core
-  ppdoclayout_onnx.py    PP-DocLayout_plus-L RT-DETR (raw onnxruntime)
-  detection_postprocess.py  conf/NMS/containment + all protections
-  formula_v2.py          formula pass (guard/mask/split/trim)
-  text_worker.py         RapidOCR subprocess (EN/CJK/mixed, table tokens)
-  math_worker_onnx.py    Texo ONNX subprocess (quality gate, split retries)
-  tatr_worker_onnx.py    TATR INT8 subprocess (spans)
-  layout_utils.py        reading order (DAG, XY-cut), columns, crops
-  latex_builder.py       LaTeX assembly
-  tex_to_md.py           LaTeX → OmniDocBench markdown (math quarantined)
-  models_interface.py    model singletons + table heuristic
-  onnx_config.py         thread governance
-normalization/           stage-1 gate + corrections + modality
-benchmarks/run_omnidocbench.py  benchmark runner (GT lang hints, perf.json)
-omnidocbench_eval/       official eval harness fork (utf-8 fixes only)
-models/ weights/ Texo/   ONNX weights (see paperresults.md §4 breakdown)
-paper.md                 experiment log (every dead end, with numbers)
-docs/paperresults.md     results vs SOTA (v1.6 + v1.5 + efficiency)
-docs/formula_fix_v2.md   deep-dive: the formula recall investigation
-docs/pipeline_audit_2026-07-04.md  deep-dive: tables/empty-pages/routing
-```
-
-## 7. Reproducing the headline number
-
+### Eval commands
 ```powershell
-# full 1651-page run (defaults = validated config), writes preds + perf.json
-python benchmarks/run_omnidocbench.py `
-  --gt-json data/omnidocbench_full/OmniDocBench.json `
-  --images-dir data/omnidocbench_full/images `
-  --pred-dir preds/odb_full_v10 --skip-eval
-# official eval incl. CDM (WSL: TeX Live 2026 + ImageMagick shim required)
-wsl -u root -e bash -lc 'export PATH=/usr/local/texlive/2026/bin/x86_64-linux:$PATH \
-  CDM_PDFLATEX=/usr/local/texlive/2026/bin/x86_64-linux/pdflatex CDM_SAVE_VIS=0 \
-  PYTHONPATH=/mnt/c/PROJECTS/s2l2/testprism/omnidocbench_eval; \
-  cd /mnt/c/PROJECTS/s2l2/testprism/omnidocbench_eval && \
-  python3 pdf_validation.py --config /mnt/c/PROJECTS/s2l2/testprism/data/omnidocbench_full/eval_cdm_v10full.yaml'
+# Full v1.6 with CDM (WSL; TeX Live 2026)
+wsl -u root -e bash -lc 'export PATH=/usr/local/texlive/2026/bin/x86_64-linux:$PATH CDM_PDFLATEX=/usr/local/texlive/2026/bin/x86_64-linux/pdflatex CDM_SAVE_VIS=0 PYTHONPATH=/mnt/c/PROJECTS/s2l2/testprism/omnidocbench_eval; cd /mnt/c/PROJECTS/s2l2/testprism/omnidocbench_eval && python3 pdf_validation.py --config /mnt/c/PROJECTS/s2l2/testprism/data/omnidocbench_full/eval_cdm_v19full.yaml'
+
+# Subset eval without CDM (Windows, fast)
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH='C:\PROJECTS\s2l2\testprism\omnidocbench_eval'
+cd omnidocbench_eval; python pdf_validation.py --config <yaml>
 ```
+Config template: copy `data/omnidocbench_full/eval_cdm_v19full.yaml` (WSL
+paths) or `eval_v3split.yaml` (Windows paths, no CDM). GT subsets already
+built: `_split_pages.json` (211: newspapers+controls), `_fml_cjk_pages.json`
+(73), `_inline_fml_pages.json` (59), `_v18_pages.json` (91), `_tblocr_pages.json`
+(75), `_gpu_smoke.json` (10). Results land in `omnidocbench_eval/result/`.
+
+---
+
+## 3. Pipeline architecture (v19 = current defaults)
+
+Flow per page: **normalize → layout detect → postprocess → route to
+specialists → assemble in reading order → LaTeX → Markdown**.
+
+### Entry points
+- `pipeline/orchestrate.py <image>` — single-image CLI (what the web UI calls).
+- `benchmarks/run_omnidocbench.py` — benchmark runner. Has its OWN detection
+  wrapper `_layout_from_cache` (line ~97) — **any new detection dict key must
+  be copied there AND in `orchestrate.run_detection`** (read_order and
+  from_inline were both silently dropped there once).
+- `app.py` — FastAPI web UI (port 8000), spawns orchestrate as subprocess.
+- `benchmarks/run_fox.py` — Fox benchmark (212 pages, plain-text NED).
+
+### Stage 1 — normalization (`normalization/`)
+- `pipeline.py`: modality classifier (entropy/occupancy → screenshot vs
+  phone_photo vs scan) routes to corrections. Screenshots/scans pass through
+  (resolution cap only). Camera captures get: glare inpaint → shadow flatten →
+  rectification → CLAHE, each **verification-gated**.
+- `verified.py`: the probe — DBNet det @640px scores confident-text surface
+  before/after; accept only ≥1.02×. This is the paper's normalization novelty.
+- **`PRISM_NORM_STRICT=1` (benchmark) pins everything off for benchmark pages**
+  — benchmark images are clean; the camera path is for real captures.
+- Key measured finding (paper §verified): PP-OCRv6 is nearly invariant to
+  photometric defects; open-loop correction taxes every page. Don't "improve"
+  normalization expecting benchmark gains — it is score-neutral by design.
+
+### Stage 2 — layout detection
+- `pipeline/ppdoclayout_onnx.py`: raw-ORT wrapper. **PP-DocLayoutV3**
+  (`models/ppdoclayoutv3/PP-DocLayoutV3.onnx`, 124 MB, default via
+  `PRISM_PPDL_V3=1` in `models_interface.py`). 800×800, norm_type none (NOT
+  ImageNet — per the official exported config.json). Output rows `[cls, score,
+  x1,y1,x2,y2, read_order]`; a mask tensor is ignored. 25 classes; mapping
+  `PPDL_V3_2PRISM`.
+  - `read_order` is attached to each det → **model reading order**.
+  - `inline_formula` class → mapped to `Formula` with `from_inline: True`
+    (`PRISM_INLINE_FML_DISPLAY=1` default). This recovered ALL formulas on
+    handwritten-notes/textbook pages (V3 labels them inline; dropping the
+    class cost ~2 CDM in v16).
+  - Legacy plus-L model still in `models/ppdoclayout/` (`PRISM_PPDL_V3=0`).
+- `pipeline/detection_postprocess.py`: confidence gates (base 0.50, Formula
+  0.30, Table 0.50 via `PRISM_PPDL_CONF/_TBL_CONF`), class-aware NMS,
+  containment resolution, nearby-merge (merge inherits min read_order).
+
+### Stage 3 — specialists (`pipeline/page_core.py` routes everything)
+- **Text OCR**: `text_worker.py` — 2 persistent subprocess workers, RapidOCR
+  1.4.4 with **PP-OCRv6-small det+rec swapped in** (`weights/PP-OCRv6_*_small
+  .onnx`, `PRISM_OCR_V6=1`). Unified EN/CJK. `run_text_lines` = full-page
+  det+rec used by rescue/probes. (rapidocr 3.x engine defaults are WORSE than
+  v6-models-in-1.4.4 — do not "upgrade".)
+- **Formulas**: `math_worker_onnx.py` — Texo 20M distill (79 MB,
+  `Texo/model/onnx/`). Greedy decode, `_MAX_NEW_TOKENS` default **512**
+  (`PRISM_FML_MAXTOK`; 256 truncated real matrices). `_sanitize` chain:
+  KaTeX-ism rewrites → brace count balance → **`_render_repair`** (structural
+  LaTeX repair: \left/\right paired per group+cell else demoted to \big;
+  stray }/& fixes; array colspec widening; two-arg macro completion —
+  validated 11/12 zero-CDM preds compile vs 4/12 before). `formula_v2.py` =
+  ink-geometry layer (band split, fraction fusion, inline-FP guard with
+  dense-grid exemption — **converted `from_inline` dets do NOT get the dense
+  exemption**; that's the v19 text-guard fix).
+  - **CJK hybrid** (`PRISM_FML_CJK=1`, page_core): on CJK pages each formula
+    crop is probed with line OCR; ≥2 CJK chars → emit OCR-derived
+    `\text{}`-wrapped LaTeX instead of Texo (Texo hallucinates on CJK).
+- **Tables**: `page_core._extract_tables` — RapidTable **SLANet-plus** primary
+  (7.4 MB) via stdio child in `.venv_rtable` (`rtable_worker.py` ↔
+  `rtable_child.py`, length-prefixed PNG→JSON; protocol v2 can inject external
+  OCR tokens — measured NO gain, off by default `PRISM_RTABLE_OCR_V6=0`).
+  TATR INT8 fallback (30 MB) when SLANet returns no cells.
+- **Rescues** (page_core): uncovered-text rescue (`PRISM_TEXT_RESCUE=1`,
+  full-page line OCR, orphan lines → synthetic Text dets); empty-page rescue
+  (<30 chars → whole-page OCR).
+
+### Stage 4 — reading order & assembly (page_core.build_document)
+- **Model reading order** (`PRISM_RO_MODEL=1`): if ≥70% of dets carry
+  `read_order`, sort by it (synthetics inherit nearest neighbour ±0.5) and
+  skip ALL column logic. This halved RO (0.35→0.17 on the hard subset).
+  **Counterintuitive measured fact: V3's finer boxes make geometric/XY-cut
+  ordering WORSE (0.353→0.399) — never pair V3 with geometric ordering.**
+- Geometric path (plus-L or `PRISM_RO_MODEL=0`): column split / DAG /
+  recursive XY-cut — legacy fallback only.
+- `PRISM_DROP_MARGINALIA=1`: headers/footers dropped (GT never scores them;
+  emitting risks unmatched-pred penalties).
+
+### Stage 5 — emission
+- `latex_builder.py` (raw `<table` HTML passes through), `tex_to_md.py`
+  (math AND raw HTML tables are quarantined from text rewrites — the %
+  stripper once truncated tables at a literal %).
+
+### GPU mode (optional, for the latency study only)
+`PRISM_ORT_GPU=1` → CUDA EP in layout/TATR/OCR (via `onnx_config.ort_providers`
++ text_worker monkeypatch). Needs `venvs/gpu` python (onnxruntime-gpu==1.20.1
++ nvidia-*-cu12 wheels; the driver supports CUDA 12 only, NOT 13).
+**Math worker stays on CPU** (`PRISM_ORT_GPU_MATH=0`): autoregressive decode is
+SLOWER on GPU. `cudnn_conv_algo_search=HEURISTIC` is mandatory (EXHAUSTIVE
+re-tunes per crop shape → 480 s pages). Layout: 0.78 s → 0.068 s. Accuracy
+numbers are ALWAYS quoted CPU-only.
+
+---
+
+## 4. Version history (what worked, with numbers)
+
+| ver | Overall v1.6 | What landed |
+|---|---|---|
+| v9 | 70.37 | baseline of record |
+| v10 | 78.46 | formula ink-geometry (CDM 56.9→78.1), table spans, rescues |
+| v13 | 80.43 | answer-key rule, XY-cut RO, marginalia drop |
+| v14 | 83.55 | **RapidTable SLANet-plus (+7.4 TEDS), PP-OCRv6 swap (−0.016 text), formula sanitizer**; fastest build (3.04 s) |
+| v15 | — | + uncovered-text rescue (subset-validated; superseded same day) |
+| v16 | 85.77 | **PP-DocLayoutV3 swap (same 124 MB!) + model reading order** (text 0.120→0.083, TEDS +1.4, RO −0.077), fml maxtok 512, CJK hybrid |
+| v17 | 86.35 | **inline_formula→Formula recovery** (CDM +2.17; V3 labels handwritten formulas inline; the dropped class silently zeroed notes/textbook pages) |
+| v19 | **86.37** | inline dense-host guard fix (text −0.001) + LaTeX render repair (net 0 CDM — real fixes offset by chips the guard now drops) |
+
+(v18 = guard fix alone, killed at 25% and folded into v19.)
+
+---
+
+## 5. REJECTED with measurements — do not retry these
+
+All logged in detail in `paper.md`:
+- **Detector ensembling / dedicated MFD**: FP text-cost exceeds CDM gain.
+- **Global confidence relaxation (0.15)**: fragments steal matches.
+- **Table detection gate 0.30** (tried twice), **tiled detection** (partial
+  recovery, never integrated; agate listings unaffected).
+- **OCRv6-medium rec**: noise, +112 MB, 2× slower. Deleted from weights/.
+- **rapidocr 3.9 engine defaults**: worse than v6-models-in-1.4.4 (ZH 0.165
+  vs 0.086).
+- **unitable**: torch dependency, low EV.
+- **Clean-page enhancements** (upscale/sharpen/binarize): base wins every arm.
+- **LaTeX canonicalization** (−0.0001), **native-res crops** (−0.003),
+  **crop-prep variants** (noise), **moiré filter on paper** (erases text
+  frequencies — screens only).
+- **Emphasis markup** (bold/italic): breaks matcher pairing; plain text wins.
+- **Feeding our v6 OCR tokens into SLANet** (`ocr_results` injection): TEDS
+  72.98→72.94 = nothing; the child's internal OCR was not the bottleneck.
+- **SLANeXt (PP-StructureV3's table model)**: 350 MB per variant — kills the
+  budget. **PP-OCRv7 does not exist**; v6-small is current.
+- **Colsplit/coalesce heuristics** (`PRISM_COLSPLIT/PRISM_COALESCE`, off):
+  superseded by V3's column-accurate boxes; never validated a win.
+- **WSJ dot-leader directory tables**: SLANet emits 1 column where GT wants 2;
+  a split heuristic was considered and skipped (3 tables, high risk).
+
+## 6. Remaining known weaknesses (and why we stopped)
+
+From `docs/weakness_analysis_v15.md` + v19 section scores:
+- **Newspaper tables TEDS ~0.62** (agate stock listings) — structure-model
+  capacity; the model that fixes it is 350 MB.
+- **Handwritten notes**: table TEDS 0.58, formula CDM ~0.72 — handwriting is
+  a capacity wall for 20M-param recognizers.
+- **ZH formulas CDM ~0.76 vs EN 0.90** — Texo has no CJK; the OCR-hybrid is
+  the mitigation, a bigger recognizer is the fix.
+- **Text edit 0.086 vs MinerU 0.055** — their OCR stack is far larger.
+- **Inline math read as Unicode text** — needs true inline-math splicing
+  (V3's inline_formula boxes + char-level positioning); biggest untapped
+  lever but a multi-day change.
+- historical_document (5 pages), trad-ZH (12 pages): tiny populations.
+
+## 7. Repo map
+
+```
+pipeline/          the parser (see §3 for file-by-file)
+normalization/     modality + verified corrections
+benchmarks/        run_omnidocbench.py, run_fox.py, make_report.py
+models/            ppdoclayoutv3/ (current), ppdoclayout/ (legacy plus-L)
+weights/           OCR v6-small det+rec, en-v4 fallback, dicts
+Texo/              formula model (model/onnx/) + its docs
+omnidocbench_eval/ official harness + result/ (all score artifacts)
+preds/             odb_full_v14..v19 mainline preds + perf.json each
+data/              omnidocbench_full (GT + eval yamls + subset GTs), fox/
+paper/             WACV LaTeX (compiles in WSL: pdflatex+bibtex)
+paper.md           EXPERIMENT LOG — read before trying anything
+docs/              context (this), paperresults, weakness analyses, section scores
+venvs/gpu          CUDA runtime; .venv_rtable (root) = RapidTable child venv
+                   (move to venvs/rtable when idle — worker checks both)
+app.py + web/      FastAPI UI on :8000
+```
+
+## 8. Key env flags (defaults in code; benchmark = defaults + NORM_STRICT)
+
+| Flag | Default | Meaning |
+|---|---|---|
+| PRISM_PPDL_V3 | 1 | PP-DocLayoutV3 layout (0 = legacy plus-L) |
+| PRISM_RO_MODEL | 1 | detector reading order when available |
+| PRISM_INLINE_FML_DISPLAY | 1 | inline_formula class → Formula path |
+| PRISM_FML_CJK | 1 | OCR-hybrid for CJK-text formulas |
+| PRISM_FML_MAXTOK | 512 | Texo decode cap |
+| PRISM_TEXT_RESCUE | 1 | uncovered-text rescue |
+| PRISM_OCR_V6 | 1 | PP-OCRv6-small models in RapidOCR 1.4.4 |
+| PRISM_RTABLE | 1 | SLANet-plus primary table recognizer |
+| PRISM_RTABLE_OCR_V6 | 0 | inject our OCR into SLANet (measured no-op) |
+| PRISM_NORM_STRICT | benchmark sets 1 | pin normalization off for benchmark |
+| PRISM_NORM_VERIFY | 1 | probe-gated camera corrections |
+| PRISM_ORT_GPU / _MATH | 0 / 0 | CUDA EP (latency study only) |
+| PRISM_SKIP_EXISTING | 0 | resume interrupted benchmark run |
+| PRISM_COLSPLIT / PRISM_COALESCE | 0 | legacy heuristics, superseded by V3 |
+
+## 9. Do NOT
+
+- Do not flip any §8 default without a subset A/B — each one is measured.
+- Do not run two heavy jobs at once (see §2.1).
+- Do not score a subset against a full-run pred dir (see §2.2).
+- Do not chase <0.1 Overall with full runs — that's the noise floor.
+- Do not swap rapidocr versions or "update" onnxruntime in the main env.
+- Do not touch `.venv_rtable` while any benchmark run is alive.
+- Do not trust absence of a log line in a buffered background task — diff
+  the outputs.
+- Do not delete `preds/odb_full_v19` or `omnidocbench_eval/result/*v19*` —
+  final paper numbers live there. `perf.json` per pred dir = latency record.
+
+## 10. In flight / next steps (as of 2026-07-07 ~02:30)
+
+- Fox benchmark run of v19 → `preds/fox_v19` (fills paper §fox `\todo`).
+- GPU latency full run on v19 (venvs/gpu python + `PRISM_ORT_GPU=1`; V3 is
+  default now) → fills paperresults §4 GPU column + paper efficiency prose.
+- RAM percentiles: the runner now records a RAM time-series in perf.json
+  (added post-v19) — any future run gets RAM p50/p90/p95/p99 automatically.
+- Move `.venv_rtable` → `venvs/rtable` once no run is alive.
+- Paper: title/abstract/experiments current at v19 numbers; sweep remaining
+  `\todo`s (Fox, GPU), final compile (WSL pdflatex+bibtex), push.

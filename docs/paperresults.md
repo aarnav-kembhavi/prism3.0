@@ -1,9 +1,9 @@
 # PRISM — Results vs. State of the Art
 
-All PRISM numbers are from the **v17 run** (2026-07-06): full official
+All PRISM numbers are from the **v19 run** (2026-07-07): full official
 OmniDocBench dataset, official evaluation harness (`opendatalab/OmniDocBench`
 main branch), CDM rendered with TeX Live 2026. Predictions:
-`preds/odb_full_v17`; eval artifacts: `omnidocbench_eval/result/odb_full_v17_*`.
+`preds/odb_full_v19`; eval artifacts: `omnidocbench_eval/result/odb_full_v19_*`.
 
 PRISM configuration: PP-DocLayoutV3 (layout + native reading order) + RapidOCR
 PP-OCRv6-small (unified EN/CJK) + Texo-distill 20M (formulas; OCR-hybrid for
@@ -44,7 +44,7 @@ by us on the identical dataset + harness + metric definitions.
 | GPT-5.2 | General VLM | 86.59 | 0.114 | 88.21 | 82.95 | 0.193 |
 | Dolphin-1.5 | Specialized VLM | 86.52 | 0.094 | 87.49 | 81.43 | 0.167 |
 | **MinerU-Pipeline** | **Pipeline** | **86.47** | 0.055 | 83.07 | 81.88 | 0.153 |
-| **PRISM (ours, v17)** | **Pipeline — CPU, 283 MB** | **86.35** | 0.087 | 87.56 | 80.21 | 0.163 |
+| **PRISM (ours, v19)** | **Pipeline — CPU, 283 MB** | **86.37** | 0.086 | 87.56 | 80.21 | 0.164 |
 | olmOCR | Specialized VLM (7B) | 85.74 | 0.139 | 88.10 | 83.00 | 0.216 |
 | Mistral OCR | Specialized VLM | 85.66 | 0.097 | 89.91 | 76.78 | 0.171 |
 | Kimi K2.5 | General VLM | 84.53 | 0.107 | 83.50 | 80.76 | 0.211 |
@@ -86,7 +86,7 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 | Deepseek-OCR | VLM 3B | 87.01 | 0.073 | 83.37 | 84.97 | 0.086 |
 | Qwen2.5-VL-72B | General VLM | 87.02 | 0.094 | 88.27 | 82.15 | 0.102 |
 | MonkeyOCR-pro-1.2B | VLM 1.9B | 86.96 | 0.084 | 85.02 | 84.24 | 0.130 |
-| **PRISM (ours, v17)†** | **Pipeline — CPU, 283 MB** | **88.11** | 0.078 | 88.87 | 83.29 | 0.149 |
+| **PRISM (ours, v19)†** | **Pipeline — CPU, 283 MB** | **88.10** | 0.078 | 88.75 | 83.29 | 0.149 |
 | **PP-StructureV3** | **Pipeline** | **86.73** | 0.073 | 85.79 | 81.68 | 0.073 |
 | PRISM v14 (reference)† | Pipeline — CPU, 283 MB | 85.73 | 0.108 | 86.33 | 81.67 | 0.231 |
 | Nanonets-OCR-s | VLM 3B | 85.59 | 0.093 | 85.90 | 80.14 | 0.108 |
@@ -109,7 +109,7 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly) —
 directional, not a leaderboard submission.
 
-On this snapshot PRISM v17 is the **top pipeline** at 88.11 — 1.4 above
+On this snapshot PRISM v19 is the **top pipeline** at 88.10 — 1.4 above
 PP-StructureV3 (which needs 8 GB and 58 s/page on CPU — see §5) — and passes
 Gemini-2.5 Pro (88.03), MonkeyOCR-3B (87.13), Qwen2.5-VL-72B (87.02) and
 Deepseek-OCR (87.01); next above are dots.ocr (88.41) and
@@ -129,13 +129,14 @@ numbers are from **older, non-comparable** versions (different matcher/pages):
 | GOT-OCR 2.0 | EN overall 0.287 | v1.0 | 580M, GPU |
 | PP-StructureV3 | Overall 86.73 | official v1.5 (see §2) | never re-scored on v1.6 |
 
-## 4. Efficiency — measured on the v17 full run (1651 pages)
+## 4. Efficiency — measured on the v19 full run (1651 pages)
 
-| Metric | PRISM v17 (CPU) | PRISM v17 (GPU-assisted) |
+| Metric | PRISM v19 (CPU) | PRISM v19 (GPU-assisted) |
 |---|---|---|
-| Wall time (1651 pages) | 3.19 h | TBD |
-| Latency median / mean / p90 | **5.88 s / 6.96 s / 11.50 s per page** | TBD |
-| Peak RAM, process tree (dual OCR+math workers) | 2.65 GB | TBD |
+| Wall time (1651 pages) | 3.27 h | TBD |
+| Latency median / mean | **6.02 s / 7.12 s per page** | TBD |
+| Latency tail p90 / p95 / p99 / p99.9 / max | 11.81 / 16.27 / 22.68 / 38.90 / 75.6 s | TBD |
+| Peak RAM, process tree (dual OCR+math workers) | 2.59 GB | TBD |
 | Total inference weights | **~283 MB** | same |
 | Runtime | CPU-only (16 logical cores, Windows 11), onnxruntime; no torch in-process | + RTX 3070 Laptop: layout/OCR on CUDA, autoregressive math decode stays CPU (faster there) |
 
@@ -191,7 +192,8 @@ and 8.5× the latency.
 | v13 | 2026-07-05 | 80.43 | 0.1358 | 83.46 | 71.40 | 0.2409 | 5.21* |
 | v14 | 2026-07-05 | 83.55 | 0.1203 | 83.84 | 78.83 | 0.2383 | **3.04** |
 | v16 | 2026-07-06 | 85.77 | 0.0830 | 85.39 | 80.21 | 0.1617 | 5.62 |
-| **v17** | 2026-07-06 | **86.35** | 0.0873 | **87.56** | **80.21** | 0.1634 | 5.88 |
+| v17 | 2026-07-06 | 86.35 | 0.0873 | 87.56 | 80.21 | 0.1634 | 5.88 |
+| **v19** | 2026-07-07 | **86.37** | 0.0865 | **87.56** | **80.21** | 0.1636 | 6.02 |
 
 \* v13 ran under CPU contention from concurrent experiments.
 

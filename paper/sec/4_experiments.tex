@@ -25,7 +25,7 @@ Gemini 3 Pro & General VLM & n/a (API) & 92.91 & 0.064 & 95.99 & 89.15 & 0.165 \
 dots.ocr & VLM (3B) & 6\,GB & 90.77 & 0.048 & 89.95 & 87.18 & 0.138 \\
 GPT-5.2 & General VLM & n/a (API) & 86.59 & 0.114 & 88.21 & 82.95 & 0.193 \\
 MinerU-Pipeline & Pipeline (GPU) & $\sim$2\,GB & 86.47 & 0.055 & 83.07 & 81.88 & 0.153 \\
-\textbf{PRISM (ours)} & \textbf{Pipeline (CPU)} & \textbf{0.28\,GB} & \textbf{86.35} & 0.087 & 87.56 & 80.21 & 0.163 \\
+\textbf{PRISM (ours)} & \textbf{Pipeline (CPU)} & \textbf{0.28\,GB} & \textbf{86.37} & 0.086 & 87.56 & 80.21 & 0.164 \\
 olmOCR & VLM (7B) & 14\,GB & 85.74 & 0.139 & 88.10 & 83.00 & 0.216 \\
 Mistral OCR & VLM (API) & n/a (API) & 85.66 & 0.097 & 89.91 & 76.78 & 0.171 \\
 Nanonets-OCR-s & VLM (3B) & 6\,GB & 83.61 & 0.108 & 81.46 & 80.18 & 0.213 \\
@@ -59,7 +59,7 @@ GraniteDocling-258M & 2.3\,GB & 54.6 & 0.341 & 0.585 & 37.4 \\
 \end{tabular}
 \end{table}
 
-On the full-benchmark run PRISM's median latency is 5.9\,s/page (mean 7.0, p90 11.5) with a 2.65\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker); the speed-optimal v14 configuration (83.55 Overall) runs at 3.0\,s median, so the last +2.8 points cost +2.9\,s --- spent on a doubled formula decode budget and the higher-capacity layout model. \Cref{tab:cpu_frontier} is the same-machine comparison (run before the current build; PRISM's row there understates it): PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile scored higher in that snapshot --- a gap the current build closes --- at $6\times$ the memory and $19\times$ the latency. Model inventory: layout 124\,MB, OCR 31\,MB, formulas 79\,MB, tables 7.4\,MB + 30\,MB TATR fallback $\approx$ 283\,MB.
+On the full-benchmark run PRISM's median latency is 6.0\,s/page (mean 7.1; tail: p90 11.8, p95 16.3, p99 22.7, p99.9 38.9, max 75.6) with a 2.59\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker); the speed-optimal v14 configuration (83.55 Overall) runs at 3.0\,s median, so the last +2.8 points cost +3.0\,s --- spent on a doubled formula decode budget and the higher-capacity layout model. The p99 tail is $3.8\times$ the median, dominated by dense newspaper spreads with dozens of tables and formula-heavy academic pages at the doubled decode budget. \Cref{tab:cpu_frontier} is the same-machine comparison (run before the current build; PRISM's row there understates it): PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile scored higher in that snapshot --- a gap the current build closes --- at $6\times$ the memory and $19\times$ the latency. Model inventory: layout 124\,MB, OCR 31\,MB, formulas 79\,MB, tables 7.4\,MB + 30\,MB TATR fallback $\approx$ 283\,MB.
 
 \subsection{Generalization: Fox benchmark}
 \label{sec:fox}
@@ -109,7 +109,8 @@ Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 & 0.323 \\
 + answer-key rule, XY-cut, marginalia & 80.43 & 0.136 & 83.46 & 71.40 & 0.241 \\
 + SLANet-plus, OCRv6, sanitizer & 83.55 & 0.120 & 83.84 & 78.83 & 0.238 \\
 + DocLayoutV3 + native order, fml budget/hybrid & 85.77 & \textbf{0.083} & 85.39 & \textbf{80.21} & \textbf{0.162} \\
-+ inline-class formula recovery & \textbf{86.35} & 0.087 & \textbf{87.56} & \textbf{80.21} & 0.163 \\
++ inline-class formula recovery & 86.35 & 0.087 & \textbf{87.56} & \textbf{80.21} & 0.163 \\
++ text guard + \LaTeX{} render repair (final) & \textbf{86.37} & 0.086 & \textbf{87.56} & \textbf{80.21} & 0.164 \\
 \bottomrule
 \end{tabular}
 \end{table}

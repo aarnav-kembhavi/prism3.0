@@ -488,3 +488,14 @@ handwritten-table structure (note TEDS 0.58), newspaper agate structure
 (0.62), ZH handwriting OCR, and MinerU's text-edit lead (0.055 vs ~0.084) —
 all model-capacity walls under the 350MB budget. Realistic ceiling for this
 architecture tonight is ~86.5-87.0 v1.6.
+
+**v19 CONFIRMED (2026-07-07): v1.6 Overall 86.37** (text 0.0865, CDM 87.56,
+TEDS 80.21, RO 0.1636; median 6.02 s/pg, tails p95 16.3 / p99 22.7 / p99.9
+38.9 / max 75.6, RAM 2.59 GB). **v1.5 cut: 88.10** (text 0.0775, CDM 88.75,
+TEDS 83.29) — stable vs v17's 88.11; top pipeline confirmed. The guard fix
+delivered a fifth of its subset projection (text −0.0008) and the render
+repair netted 0.00 CDM: 9 formulas up >0.3 but 10 down — chips the guard now
+drops had occasionally been matching GT display formulas. Verdict: v19 =
+final build at 86.37, gap to MinerU-Pipeline 0.10 — inside run-to-run
+matcher variance; further full-run microtuning at this scale is not
+distinguishable from noise and we stop here honestly.
