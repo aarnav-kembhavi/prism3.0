@@ -21,7 +21,13 @@ import threading
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _CHILD_SCRIPT = os.path.join(ROOT_DIR, "pipeline", "rtable_child.py")
-_VENV_PYTHON = os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe")
+# Preferred location is venvs/rtable; the legacy root path is the fallback so
+# the venv can be relocated without breaking a running deployment.
+_VENV_PYTHON = next(
+    (p for p in (os.path.join(ROOT_DIR, "venvs", "rtable", "Scripts", "python.exe"),
+                 os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe"))
+     if os.path.exists(p)),
+    os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe"))
 
 _REQUEST_TIMEOUT_S = 30.0
 

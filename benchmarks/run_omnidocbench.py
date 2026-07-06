@@ -175,6 +175,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     _peak_rss = {'mb': 0.0}
     _perf_stop = threading.Event()
 
+    _ram_samples: list = []          # full RSS time-series → RAM percentiles
+
     def _ram_sampler():
         me = psutil.Process(os.getpid())
         while not _perf_stop.is_set():
@@ -185,7 +187,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                         rss += ch.memory_info().rss
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-                _peak_rss['mb'] = max(_peak_rss['mb'], rss / 1024 / 1024)
+                mb = rss / 1024 / 1024
+                _peak_rss['mb'] = max(_peak_rss['mb'], mb)
+                _ram_samples.append(round(mb, 1))
             except Exception:
                 pass
             _perf_stop.wait(0.3)
@@ -330,15 +334,25 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
         return round(_lat[min(len(_lat) - 1, int(p / 100 * len(_lat)))], 3)
     _mean = round(sum(_lat) / len(_lat), 3) if _lat else 0.0
     _median = round(_lat[len(_lat) // 2], 3) if _lat else 0.0
+    _ram_sorted = sorted(_ram_samples)
+    def _rpct(p):
+        if not _ram_sorted:
+            return 0.0
+        return round(_ram_sorted[min(len(_ram_sorted) - 1, int(p / 100 * len(_ram_sorted)))], 1)
     perf = {
         'n_pages': len(_perf_latencies),
         'wall_s': round(_wall_s, 1),
         'latency_s_per_page': {
             'mean': _mean, 'median': _median,
-            'p90': _pct(90), 'p99': _pct(99),
+            'p90': _pct(90), 'p95': _pct(95), 'p99': _pct(99), 'p99.9': _pct(99.9),
             'min': _lat[0] if _lat else 0.0, 'max': _lat[-1] if _lat else 0.0,
         },
         'peak_ram_mb_process_tree': round(_peak_rss['mb'], 1),
+        'ram_mb_process_tree': {
+            'n_samples': len(_ram_sorted), 'sample_interval_s': 0.3,
+            'median': _rpct(50), 'p90': _rpct(90), 'p95': _rpct(95),
+            'p99': _rpct(99), 'max': _ram_sorted[-1] if _ram_sorted else 0.0,
+        },
         'per_page': dict(_perf_latencies),
     }
     with open(Path(pred_dir) / 'perf.json', 'w', encoding='utf-8') as _pf:

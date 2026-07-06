@@ -31,7 +31,7 @@ pipelines.
 | `paper/` | WACV LaTeX sources; `paper.md` is the raw experiment log |
 | `docs/` | Architecture, results vs. SOTA, per-section scores, deep dives |
 | `app.py` + `web/` | FastAPI web UI (serves the exact benchmark build) |
-| `.venv_rtable/`, `.venv_gpu/` | Purpose-built venvs: RapidTable child process; optional CUDA runtime. Kept at repo root because Windows venvs embed absolute paths (not relocatable) and `rtable_worker.py` addresses the first by path |
+| `venvs/` | Purpose-built venvs: `venvs/gpu` (optional CUDA runtime for `PRISM_ORT_GPU=1`); `venvs/rtable` is the target home of the RapidTable child venv (currently `.venv_rtable` at root until the in-flight benchmark run releases it — `rtable_worker.py` checks both) |
 
 ## Quick start
 
