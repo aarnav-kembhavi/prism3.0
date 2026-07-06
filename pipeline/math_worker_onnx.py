@@ -89,9 +89,10 @@ _COL_MIN_GAP     = 15   # Var-A: lower to 8 to capture tighter column gaps
 # Cap on tokens generated per formula. Greedy decode is one sequential
 # decoder.run() per token on CPU, and the quality gate runs only AFTER the
 # full generation, so an over-long cap makes hallucinating crops (and their
-# row/col-split retries) extremely expensive. 256 covers real display
-# equations while bounding worst-case latency (was 384).
-_MAX_NEW_TOKENS = 256
+# row/col-split retries) expensive. 256 truncated real matrix/determinant
+# formulas (measured: unmatched-GT tail on academic books); 512 covers them
+# and only formulas that legitimately pass 256 pay the extra decode time.
+_MAX_NEW_TOKENS = int(os.environ.get('PRISM_FML_MAXTOK', '512'))
 
 # Patterns that indicate Texo is looping / hallucinating
 _BAD_PATTERNS = [
@@ -459,19 +460,26 @@ def _worker_main(conn):
 
     tokenizer = Tokenizer.from_file(os.path.join(MODEL_DIR, 'tokenizer.json'))
 
-    from pipeline.onnx_config import apply_session_threads
+    from pipeline.onnx_config import apply_session_threads, ort_providers
     opts = ort.SessionOptions()
     opts.enable_cpu_mem_arena = False
     apply_session_threads(opts)
+    # Texo decode is autoregressive (one tiny decoder.run per token): GPU
+    # kernel-launch overhead makes it SLOWER than CPU (measured 10→25s pages
+    # on RTX 3070). Keep math on CPU under PRISM_ORT_GPU; the encoder rides
+    # along since it shares the process. PRISM_ORT_GPU_MATH=1 overrides.
+    _math_providers = (ort_providers()
+                       if os.environ.get('PRISM_ORT_GPU_MATH', '0') != '0'
+                       else ['CPUExecutionProvider'])
     enc_sess = ort.InferenceSession(
         os.path.join(ONNX_DIR, 'encoder_model.onnx'),
         sess_options=opts,
-        providers=['CPUExecutionProvider'],
+        providers=_math_providers,
     )
     dec_sess = ort.InferenceSession(
         os.path.join(ONNX_DIR, 'decoder_model_merged.onnx'),
         sess_options=opts,
-        providers=['CPUExecutionProvider'],
+        providers=_math_providers,
     )
 
     conn.send('ready')

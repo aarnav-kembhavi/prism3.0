@@ -400,6 +400,10 @@ def _merge_nearby_boxes(
                 merged_det = dict(prev)
                 merged_det['bbox'] = new_bbox
                 merged_det['confidence'] = max(prev['confidence'], curr['confidence'])
+                if prev.get('read_order') is not None or curr.get('read_order') is not None:
+                    ros = [r for r in (prev.get('read_order'), curr.get('read_order'))
+                           if r is not None]
+                    merged_det['read_order'] = min(ros)
                 merged_group[-1] = merged_det
             else:
                 merged_group.append(curr)

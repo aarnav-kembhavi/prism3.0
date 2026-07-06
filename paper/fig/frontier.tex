@@ -1,0 +1,52 @@
+% Accuracy vs. inference-weight size on OmniDocBench v1.6 (log-x scatter).
+% Weights: fp16 bytes for VLMs (2 x params), reported stack sizes for pipelines.
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth, height=0.72\linewidth,
+  xmode=log, xmin=0.15, xmax=600,
+  ymin=74, ymax=98,
+  xlabel={inference weights (GB, log)}, ylabel={OmniDocBench v1.6 Overall},
+  label style={font=\scriptsize}, tick label style={font=\tiny},
+  grid=major, grid style={black!12},
+  legend style={font=\tiny, at={(0.985,0.03)}, anchor=south east, draw=black!30},
+  legend cell align=left,
+]
+% Specialized VLMs (params x 2 bytes)
+\addplot[only marks, mark=o, mark size=1.6, color=black!55] coordinates {
+  (2.4,95.75) % MinerU2.5-Pro 1.2B
+  (1.8,95.22) % GLM-OCR 0.9B
+  (1.8,94.93) % PaddleOCR-VL-1.5
+  (1.8,94.18) % PaddleOCR-VL
+  (6,90.77)   % dots.ocr 3B
+  (6,90.25)   % DeepSeek-OCR2 3B
+  (14,85.74)  % olmOCR 7B
+  (6,83.61)   % Nanonets-OCR-s 3B
+  (6,83.37)   % POINTS-Reader 3B
+  (2.4,89.50) % Dolphin-v2
+  (0.5,79.0)  % SmolDocling-256M (published-protocol proxy, below PRISM in our controlled run)
+};
+\addlegendentry{specialized VLMs}
+% General VLMs
+\addplot[only marks, mark=triangle, mark size=1.9, color=black!55] coordinates {
+  (470,89.78) % Qwen3-VL-235B
+  (482,83.76) % InternVL3.5-241B
+  (200,92.91) % Gemini 3 Pro (unknown, placeholder scale)
+  (150,86.59) % GPT-5.2 (unknown, placeholder scale)
+};
+\addlegendentry{general VLMs}
+% Pipelines
+\addplot[only marks, mark=square*, mark size=1.8, color=blue!60!black] coordinates {
+  (2.0,86.47)  % MinerU-Pipeline
+  (3.0,78.44)  % Marker
+};
+\addlegendentry{GPU pipelines}
+% PRISM
+\addplot[only marks, mark=star, mark size=3.4, color=red!75!black] coordinates {
+  (0.283,85.77)
+};
+\addlegendentry{\textbf{PRISM (CPU)}}
+\node[font=\tiny, anchor=west, color=red!75!black] at (axis cs:0.34,85.77) {PRISM 283\,MB};
+\node[font=\tiny, anchor=south, color=blue!60!black] at (axis cs:2.0,86.8) {MinerU};
+\node[font=\tiny, anchor=north, color=blue!60!black] at (axis cs:3.0,78.1) {Marker};
+\end{axis}
+\end{tikzpicture}

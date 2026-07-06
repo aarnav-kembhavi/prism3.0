@@ -126,10 +126,13 @@ def run_detection(image_norm: Image.Image, image_fidelity: Image.Image, image_pa
                 fidelity_crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])
                 if _is_likely_logo(fidelity_crop):
                     class_name = "Picture"; crop = fidelity_crop
-            detections.append({
+            det_out = {
                 "bbox": [x1, y1, x2, y2], "class_id": 0,
                 "class_name": class_name, "confidence": confidence, "crop": crop,
-            })
+            }
+            if d.get('read_order') is not None:
+                det_out['read_order'] = d['read_order']
+            detections.append(det_out)
         return detections
 
 
@@ -309,6 +312,9 @@ def _process_one(image_path_str: str, args, worker_thread):
             det['crop'] = xyxy_to_pil_crop(image_norm, bbox)
 
     # Free full-resolution images — all crops are now extracted into det['crop']
+    # (image_norm is retained when the uncovered-text rescue is on; it is the
+    # rescue's full-page OCR input and is released after build_document.)
+    _rescue_page = image_norm if os.environ.get('PRISM_TEXT_RESCUE', '1') != '0' else None
     del image_norm, image_fidelity
     gc.collect()
 
@@ -359,8 +365,10 @@ def _process_one(image_path_str: str, args, worker_thread):
     document = build_document(
         body_detections, img_width, img_height, workers, str(figures_dir),
         is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
-        header_logo_fname=header_logo_fname,
+        header_logo_fname=header_logo_fname, page_image=_rescue_page,
     )
+    del _rescue_page
+    gc.collect()
 
     # Empty-output rescue (same as the benchmark path): when layout detection
     # finds no usable regions (receipts, stylized pages), whole-page OCR is

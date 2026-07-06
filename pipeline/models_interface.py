@@ -195,17 +195,24 @@ def _get_texo():
 # netting only +42 MB. Torch/paddle-free (raw onnxruntime, ONNX exported once).
 _ppdoclayout_detector = None
 _PPDOCLAYOUT_MODEL_PATH = os.path.join(ROOT_DIR, 'models', 'ppdoclayout', 'ppdoclayout_plus_l.onnx')
+# PP-DocLayoutV3: same size (124MB), adds pixel-accurate boxes + built-in
+# reading order (+ inline_formula / vertical_text classes). PRISM_PPDL_V3=1.
+_PPDOCLAYOUT_V3_MODEL_PATH = os.path.join(ROOT_DIR, 'models', 'ppdoclayoutv3', 'PP-DocLayoutV3.onnx')
 
 
 def get_ppdoclayout_detector(imgsz: int = 800):
-    """Torch-free PP-DocLayout_plus-L detector singleton (None if model absent)."""
+    """Torch-free PP-DocLayout detector singleton (None if model absent)."""
     global _ppdoclayout_detector
     if _ppdoclayout_detector is None:
-        if not os.path.exists(_PPDOCLAYOUT_MODEL_PATH):
+        use_v3 = os.environ.get('PRISM_PPDL_V3', '0') != '0'
+        path = _PPDOCLAYOUT_V3_MODEL_PATH if use_v3 else _PPDOCLAYOUT_MODEL_PATH
+        if not os.path.exists(path):
             return None
         from pipeline.ppdoclayout_onnx import PPDocLayoutOnnxDetector
-        print(f"[*] Loading PP-DocLayout_plus-L detector (raw ONNX @ {imgsz}px)")
-        _ppdoclayout_detector = PPDocLayoutOnnxDetector(_PPDOCLAYOUT_MODEL_PATH, imgsz=imgsz)
+        keep_inline = os.environ.get('PRISM_INLINE_FML', '0') != '0'
+        print(f"[*] Loading PP-DocLayout{'V3' if use_v3 else '_plus-L'} detector (raw ONNX @ {imgsz}px)")
+        _ppdoclayout_detector = PPDocLayoutOnnxDetector(
+            path, imgsz=imgsz, keep_inline_formula=keep_inline and use_v3)
     return _ppdoclayout_detector
 
 

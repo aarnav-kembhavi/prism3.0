@@ -246,6 +246,46 @@
   mild (no signal), block-level harsh + strict accept (invariance
   finding), page-level (verified≈none<open).
 
+- **Uncovered-text rescue (2026-07-05, kept)** — 32% of v14 text loss was
+  GT text NEVER emitted (809 unmatched-GT records: slide titles, text beside
+  dense tables). One full-page det+rec pass; lines whose center is in no
+  detection box become synthetic Text dets (merged into paragraph blocks,
+  normal reading-order flow). 293-page A/B: missed-pages text 0.2559→0.2276
+  (108 imp / 19 reg), controls ~flat (+0.005), RO 0.382→0.342; projected
+  full-benchmark text 0.1203→0.1162. `PRISM_TEXT_RESCUE=0` disables.
+- **unitable NOT PURSUED (2026-07-05)** — RapidTable's larger autoregressive
+  option needs torch+torchvision+tokenizers in the child venv (~200 MB) and
+  the A/B run was interrupted twice (once machine OOM); expected value low
+  since MinerU-Pipeline itself ships SLANet-plus. Logged as untested.
+- **PP-OCRv6 medium rec REJECTED (2026-07-05)** — 1354-block A/B vs small:
+  EN 0.0587→0.0616, ZH 0.0858→0.0840, mixed 0.1547→0.1516, notes
+  0.1316→0.1361. Noise-level swings both ways for +52 MB and ~2× rec
+  latency. Small stays.
+
+- **Clean-page enhancement sweep REJECTED (2026-07-05)** — can ANY
+  enhancement lift clean benchmark pages? 461 GT blocks, 60 pages, v6-small
+  engine: base 0.1352 | 2× upscale of small crops 0.1354 | 2× upscale all
+  0.1408 | unsharp 0.1362 | adaptive binarization 0.1428. Nothing beats
+  raw pixels; the existing skip-corrections-on-clean policy is optimal
+  (fourth independent confirmation of the photometric-invariance finding).
+
+- **Perturbation study of the harness (2026-07-06, paper §perturb)** —
+  semantically-null transforms of the final preds, re-scored unmodified:
+  bold-wrap ⅓ of paragraphs **+0.0000** text (styling normalized exactly);
+  re-add GT marginalia verbatim +0.0006 (pairs with abandon-category GT —
+  the earlier 0.0036 damage was from NOISY OCR'd marginalia, an important
+  nuance); **sentence-level fragmentation +0.0041 text, +0.0154 RO** — half
+  a leaderboard step from segmentation convention alone.
+- **MinerU-gap forensics (2026-07-06)** — matched-pair text loss (1690
+  units) decomposed: content 650 (inline-math-in-text read as unicode
+  approximations — recognizer capacity, MinerU has inline MFD), partial 580
+  + extra 348 (newspaper detection geometry: boxes merge across columns →
+  scrambled OCR and matcher mispairing). Ruled out with A/Bs: LaTeX
+  convention canonicalization (−0.0001), native-res crops vs 1800px cap
+  (−0.003, not the cause), crop-prep variants (noise-level). The garbled-ZH
+  newsprint bucket is DETECTION geometry, not OCR/resolution/prep — needs
+  detector work (tiling/V3), out of scope tonight.
+
 ## OCR / language routing
 
 - **GT-hint language routing** in the benchmark (standard for pipeline
@@ -292,7 +332,8 @@
 | v9 (baseline of record) | 2026-07-01 | 70.37 | 0.1575 | 56.90 | 69.96 | 0.3234 |
 | v10 (FML_V2+TBL_V2+rescues) | 2026-07-04 | 78.46 | 0.1419 | 78.11 | 71.46 | 0.2864 |
 | v13 (fml_v4 answer-key + XY-cut + marginalia + plain emphasis + norm overhaul) | 2026-07-05 | 80.43 | 0.1358 | 83.46 | 71.40 | 0.2409 |
-| **v14 (RapidTable + PP-OCRv6 + formula sanitizer)** | 2026-07-05 | **83.55** | **0.1203** | **83.84** | **78.83** | **0.2383** |
+| v14 (RapidTable + PP-OCRv6 + formula sanitizer) | 2026-07-05 | 83.55 | 0.1203 | 83.84 | 78.83 | 0.2383 |
+| **v16 (PP-DocLayoutV3 + model RO + fml maxtok512 + CJK hybrid)** | 2026-07-06 | **85.77** | **0.0830** | **85.39** | **80.21** | **0.1617** |
 
 v13 deltas vs v10: CDM +5.35 (answer-key rule recovered the 124-formula pages),
 RO −0.046 (XY-cut), text −0.006; TEDS flat (no table change in v13 — RapidTable
@@ -313,3 +354,57 @@ of Nanonets-OCR-s 85.59, MinerU2-VLM 85.56, GPT-5.2 85.50.
 
 Marker 78.44 / MinerU-Pipeline 85.75 on the same set. PRISM: 245 MB weights,
 CPU-only, median 4.71 s/page, peak RAM 2.24 GB.
+
+## 2026-07-06 overnight: v16 push (PP-DocLayoutV3 + model reading order + formula fixes)
+
+Lever map (docs/weakness_analysis_v15.md, from v14 per-page/per-sample data):
+EN tables +2.56 Overall pts possible (newspaper agate TEDS 0.239; 35 near-zero
+tables concentrated on 4 pages), book formulas +1.03 (Texo 256-token truncation
+on matrices), ZH formulas +0.71 (100 CJK-GT formulas; Texo hallucinates
+`\Gamma_i^k` for 未检测), ZH text +0.71 (diffuse).
+
+**PP-DocLayoutV3 swap (NET-ZERO size: 124MB replaces plus-L 124MB).**
+HF alex-dinh/PP-DocLayoutV3-ONNX (Apache-2.0), same 800x800 norm-none
+preprocessing, 7-col output adds read_order; masks output ignored. Raw table
+detection on the 4 worst newspaper pages: BostonGlobe 78-vs-13, WSJ 4-vs-0,
+Chicago 20-vs-9, TimesUK above-gate-vs-below. 211-page split-subset A/B
+(v15 base → V3+modelRO): text 0.1102→0.0970, TEDS(page) 65.46→73.99,
+struct 77.26→84.32, RO 0.3526→0.1707 (newspaper RO 0.391→0.158).
+Attribution note: V3 with GEOMETRIC ordering makes RO WORSE (0.3985) — the
+finer boxes fragment XY-cut; the model's own read_order is what halves it.
+Bug found: benchmark runner `_layout_from_cache` dropped read_order (two
+"different" arms scored byte-identical — always cmp preds across arms).
+SLANeXt (PP-StructureV3's table model) evaluated for the EN-table gap and
+REJECTED on size: 350MB per variant.
+
+**Formula fixes.** (a) PRISM_FML_CJK=1 (default): on CJK pages each formula
+crop is probed with the line OCR; >=2 CJK chars → emit OCR-derived LaTeX
+(CJK in \text{}, %&# escaped, unbalanced braces escaped, rows as array{l})
+instead of the Texo hallucination. (b) PRISM_FML_MAXTOK default 256→512
+(256 truncated real matrices/determinants; only formulas legitimately passing
+256 pay extra decode). 73-page formula-subset A/B (edit-dist proxy): fml page
+0.4802→0.4182, ZH 0.5448→0.4961, EN 0.3561→0.2687, text flat (0.198→0.197).
+CDM confirmation lands with the v16 full eval.
+
+Also: PRISM_ORT_GPU=1 adds CUDAExecutionProvider to our raw ORT sessions
+(layout/Texo/TATR) for the GPU latency study (RTX 3070 Laptop).
+
+v16 full run (V3 + modelRO + FML_CJK + MAXTOK512 + rescue) launched
+→ preds/odb_full_v16; v1.6 WSL eval + v1.5 cut to follow.
+
+
+**v16 CONFIRMED (2026-07-06): v1.6 Overall 85.77** (text 0.0830, CDM 85.39,
+TEDS 80.21, RO 0.1617) — +2.22 over v14 in one night. **v1.5 cut: 87.09**
+(text 0.0728, CDM 85.27, TEDS 83.29, RO 0.1465) — **passes PP-StructureV3
+(86.73) and MinerU-Pipeline: top pipeline on that snapshot**; on v1.6 the gap
+to MinerU-Pipeline (86.47) is 0.70, with PRISM ahead on CDM (85.39 vs 83.07).
+Perf: median 5.62 s/pg mean 6.62 p90 10.97, peak RAM 2.60 GB — +2.6 s median
+vs v14, all spent on maxtok-512 decode + V3 + CJK probe. Deltas by section
+(docs/section_scores_odb_full_v16.md): PPT text 0.139→0.066, ZH CDM
+61.9→71.0, newspaper TEDS 55.1→68.1, trad-ZH text 0.302→0.211, RO improved
+in every category. Small-n regression noted honestly: note-CDM (3 samples)
+dropped — CJK hybrid can misfire on handwriting; net CDM still +1.55.
+GPU-assisted variant (PRISM_ORT_GPU=1, RTX 3070 Laptop): layout 0.78→0.07 s;
+cudnn_conv_algo_search=HEURISTIC required (EXHAUSTIVE re-tunes per crop shape
+= 480 s pages); autoregressive Texo decode kept on CPU (GPU per-token launch
+overhead is slower). Full-run GPU latency measurement in flight.

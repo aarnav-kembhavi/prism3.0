@@ -50,6 +50,36 @@ def apply_session_threads(sess_options) -> None:
         pass
 
 
+def ort_providers() -> list:
+    """Execution-provider list for our raw onnxruntime sessions.
+
+    PRISM_ORT_GPU=1 puts CUDA first (falls back to CPU per-op); default is
+    CPU-only, which is the configuration all benchmark numbers are quoted at.
+    """
+    if os.environ.get('PRISM_ORT_GPU', '0') != '0':
+        _add_nvidia_dll_dirs()
+        # HEURISTIC algo search: the default EXHAUSTIVE re-benchmarks conv
+        # algorithms per input shape — Texo/OCR see a new shape per crop,
+        # which turned single pages into minutes on first encounter.
+        return [('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'HEURISTIC'}),
+                'CPUExecutionProvider']
+    return ['CPUExecutionProvider']
+
+
+def _add_nvidia_dll_dirs() -> None:
+    """Put pip-installed NVIDIA runtime DLLs (nvidia-cudnn-cu12 etc.) on the
+    search path so onnxruntime-gpu's CUDA EP can load them."""
+    import glob, sys
+    for site in sys.path:
+        for d in glob.glob(os.path.join(site, 'nvidia', '*', 'bin')):
+            try:
+                os.add_dll_directory(d)
+            except (OSError, AttributeError):
+                pass
+            if d not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH', '')
+
+
 def apply_thread_env() -> None:
     """Set OMP/thread env vars so libraries we don't directly configure
     (ultralytics/torch, OpenMP-backed BLAS) also respect the budget.

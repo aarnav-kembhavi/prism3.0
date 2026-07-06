@@ -11,7 +11,7 @@
 
 \begin{table*}[t]
 \centering
-\caption{OmniDocBench v1.6\_full (1651 pages), official harness. Leaderboard rows from the official repository; PRISM measured by us on the identical dataset, harness and metrics. Abbreviated: the full 32-row table is in the supplementary. \todo{Update PRISM row to v14.}}
+\caption{OmniDocBench v1.6\_full (1651 pages), official harness. Leaderboard rows from the official repository; PRISM measured by us on the identical dataset, harness and metrics. Abbreviated: the full 32-row table is in the supplementary.}
 \label{tab:v16}
 \small
 \begin{tabular}{llccccc}
@@ -24,17 +24,17 @@ Gemini 3 Pro & General VLM & 92.91 & 0.064 & 95.99 & 89.15 & 0.165 \\
 dots.ocr & VLM (3B) & 90.77 & 0.048 & 89.95 & 87.18 & 0.138 \\
 GPT-5.2 & General VLM & 86.59 & 0.114 & 88.21 & 82.95 & 0.193 \\
 MinerU-Pipeline & Pipeline (GPU) & 86.47 & 0.055 & 83.07 & 81.88 & 0.153 \\
+\textbf{PRISM (ours)} & \textbf{Pipeline, CPU, 283\,MB} & \textbf{85.77} & 0.083 & 85.39 & 80.21 & 0.162 \\
 olmOCR & VLM (7B) & 85.74 & 0.139 & 88.10 & 83.00 & 0.216 \\
 Mistral OCR & VLM (API) & 85.66 & 0.097 & 89.91 & 76.78 & 0.171 \\
 Nanonets-OCR-s & VLM (3B) & 83.61 & 0.108 & 81.46 & 80.18 & 0.213 \\
-\textbf{PRISM (ours)} & \textbf{Pipeline, CPU, 283\,MB} & \textbf{83.55} & 0.120 & 83.84 & 78.83 & 0.238 \\
 POINTS-Reader & VLM (3B) & 83.37 & 0.096 & 85.72 & 73.98 & 0.198 \\
 Marker & Pipeline (GPU) & 78.44 & 0.157 & 85.24 & 65.77 & 0.243 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM reaches parity with the 3B-parameter specialized-VLM class (between POINTS-Reader and Nanonets-OCR-s), exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- by 5.1 points, and sits within 3 points of the MinerU GPU pipeline, with every system above it using at least one order of magnitude more compute. By language, PRISM's text edit is 0.101 (EN) / 0.127 (ZH); table TEDS is 82.5 on Chinese pages and 71.6 on English ones (dominated by dense newspaper stock listings); the residual formula gap is concentrated in Chinese-embedded math, a capacity limit of the 20M recognizer. On the v1.5 cut, PRISM scores \textbf{85.7} (text 0.108, CDM 86.3, TEDS 81.7) --- second among all pipelines on that snapshot, 1.0 point behind PP-StructureV3 (which requires 8\,GB and 58\,s/page on CPU, \cref{tab:cpu_frontier}) and ahead of Nanonets-OCR-s (85.6), MinerU2-VLM (85.6) and GPT-5.2 (85.5).
+\Cref{tab:v16} places PRISM on the v1.6 leaderboard. PRISM lands above the 7B-parameter VLM class (olmOCR-7B, Mistral OCR), exceeds Marker --- a pipeline whose OCR alone is a 650M-parameter GPU VLM --- by 7.3 points, and sits within 0.7 of the MinerU GPU pipeline while beating its formula CDM outright (85.4 vs.\ 83.1), with every system above it using at least one order of magnitude more compute. By language, PRISM's text edit is 0.068 (EN) / 0.096 (ZH); table TEDS is 82.8 on Chinese pages and 75.6 on English ones (the residual English deficit is dense newspaper stock listings); the residual formula gap is Chinese-embedded math, bounded by the OCR-hybrid escape hatch (\cref{sec:formula}). On the v1.5 cut, PRISM scores \textbf{87.1} (text 0.073, CDM 85.3, TEDS 83.3) --- the \emph{highest-scoring pipeline} on that snapshot, ahead of PP-StructureV3 (86.7, which requires 8\,GB and 58\,s/page on CPU, \cref{tab:cpu_frontier}), with the same text edit distance and +1.6 TEDS; the systems above it are all GPU VLMs.
 
 \subsection{Efficiency frontier}
 \label{sec:efficiency}
@@ -58,7 +58,7 @@ GraniteDocling-258M & 2.3\,GB & 54.6 & 0.341 & 0.585 & 37.4 \\
 \end{tabular}
 \end{table}
 
-On the full-benchmark run PRISM's median latency is 3.0\,s/page (mean 3.6, p90 6.4) with a 2.61\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker). \Cref{tab:cpu_frontier} is the same-machine comparison (run before the current build; PRISM's row there understates it): PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile scored higher in that snapshot --- a gap the current build closes --- at $6\times$ the memory and $19\times$ the latency. Model inventory: layout 124\,MB, OCR 31\,MB, formulas 79\,MB, tables 7.4\,MB + 30\,MB TATR fallback $\approx$ 283\,MB.
+On the full-benchmark run PRISM's median latency is 5.6\,s/page (mean 6.6, p90 11.0) with a 2.60\,GB peak working set in the dual-worker benchmark configuration ($\sim$1.3\,GB single-worker); the speed-optimal v14 configuration (83.55 Overall) runs at 3.0\,s median, so the last +2.2 points cost +2.6\,s --- spent on a doubled formula decode budget and the higher-capacity layout model. \Cref{tab:cpu_frontier} is the same-machine comparison (run before the current build; PRISM's row there understates it): PRISM is simultaneously more accurate \emph{and} an order of magnitude faster than both sub-300M VLMs; only PP-StructureV3's server profile scored higher in that snapshot --- a gap the current build closes --- at $6\times$ the memory and $19\times$ the latency. Model inventory: layout 124\,MB, OCR 31\,MB, formulas 79\,MB, tables 7.4\,MB + 30\,MB TATR fallback $\approx$ 283\,MB.
 
 \subsection{Recognition-verified normalization}
 \label{sec:verified_exp}
@@ -101,7 +101,8 @@ Configuration & Overall & Text$\downarrow$ & CDM & TEDS & Order$\downarrow$ \\
 Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 & 0.323 \\
 + formula geometry, spans, rescues & 78.46 & 0.142 & 78.11 & 71.46 & 0.286 \\
 + answer-key rule, XY-cut, marginalia & 80.43 & 0.136 & 83.46 & 71.40 & 0.241 \\
-+ SLANet-plus, OCRv6, sanitizer & \textbf{83.55} & \textbf{0.120} & \textbf{83.84} & \textbf{78.83} & \textbf{0.238} \\
++ SLANet-plus, OCRv6, sanitizer & 83.55 & 0.120 & 83.84 & 78.83 & 0.238 \\
++ DocLayoutV3 + native order, fml budget/hybrid & \textbf{85.77} & \textbf{0.083} & \textbf{85.39} & \textbf{80.21} & \textbf{0.162} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -114,4 +115,24 @@ Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 & 0.323 \\
 \item \textbf{Emphasis markup.} Emitting bold/italic markers broke the matcher's caption pairing and turned matched blocks into unmatched 1.0-edit predictions; plain text scores strictly better.
 \end{itemize}
 
-\paragraph{Where the evaluation, not the model, was the bottleneck.} Three of our largest single improvements were pipeline--evaluation interaction fixes, not modeling: math-block quarantine in the Markdown lowering (a line-break rewrite was corrupting matrix row separators in 28\% of matched formula pairs), marginalia suppression (unmatched running headers penalized as full-weight predictions), and pdflatex-compatibility sanitation of recognizer output (\cref{sec:formula}). We suggest these classes of failure are endemic in benchmark submissions and deserve routine auditing.
+\subsection{How much of the score is emission convention?}
+\label{sec:perturb}
+
+\begin{table}[t]
+\centering
+\caption{Emission-convention perturbation study: semantically-null transformations of our final predictions, re-scored with the unmodified official harness (1651 pages). $\Delta$ in points ($\times 100$).}
+\label{tab:perturb}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcc}
+\toprule
+Perturbation (content unchanged) & $\Delta$Text & $\Delta$Order \\
+\midrule
+bold-wrap first sentence of every 3rd para & 0.00 & 0.00 \\
+re-add GT marginalia verbatim & $+0.06$ & $-0.01$ \\
+split paragraphs at sentence boundaries & $+0.41$ & $+1.54$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Because our development process kept surfacing evaluation-interaction effects, we quantified them systematically: we applied semantically-null transformations to our final predictions --- a human reader would extract identical content --- and re-scored with the untouched official harness (\cref{tab:perturb}). The harness proves \emph{robust} where content stays faithful: markdown styling is normalized away exactly, and even re-adding running headers/footers verbatim costs only 0.06 text points, because the matcher pairs them with the annotated-but-unscored ground-truth elements. The sensitivity is elsewhere: \textbf{segmentation granularity}. Emitting the same text as sentence-level blocks instead of paragraphs costs 0.41 text points and 1.54 reading-order points --- half a leaderboard step --- purely by convention. Combined with the interaction bugs we repaired during development (a line-break rewrite corrupting matrix row separators in 28\% of matched formula pairs; \emph{noisy OCR'd} marginalia, unlike verbatim ones, costing 0.36 text points through failed pairing; a single un-compilable macro zeroing a formula's CDM), the picture is consistent: benchmark scores conflate parsing ability with emission and segmentation conventions at the half-point scale, which is the same scale as many published leaderboard gaps. We recommend perturbation audits of this kind as standard practice when comparing document parsers.

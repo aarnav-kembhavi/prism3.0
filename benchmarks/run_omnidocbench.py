@@ -107,8 +107,11 @@ def _layout_from_cache(stem, image_norm, image_fidelity, formula_from_fidelity, 
             crop = xyxy_to_pil_crop(image_fidelity, bbox)
         else:
             crop = xyxy_to_pil_crop(image_norm, bbox)
-        dets.append({'bbox': bbox, 'class_id': 0, 'class_name': cls,
-                     'confidence': conf, 'crop': crop})
+        d = {'bbox': bbox, 'class_id': 0, 'class_name': cls,
+             'confidence': conf, 'crop': crop}
+        if b.get('read_order') is not None:
+            d['read_order'] = b['read_order']
+        dets.append(d)
     return dets
 
 
@@ -194,6 +197,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     for img_path_str in image_paths:
         img_path = Path(img_path_str)
         stem = img_path.stem
+        if (os.environ.get('PRISM_SKIP_EXISTING', '0') == '1'
+                and (Path(pred_dir) / f'{stem}.md').exists()):
+            continue
         t0 = time.perf_counter()
         print(f'[>] {stem}')
 
@@ -244,7 +250,8 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
                 else:
                     det['crop'] = xyxy_to_pil_crop(image_norm, bbox)
 
-            del image_norm, image_fidelity
+            _rescue_page = image_norm if os.environ.get('PRISM_TEXT_RESCUE', '1') != '0' else None
+            del image_fidelity
             gc.collect()
 
             # Stage 3: extraction + assembly (shared with orchestrate.py)
@@ -254,7 +261,10 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             document = build_document(
                 detections, img_width, img_height, workers, str(figures_dir),
                 is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
+                page_image=_rescue_page,
             )
+            del image_norm, _rescue_page
+            gc.collect()
 
             # Convert LaTeX → Markdown
             md_text = tex_to_omnidocbench_md(document)

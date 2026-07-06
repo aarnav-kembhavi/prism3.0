@@ -268,8 +268,9 @@ def _worker_main(conn):
     # Re-apply arena + memory-mapping patch in subprocess (fresh Python state)
     try:
         import onnxruntime as _ort
-        from pipeline.onnx_config import onnx_threads as _onnx_threads
+        from pipeline.onnx_config import onnx_threads as _onnx_threads, ort_providers as _ort_providers
         _n_threads = _onnx_threads()
+        _gpu = os.environ.get('PRISM_ORT_GPU', '0') != '0'
         _orig = _ort.InferenceSession; _opts = _ort.SessionOptions
         def _patched(p, sess_options=None, providers=None, **kw):
             if sess_options is None: sess_options = _opts()
@@ -284,6 +285,8 @@ def _worker_main(conn):
                 sess_options.add_session_config_entry("session.use_memory_mapped_if_possible", "1")
             except Exception:
                 pass
+            if _gpu:
+                providers = _ort_providers()   # CUDA-first (PRISM_ORT_GPU)
             return _orig(p, sess_options=sess_options, providers=providers, **kw)
         _ort.InferenceSession = _patched
     except Exception:
@@ -413,6 +416,29 @@ def _worker_main(conn):
                 for en, cjk in zip(en_results, cjk_results)
             ]
             conn.send(results)
+
+        elif task == 'text_lines':
+            # Full-page det+rec returning per-line (bbox, text) tuples —
+            # used by the uncovered-text rescue to recover titles and text
+            # the layout detector missed (32% of v14 text loss was GT text
+            # never emitted at all).
+            page_array, lang = payload
+            img_np = page_array if page_array.ndim == 3 else None
+            engine = _get_engine('cjk' if lang == 'cjk' else 'en', False)
+            lines = []
+            try:
+                result, _ = engine(img_np)
+                if result:
+                    for entry in result:
+                        poly, txt = entry[0], (entry[1] or '').strip()
+                        if not txt:
+                            continue
+                        xs = [p[0] for p in poly]; ys = [p[1] for p in poly]
+                        lines.append((float(min(xs)), float(min(ys)),
+                                      float(max(xs)), float(max(ys)), txt))
+            except Exception:
+                lines = []
+            conn.send(lines)
 
         elif task == 'probe':
             # Run English OCR on a small sample; return total output char count.
@@ -552,6 +578,13 @@ class TextOCRWorker:
         self._conn.send(('probe_cjk', (self._serialize(sample), is_screenshot)))
         return self._conn.recv()
 
+    def run_text_lines(self, page_image, lang='en'):
+        """Full-page det+rec; returns [(x1, y1, x2, y2, text), ...]."""
+        import numpy as np
+        arr = np.asarray(page_image.convert('RGB')) if hasattr(page_image, 'convert') else page_image
+        self._conn.send(('text_lines', (arr, lang)))
+        return self._conn.recv()
+
     def run_table_batch(self, crops):
         if not crops:
             return []
@@ -616,6 +649,9 @@ class TextOCRWorkerDual:
 
     def run_cjk_probe(self, crops, is_screenshot=False):
         return self._w1.run_cjk_probe(crops, is_screenshot)
+
+    def run_text_lines(self, page_image, lang='en'):
+        return self._w1.run_text_lines(page_image, lang)
 
     def run_table_batch(self, crops):
         return self._split(crops, self._w1.run_table_batch, self._w2.run_table_batch)

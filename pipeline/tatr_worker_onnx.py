@@ -93,11 +93,11 @@ def _overlap_1d(a1, a2, b1, b2):
 
 def _worker_main(conn):
     import onnxruntime as ort
-    from pipeline.onnx_config import apply_session_threads
+    from pipeline.onnx_config import apply_session_threads, ort_providers
     sess_opts = ort.SessionOptions()
     apply_session_threads(sess_opts)
     sess = ort.InferenceSession(str(_MODEL_PATH), sess_opts,
-                                providers=["CPUExecutionProvider"])
+                                providers=ort_providers())
     print(f"  [TATR-ONNX] ready ({_MODEL_PATH.name})", flush=True)
     conn.send("ready")
 
