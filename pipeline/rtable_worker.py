@@ -104,8 +104,10 @@ class RapidTableWorker:
             return None
         return result.get("data")
 
-    def build_table_html(self, crop) -> str:
-        """crop: PIL Image. Returns '<table>...</table>' or '' on failure."""
+    def build_table_html(self, crop, ocr_tokens=None) -> str:
+        """crop: PIL Image. Optional ocr_tokens = [(x1,y1,x2,y2,text,score),...]
+        in crop coordinates — when given, SLANet uses them for cell content
+        instead of its own (older) internal OCR. Returns '<table>...' or ''."""
         with self._lock:
             if self._proc is None:
                 try:
@@ -115,6 +117,13 @@ class RapidTableWorker:
             buf = io.BytesIO()
             crop.convert("RGB").save(buf, format="PNG")
             png = buf.getvalue()
+            if ocr_tokens:
+                import base64
+                png = json.dumps({
+                    "png": base64.b64encode(png).decode("ascii"),
+                    "ocr": [[float(t[0]), float(t[1]), float(t[2]), float(t[3]),
+                             str(t[4]), float(t[5])] for t in ocr_tokens],
+                }).encode("utf-8")
             try:
                 self._proc.stdin.write(struct.pack(">I", len(png)) + png)
                 self._proc.stdin.flush()

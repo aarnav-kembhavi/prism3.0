@@ -49,14 +49,30 @@ def main():
         (length,) = struct.unpack(">I", header)
         if length == 0:  # shutdown sentinel
             break
-        png = _read_exact(stdin, length)
-        if png is None:
+        raw = _read_exact(stdin, length)
+        if raw is None:
             break
         html = ""
         try:
+            ocr_results = None
+            if raw[:1] == b"{":
+                # Protocol v2: JSON {png: base64, ocr: [[x1,y1,x2,y2,text,score],...]|null}
+                import base64
+                msg = json.loads(raw.decode("utf-8"))
+                png = base64.b64decode(msg["png"])
+                toks = msg.get("ocr")
+                if toks:
+                    boxes = np.array(
+                        [[[t[0], t[1]], [t[2], t[1]], [t[2], t[3]], [t[0], t[3]]]
+                         for t in toks], dtype=np.float32)
+                    texts = tuple(t[4] for t in toks)
+                    scores = tuple(float(t[5]) for t in toks)
+                    ocr_results = [(boxes, texts, scores)]
+            else:
+                png = raw
             img = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_COLOR)
             if img is not None and img.size > 0:
-                out = engine(img)
+                out = engine(img, ocr_results=ocr_results) if ocr_results else engine(img)
                 if out.pred_htmls:
                     html = out.pred_htmls[0] or ""
         except Exception as exc:  # never crash the loop; parent falls back

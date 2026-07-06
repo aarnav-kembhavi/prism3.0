@@ -408,3 +408,51 @@ GPU-assisted variant (PRISM_ORT_GPU=1, RTX 3070 Laptop): layout 0.78→0.07 s;
 cudnn_conv_algo_search=HEURISTIC required (EXHAUSTIVE re-tunes per crop shape
 = 480 s pages); autoregressive Texo decode kept on CPU (GPU per-token launch
 overhead is slower). Full-run GPU latency measurement in flight.
+
+## 2026-07-06 afternoon: the 0.7-to-MinerU hunt (v17)
+
+Gap decomposition vs MinerU-Pipeline 86.47 (v1.6): text 0.083-vs-0.055 =
++0.93 to them; TEDS 80.21-vs-81.88 = +0.56 to them; CDM 85.39-vs-83.07 =
+-0.77 to us; net 0.72.
+
+**Found: a v16 regression hiding inside the CDM gain.** Per-formula v14-vs-v16
+diff: 112 formulas dropped >0.3 CDM, 80 of them on .jpg pages (notes, yanbao
+PPT-merges, ZH textbooks); zeros on those pages went 20 -> 77. Root cause is
+NOT detection recall and NOT the CJK hybrid (only 3 drops carry its
+signature): **PP-DocLayoutV3 labels handwritten/standalone formulas
+`inline_formula`** (plus-L called them display), and our mapping dropped the
+class — notes pages lost every formula to plain OCR text (page went from 10
+recognized formulas to zero). V3 sees them fine: 8-10 inline_formula boxes at
+conf>0.5 on the worst notes pages.
+
+**Fix (v17): PRISM_INLINE_FML_DISPLAY=1** — map inline_formula -> Formula and
+let formula_v2's inline-FP guard drop the true in-text chips. 59-page A/B
+(35 regression pages + 30 EN academic inline-heavy controls), with the CJK
+hybrid ACTIVE (i.e. the exact v17 configuration): formula edit
+0.380 -> 0.316 (sample 0.329 -> 0.269), text 0.2409 -> 0.2385 (controls
+clean — the guard holds), RO noise. v17 full run launched.
+
+**Rejected: feeding SLANet our v6 OCR tokens** (PRISM_RTABLE_OCR_V6,
+rapid_table ocr_results injection, protocol v2 in rtable_worker/child with
+PNG-magic backward compat). Motivation was the 0.10-0.11 content-vs-structure
+TEDS gap; measured on 75 mid-TEDS + control pages: TEDS 72.98 -> 72.94,
+struct identical — the child's internal OCR was not the bottleneck. Code kept
+behind the flag (default off), protocol change retained (harmless).
+
+**Process bug worth remembering**: subset "baseline" evals that point at the
+full-run pred dir REUSE its save_name and silently overwrite the full-run
+result JSONs (odb_full_v15/v16 metric artifacts clobbered by 59/211-page
+baselines). Always copy preds to a distinct dir for baseline scoring; the
+full v16 per-table data was regenerated via preds/odb_v16_tblsel.
+
+**v17 CONFIRMED (2026-07-06 evening): v1.6 Overall 86.35** (text 0.0873,
+CDM 87.56, TEDS 80.21, RO 0.1634) — +0.58 over v16, 0.12 behind
+MinerU-Pipeline 86.47 with CDM ahead by 4.5. **v1.5 cut: 88.11** (text
+0.0784, CDM 88.87, TEDS 83.29, RO 0.1487) — top pipeline by 1.4 over
+PP-StructureV3 and past Gemini-2.5 Pro (88.03), MonkeyOCR-3B, Qwen2.5-VL-72B,
+Deepseek-OCR. The inline-formula recovery delivered CDM +2.17 at a small text
+cost (0.0830→0.0873: recovered formula regions no longer emit OCR text that
+had been pairing with GT). Perf: median 5.88 s/pg, mean 6.96, p90 11.50, RAM
+2.65 GB, weights ~283 MB. v14→v17 = +2.80 Overall in 24 hours. Defaults
+flipped in code: PRISM_PPDL_V3=1, PRISM_INLINE_FML_DISPLAY=1 (web UI serves
+the same build). Section tables: docs/section_scores_odb_full_v17.md.

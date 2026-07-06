@@ -204,7 +204,7 @@ def get_ppdoclayout_detector(imgsz: int = 800):
     """Torch-free PP-DocLayout detector singleton (None if model absent)."""
     global _ppdoclayout_detector
     if _ppdoclayout_detector is None:
-        use_v3 = os.environ.get('PRISM_PPDL_V3', '0') != '0'
+        use_v3 = os.environ.get('PRISM_PPDL_V3', '1') != '0'
         path = _PPDOCLAYOUT_V3_MODEL_PATH if use_v3 else _PPDOCLAYOUT_MODEL_PATH
         if not os.path.exists(path):
             return None

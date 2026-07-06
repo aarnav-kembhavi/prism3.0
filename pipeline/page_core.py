@@ -93,10 +93,28 @@ def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list
     """
     rtable = _get_rtable()
     if rtable is not None:
+        # PRISM_RTABLE_OCR_V6: read cell content with the pipeline's PP-OCRv6
+        # engines (CJK-aware) instead of rapid_table's older internal OCR —
+        # the EN/ZH content-vs-structure TEDS gap (0.11/0.10) is cell text.
+        tokens_list = [None] * len(table_crops)
+        if os.environ.get('PRISM_RTABLE_OCR_V6', '0') == '1' and table_crops:
+            try:
+                if is_cjk and hasattr(workers.ocr, 'run_table_tokens_batch_cjk'):
+                    raw_tokens = workers.ocr.run_table_tokens_batch_cjk(table_crops)
+                else:
+                    raw_tokens = workers.ocr.run_table_tokens_batch(table_crops)
+                tokens_list = [
+                    [(t['x1'], t['y1'], t['x2'], t['y2'], t['text'],
+                      t.get('conf', t.get('score', 0.95))) for t in toks]
+                    if toks else None
+                    for toks in raw_tokens
+                ]
+            except Exception as e:
+                print(f"  [rtable] v6-ocr tokens failed, using internal OCR: {e}")
         results = []
         pending = []  # indices that need the TATR fallback
         for i, crop in enumerate(table_crops):
-            html = rtable.build_table_html(crop)
+            html = rtable.build_table_html(crop, ocr_tokens=tokens_list[i])
             if html and html.count('<td') >= 1:
                 results.append(html)
             else:

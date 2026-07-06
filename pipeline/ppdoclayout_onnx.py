@@ -18,6 +18,8 @@ The onnxruntime output is validated box-for-box against the paddle model
 (see scripts/validate_ppdoclayout_onnx.py).
 """
 
+import os
+
 import numpy as np
 import onnxruntime as ort
 from PIL import Image, ImageOps
@@ -134,10 +136,17 @@ class PPDocLayoutOnnxDetector:
             label = self._labels[int(cls_id)] if 0 <= int(cls_id) < len(self._labels) else None
             if self.map_to_prism:
                 name = self._map.get(label)
+                if name is None and label == 'inline_formula':
+                    # V3 labels handwritten/standalone formulas 'inline' where
+                    # plus-L called them display (notes pages lost every formula
+                    # to the dropped class). Route them as Formula and let
+                    # formula_v2's inline-FP guard drop the true in-text chips.
+                    if os.environ.get('PRISM_INLINE_FML_DISPLAY', '1') != '0':
+                        name = 'Formula'
+                    elif self.keep_inline_formula:
+                        name = 'InlineFormula'
                 if name is None:
-                    if not (self.keep_inline_formula and label == 'inline_formula'):
-                        continue
-                    name = 'InlineFormula'
+                    continue
             else:
                 name = label
             x1 = float(np.clip(x1, 0, W)); x2 = float(np.clip(x2, 0, W))

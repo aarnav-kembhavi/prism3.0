@@ -1,9 +1,9 @@
 # PRISM — Results vs. State of the Art
 
-All PRISM numbers are from the **v16 run** (2026-07-06): full official
+All PRISM numbers are from the **v17 run** (2026-07-06): full official
 OmniDocBench dataset, official evaluation harness (`opendatalab/OmniDocBench`
 main branch), CDM rendered with TeX Live 2026. Predictions:
-`preds/odb_full_v16`; eval artifacts: `omnidocbench_eval/result/odb_full_v16_*`.
+`preds/odb_full_v17`; eval artifacts: `omnidocbench_eval/result/odb_full_v17_*`.
 
 PRISM configuration: PP-DocLayoutV3 (layout + native reading order) + RapidOCR
 PP-OCRv6-small (unified EN/CJK) + Texo-distill 20M (formulas; OCR-hybrid for
@@ -44,7 +44,7 @@ by us on the identical dataset + harness + metric definitions.
 | GPT-5.2 | General VLM | 86.59 | 0.114 | 88.21 | 82.95 | 0.193 |
 | Dolphin-1.5 | Specialized VLM | 86.52 | 0.094 | 87.49 | 81.43 | 0.167 |
 | **MinerU-Pipeline** | **Pipeline** | **86.47** | 0.055 | 83.07 | 81.88 | 0.153 |
-| **PRISM (ours, v16)** | **Pipeline — CPU, 283 MB** | **85.77** | 0.083 | 85.39 | 80.21 | 0.162 |
+| **PRISM (ours, v17)** | **Pipeline — CPU, 283 MB** | **86.35** | 0.087 | 87.56 | 80.21 | 0.163 |
 | olmOCR | Specialized VLM (7B) | 85.74 | 0.139 | 88.10 | 83.00 | 0.216 |
 | Mistral OCR | Specialized VLM | 85.66 | 0.097 | 89.91 | 76.78 | 0.171 |
 | Kimi K2.5 | General VLM | 84.53 | 0.107 | 83.50 | 80.76 | 0.211 |
@@ -58,13 +58,11 @@ by us on the identical dataset + harness + metric definitions.
 - PRISM is, to our knowledge, the only entry that runs **CPU-only with <300 MB
   of weights** — every VLM above it is 0.9–241B parameters on GPUs; the
   pipeline peers (MinerU-Pipeline, Marker) run multi-GB GPU model stacks.
-- v16 sits **0.70 behind MinerU-Pipeline** (a multi-GB GPU stack) and above
-  olmOCR-7B (85.74), Mistral OCR (85.66), Kimi K2.5 and InternVL3.5-241B —
-  7B-VLM-class accuracy from 283 MB on CPU. PRISM's CDM (85.39) beats
-  MinerU-Pipeline's (83.07); the remaining gap is text edit (0.083 vs 0.055).
-- v16 by language — Text: EN 0.068 / ZH 0.096 / trad-ZH 0.211;
-  TEDS: ZH 82.8 / EN 75.6; CDM: EN 90.1 / ZH 71.0. Full per-section tables:
-  `docs/section_scores_odb_full_v16.md`.
+- v17 sits **0.12 behind MinerU-Pipeline** (a multi-GB GPU stack) and above
+  olmOCR-7B (85.74), Mistral OCR (85.66), Kimi K2.5 and InternVL3.5-241B.
+  PRISM's CDM (87.56) beats MinerU-Pipeline's by 4.5; the remaining gap is
+  text edit (0.087 vs 0.055) and TEDS (80.2 vs 81.9).
+- Full per-section tables: `docs/section_scores_odb_full_v17.md`.
 
 ## 2. OmniDocBench v1.5 (1355 pages)
 
@@ -88,7 +86,7 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 | Deepseek-OCR | VLM 3B | 87.01 | 0.073 | 83.37 | 84.97 | 0.086 |
 | Qwen2.5-VL-72B | General VLM | 87.02 | 0.094 | 88.27 | 82.15 | 0.102 |
 | MonkeyOCR-pro-1.2B | VLM 1.9B | 86.96 | 0.084 | 85.02 | 84.24 | 0.130 |
-| **PRISM (ours, v16)†** | **Pipeline — CPU, 283 MB** | **87.09** | 0.073 | 85.27 | 83.29 | 0.146 |
+| **PRISM (ours, v17)†** | **Pipeline — CPU, 283 MB** | **88.11** | 0.078 | 88.87 | 83.29 | 0.149 |
 | **PP-StructureV3** | **Pipeline** | **86.73** | 0.073 | 85.79 | 81.68 | 0.073 |
 | PRISM v14 (reference)† | Pipeline — CPU, 283 MB | 85.73 | 0.108 | 86.33 | 81.67 | 0.231 |
 | Nanonets-OCR-s | VLM 3B | 85.59 | 0.093 | 85.90 | 80.14 | 0.108 |
@@ -111,10 +109,11 @@ with the v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly)
 v1.6/1.7 matcher (the official v1.5 branch matcher differs slightly) —
 directional, not a leaderboard submission.
 
-On this snapshot PRISM v16 is the **top pipeline** — above PP-StructureV3
-(which needs 8 GB and 58 s/page on CPU — see §5), Nanonets-OCR-s, MinerU2-VLM
-and GPT-5.2; the next entries above it are GPU VLMs (MonkeyOCR-pro-1.2B 86.96).
-Same text edit as PP-StructureV3 (0.073), higher TEDS (+1.6).
+On this snapshot PRISM v17 is the **top pipeline** at 88.11 — 1.4 above
+PP-StructureV3 (which needs 8 GB and 58 s/page on CPU — see §5) — and passes
+Gemini-2.5 Pro (88.03), MonkeyOCR-3B (87.13), Qwen2.5-VL-72B (87.02) and
+Deepseek-OCR (87.01); next above are dots.ocr (88.41) and
+MonkeyOCR-pro-3B (88.85), both GPU VLMs.
 
 ## 3. Systems with no current official OmniDocBench score
 
@@ -130,13 +129,13 @@ numbers are from **older, non-comparable** versions (different matcher/pages):
 | GOT-OCR 2.0 | EN overall 0.287 | v1.0 | 580M, GPU |
 | PP-StructureV3 | Overall 86.73 | official v1.5 (see §2) | never re-scored on v1.6 |
 
-## 4. Efficiency — measured on the v16 full run (1651 pages)
+## 4. Efficiency — measured on the v17 full run (1651 pages)
 
-| Metric | PRISM v16 (CPU) | PRISM v16 (GPU-assisted) |
+| Metric | PRISM v17 (CPU) | PRISM v17 (GPU-assisted) |
 |---|---|---|
-| Wall time (1651 pages) | 3.04 h | TBD |
-| Latency median / mean / p90 | **5.62 s / 6.62 s / 10.97 s per page** | TBD |
-| Peak RAM, process tree (dual OCR+math workers) | 2.60 GB | TBD |
+| Wall time (1651 pages) | 3.19 h | TBD |
+| Latency median / mean / p90 | **5.88 s / 6.96 s / 11.50 s per page** | TBD |
+| Peak RAM, process tree (dual OCR+math workers) | 2.65 GB | TBD |
 | Total inference weights | **~283 MB** | same |
 | Runtime | CPU-only (16 logical cores, Windows 11), onnxruntime; no torch in-process | + RTX 3070 Laptop: layout/OCR on CUDA, autoregressive math decode stays CPU (faster there) |
 
@@ -191,7 +190,8 @@ and 8.5× the latency.
 | v10 | 2026-07-04 | 78.46 | 0.1419 | 78.11 | 71.46 | 0.2864 | 4.71 |
 | v13 | 2026-07-05 | 80.43 | 0.1358 | 83.46 | 71.40 | 0.2409 | 5.21* |
 | v14 | 2026-07-05 | 83.55 | 0.1203 | 83.84 | 78.83 | 0.2383 | **3.04** |
-| **v16** | 2026-07-06 | **85.77** | **0.0830** | **85.39** | **80.21** | **0.1617** | 5.62 |
+| v16 | 2026-07-06 | 85.77 | 0.0830 | 85.39 | 80.21 | 0.1617 | 5.62 |
+| **v17** | 2026-07-06 | **86.35** | 0.0873 | **87.56** | **80.21** | 0.1634 | 5.88 |
 
 \* v13 ran under CPU contention from concurrent experiments.
 
