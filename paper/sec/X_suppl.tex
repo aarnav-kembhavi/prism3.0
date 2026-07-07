@@ -5,7 +5,7 @@
 \section{Per-section results on OmniDocBench v1.6}
 \label{sec:suppl_sections}
 
-\Cref{tab:suppl_type,tab:suppl_lang,tab:suppl_layout} give the full breakdown of PRISM's final (v20) OmniDocBench v1.6 run by document type, language and layout. Text and reading order are normalized edit distance (lower better); CDM and TEDS are $\times100$ (higher better). A dash indicates the category contains no scorable instances of that element (e.g.\ magazines and newspapers carry no annotated display formulas). These are the disaggregated numbers behind the composite in \cref{tab:v16}; they localize the residual gap to GPU systems to a small number of capacity-bound cells --- simplified-Chinese and note-page formula CDM, and three-column / newspaper table TEDS --- rather than a diffuse deficit.
+\Cref{tab:suppl_type,tab:suppl_lang,tab:suppl_layout} give the full breakdown of PRISM's final (v20) OmniDocBench v1.6 run by document type, language and layout. Text and reading order are normalized edit distance (lower better); CDM and TEDS are $\times100$ (higher better). A dash indicates the category contains no scorable instances of that element (e.g.\ magazines and newspapers carry no annotated display formulas). These are the disaggregated numbers behind the composite in \cref{tab:v16}; they localize the residual gap to GPU systems to a small number of capacity-bound cells --- simplified-Chinese and note-page formula CDM, and three-column / newspaper table TEDS --- rather than a diffuse deficit. Each row lists its sample size $N$ (pages); the smallest cells --- historical\_document ($N{=}5$) and traditional\_chinese ($N{=}13$) --- are high-variance and should be read as localized rather than representative.
 
 \begin{table}[h]
 \centering
@@ -13,20 +13,20 @@
 \label{tab:suppl_type}
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccc}
+\begin{tabular}{lrcccc}
 \toprule
-Type & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+Type & N & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
 \midrule
-research\_report     & 0.014 & --    & 82.3 & 0.325 \\
-magazine             & 0.056 & --    & 71.5 & 0.115 \\
-PPT2PDF              & 0.066 & 88.6  & 84.0 & 0.109 \\
-academic\_literature & 0.080 & 89.1  & 72.0 & 0.186 \\
-book                 & 0.083 & 83.7  & 88.0 & 0.172 \\
-colorful\_textbook   & 0.097 & 82.0  & 89.0 & 0.156 \\
-note                 & 0.101 & 73.5  & 57.7 & 0.137 \\
-newspaper            & 0.103 & --    & 67.9 & 0.158 \\
-exam\_paper          & 0.127 & 91.2  & 89.4 & 0.150 \\
-historical\_document & 0.560 & --    & --   & 0.432 \\
+research\_report     & 132 & 0.014 & --    & 82.3 & 0.325 \\
+magazine             & 149 & 0.056 & --    & 71.5 & 0.115 \\
+PPT2PDF              & 253 & 0.066 & 88.6  & 84.0 & 0.109 \\
+academic\_literature & 215 & 0.080 & 89.1  & 72.0 & 0.186 \\
+book                 & 276 & 0.083 & 83.7  & 88.0 & 0.172 \\
+colorful\_textbook   & 159 & 0.097 & 82.0  & 89.0 & 0.156 \\
+note                 & 118 & 0.101 & 73.5  & 57.7 & 0.137 \\
+newspaper            & 151 & 0.103 & --    & 67.9 & 0.158 \\
+exam\_paper          & 193 & 0.127 & 91.2  & 89.4 & 0.150 \\
+historical\_document & 5 & 0.560 & --    & --   & 0.432 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -37,14 +37,14 @@ historical\_document & 0.560 & --    & --   & 0.432 \\
 \label{tab:suppl_lang}
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccc}
+\begin{tabular}{lrcccc}
 \toprule
-Language & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+Language & N & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
 \midrule
-english              & 0.070 & 90.9 & 75.1 & 0.124 \\
-en\_ch\_mixed        & 0.080 & 93.3 & 81.5 & 0.152 \\
-simplified\_chinese  & 0.098 & 77.0 & 83.0 & 0.201 \\
-traditional\_chinese & 0.212 & --   & 71.3 & 0.324 \\
+english              & 755 & 0.070 & 90.9 & 75.1 & 0.124 \\
+en\_ch\_mixed        & 116 & 0.080 & 93.3 & 81.5 & 0.152 \\
+simplified\_chinese  & 765 & 0.098 & 77.0 & 83.0 & 0.201 \\
+traditional\_chinese & 13 & 0.212 & --   & 71.3 & 0.324 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -55,15 +55,15 @@ traditional\_chinese & 0.212 & --   & 71.3 & 0.324 \\
 \label{tab:suppl_layout}
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccc}
+\begin{tabular}{lrcccc}
 \toprule
-Layout & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+Layout & N & Text$\downarrow$ & CDM$\uparrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
 \midrule
-1-and-more column & 0.064 & 93.8 & 87.3 & 0.125 \\
-double column     & 0.069 & 90.1 & 85.0 & 0.105 \\
-single column     & 0.079 & 86.7 & 78.8 & 0.180 \\
-three column      & 0.100 & 84.9 & 57.1 & 0.164 \\
-other layout      & 0.124 & 74.3 & 78.4 & 0.169 \\
+1-and-more column & 155 & 0.064 & 93.8 & 87.3 & 0.125 \\
+double column     & 184 & 0.069 & 90.1 & 85.0 & 0.105 \\
+single column     & 887 & 0.079 & 86.7 & 78.8 & 0.180 \\
+three column      & 53 & 0.100 & 84.9 & 57.1 & 0.164 \\
+other layout      & 372 & 0.124 & 74.3 & 78.4 & 0.169 \\
 \bottomrule
 \end{tabular}
 \end{table}
