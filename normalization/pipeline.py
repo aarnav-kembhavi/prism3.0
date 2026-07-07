@@ -130,6 +130,12 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         # full-resolution skip-stage1 path. 1800-shorter preserves detail while
         # still bounding memory on unusually large captures. Never upscale.
         SCREENSHOT_MAX_SHORTER = 1800
+        # Resolution FLOOR: low-DPI renders (Fox pages are ~857x1109) starve
+        # detection and OCR of stroke detail — dense two-column pages lost
+        # half their text (pred 1397 chars vs GT 5807 on the worst page).
+        # 2x-upscale anything whose shorter side is below 1100. OmniDocBench
+        # pages are all >1300px, so benchmark output is unchanged.
+        SCREENSHOT_MIN_SHORTER = 1100
         h, w = img.shape[:2]
         if min(h, w) > SCREENSHOT_MAX_SHORTER:
             scale = SCREENSHOT_MAX_SHORTER / min(h, w)
@@ -137,6 +143,12 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_AREA)
             fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
             print(f"  [norm] Screenshot: downsampled to {new_w}x{new_h}")
+        elif (min(h, w) < SCREENSHOT_MIN_SHORTER
+              and os.environ.get('PRISM_RES_FLOOR', '1') != '0'):
+            new_w, new_h = w * 2, h * 2
+            img          = cv2.resize(img,          (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+            fidelity_img = cv2.resize(fidelity_img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+            print(f"  [norm] Screenshot: low-DPI input, upscaled to {new_w}x{new_h}")
         else:
             print(f"  [norm] Screenshot: keeping original {w}x{h}")
 

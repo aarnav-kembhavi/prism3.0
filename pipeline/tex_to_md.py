@@ -302,6 +302,12 @@ def tex_to_omnidocbench_md(tex_content: str) -> str:
 
     text = re.sub(r'\\\[.*?\\\]', _stash, text, flags=re.DOTALL)
 
+    # Inline math from the splice path ($...$ within text blocks) is LaTeX:
+    # the same text-mode rewrites (\\ -> newline, % stripping, unescaping)
+    # would corrupt it, so quarantine those spans verbatim too. Escaped \$
+    # (dollar amounts from the OCR escape pass) must NOT delimit a span.
+    text = re.sub(r'(?<!\\)\$[^$\n]{1,200}(?<!\\)\$', _stash, text)
+
     # Raw HTML tables (RapidTable path) are final output: quarantine them from
     # every text-mode conversion (% comment stripping truncates at the first
     # literal %, formatting strippers mangle attributes).

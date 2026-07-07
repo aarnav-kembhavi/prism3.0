@@ -1,0 +1,48 @@
+You are working in the PRISM document parsing repo. Goal: close the results gaps that decide accept/reject for a WACV 2027 submission. An olmOCR-Bench evaluation run is CURRENTLY EXECUTING on this machine (CPU bound). Do not disrupt it and do not measure anything latency sensitive while it runs.
+
+## Hard constraints (violating any of these invalidates results)
+1. Identify the running olmOCR-Bench process, its PID, its output directory, and its core usage. Do NOT kill, restart, renice it downward, or write into its output directory. Poll for its completion.
+2. Do NOT modify the OmniDocBench or olmOCR-Bench scoring harness, the matcher config, or the metric definitions. You may extract per page granularity from harness output, but the numbers must come from the unmodified metric.
+3. No fabricated or estimated numbers anywhere. Every number that lands in a table must be traceable to a logged run. If a result weakens the paper, surface it plainly with the numbers, do not massage it.
+4. Do all work on a new git branch. Never overwrite existing result logs or the current LaTeX tables in place; write new versions and diff them.
+5. Append every configuration change and its measured effect to the existing cumulative experiment log (find it first). Keep the format consistent.
+
+## Phase 0: inventory and report (do this first, no heavy compute)
+Produce a STATUS.md at repo root answering:
+- The exact harness invocation used for the paper's v1.6 numbers, the harness version, and the TeX Live version.
+- Whether the harness emits or can dump per page component scores (Text edit, CDM, TEDS, Order). This is required for bootstrap CIs. If it only emits aggregates, find where per page scores exist upstream and plan to collect them WITHOUT changing the metric.
+- The config system that produces the cumulative Table 9 stages. How is the final v20 config assembled? Can individual components be disabled to build leave one out variants?
+- Which baselines are installed or runnable: MinerU pipeline, Marker, PP-StructureV3. What is missing.
+- Which datasets are present locally: OmniDocBench v1.6, the Fox set, any photographed/camera capture document set, the 44 uncontrolled captures referenced in Sec 4.6.
+- How thread count is controlled for onnxruntime (intra_op_num_threads, OMP_NUM_THREADS) and whether CPU affinity restriction is available on this OS.
+1b. Set up MinerU pipeline and Marker for a same harness accuracy re-run. Run their INFERENCE on the Vast.ai RTX 6000 Ada box so local CPU stays free for the olmOCR job. Accuracy is provider independent, so GPU inference for the accuracy composite is fine and does not contaminate the same harness provenance claim. Score the outputs with the identical harness + TeX Live 2026 you found in Phase 0. Do NOT measure MinerU/Marker latency here; CPU latency for Table 3 is a Phase 2 task on this machine.
+
+1c. Build leave one out ablation configs from the final v20 config: one variant each with formula geometry disabled, native reading order disabled (fall back to geometric stack), verified normalization disabled, inline math splicing disabled, class aware detection gates disabled. Hold everything else at final. Do not run yet.
+
+1d. Prepare the thread capped latency harness: same machine, PRISM final build, with thread count set to 4, 8, 16 via onnxruntime intra op threads plus OMP_NUM_THREADS plus affinity restriction where available. Do not run yet.
+
+1e. Prepare a full benchmark end to end verified vs open loop vs none normalization run config (extends the 40 page block level Sec 4.6 study to the full 1651 page composite, end to end). Do not run yet.
+
+1f. Mechanical fixes, safe now:
+   - Export the real v19/v20 benchmark page crops that replace the Figure 3 placeholder ("replace with exported benchmark page regions").
+   - Add an N column (count of scorable instances per category) to Tables 11, 12, 13 by counting from existing harness output. Flag any category with very small N (for example historical document at 0.560) so it reads as localized, not hidden.
+   - Recover the truncated TEDS column in Table 9.
+
+## Phase 2: measurements, ONLY after the olmOCR-Bench run completes (exclusive clean CPU)
+Poll until the running job exits. Then, in this order, one at a time, nothing else consuming CPU during latency runs:
+
+2a. Populate the olmOCR-Bench PRISM row (Table 6) from the finished run. This is the highest priority result; the empty row is currently a reject on its own. Report the full per category pass rates with the 95 percent bootstrap CI.
+2b. Feed real per page scores into the 1a bootstrap script and produce the PRISM minus MinerU composite CI. Write the verdict.
+2c. Latency vs thread count curve (4/8/16), clean, median and tail per page. Then, if the Vast.ai or a cloud 4 vCPU 8 GB instance is reachable, one honest low core low RAM datapoint (real machine, not thread capped) since memory bandwidth differs from thread capping. Report both and label which is simulated.
+2d. Table 3 refresh: current PRISM build on a larger page set, same machine, adding MinerU and Marker CPU latency and peak RAM. This CPU vs CPU comparison against the systems the paper is actually about is the money table and is currently missing.
+2e. Leave one out ablations (1c), full harness each. Warn me before starting: each full run is roughly 2.5 to 3 hours single stream, so five variants is most of a day or overnight. If I approve a fixed representative subset instead of full runs to save time, use the SAME subset for all variants and label the table as subset based, not comparable to the full Table 9.
+2f. Full benchmark verified vs open vs none end to end (1e). If the verified loop does not move the full composite, say so bluntly: that is the signal to demote recognition verified normalization from a headline contribution to a secondary one rather than defend it on 8 rescues.
+
+## Deliverables
+- Updated STATUS.md with every verdict, including the ones that hurt.
+- New LaTeX table files for Tables 3, 6, 9, 11 to 13, and the Figure 3 crops, on the branch, diffed against current.
+- The cumulative experiment log appended with all Phase 2 runs.
+- A short RESULTS_SUMMARY.md: for each of the tasks above, the number, whether it strengthens or weakens the paper, and the one line implication for the submission.
+Two blunt execution notes:
+The compute math is not trivial. olmOCR-Bench on 1403 PDFs, five full leave one out runs at ~2.7 hours each, the full benchmark normalization run, and MinerU/Marker scoring is on the order of a full day or two of wall clock even with the GPU offload. Decide before you start whether ablations run full (comparable to Table 9, honest, slow) or on a fixed subset (fast, but you must relabel Table 9 context or reviewers will notice the mismatch). Do not mix.
+The prompt will hit real decision points at the Phase 0 checkpoint: whether MinerU/Marker are actually installed, whether any camera capture set exists, whether the harness dumps per page scores. If the harness only emits aggregates, the bootstrap CI (your crux statistic) needs per page extraction, and that is the one place Claude Code might be tempted to touch scoring code. Watch that it extracts granularity without altering the metric, or the "indistinguishable from MinerU" number becomes unciteable.

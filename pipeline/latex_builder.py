@@ -105,10 +105,20 @@ def _split_section_headers(text: str) -> List[str]:
 def _clean_ocr(text: str) -> str:
     if not text:
         return text
+    # Spliced inline math ($...$ from the chip path) is LaTeX, not OCR
+    # output — the digit/citation fixups below corrupt it. Shield the spans.
+    stash: list = []
+    if '$' in text:
+        def _stash(m):
+            stash.append(m.group(0))
+            return f'\x00IM{len(stash) - 1}\x00'
+        text = re.sub(r'(?<!\\)\$[^$\n]{1,200}(?<!\\)\$', _stash, text)
     for pattern, replacement in _OCR_FIXES:
         text = pattern.sub(replacement, text)
     text = _SOFT_HYPHEN_RE.sub(r'\1\2', text)
     text = _THOUSANDS_DOT_RE.sub(r'\1,\2', text)
+    if stash:
+        text = re.sub(r'\x00IM(\d+)\x00', lambda m: stash[int(m.group(1))], text)
     return text.strip()
 
 

@@ -37,6 +37,15 @@ def enabled() -> bool:
     return os.environ.get('PRISM_FML_V2', '1') != '0'
 
 
+def splice_enabled() -> bool:
+    """Inline-math splicing: guard-dropped Formula chips are recognized and
+    spliced into their host Text block as $...$ instead of being deleted
+    (the harness normalizes pred inline LaTeX with the same converter as GT
+    inline math; dropped chips previously left the region to plain OCR,
+    which garbles math into unicode approximations)."""
+    return os.environ.get('PRISM_INLINE_SPLICE', '1') != '0'
+
+
 # ── geometry helpers ──────────────────────────────────────────────────────────
 
 def _area(b):
@@ -176,7 +185,18 @@ def _drop_inline_fps(detections):
             continue
         beside = np.concatenate([s.reshape(-1) for s in sides])
         if beside.size and beside.mean() > _GUARD_INK_FRAC:
-            continue               # prose on the same rows: inline -> drop
+            # prose on the same rows: inline. Splice into the host text
+            # (recognized later in page_core) instead of losing the math.
+            # Tiny chips (single symbols/subscripted vars) are NOT spliced:
+            # Texo hallucinates on them, plain OCR reads them fine, and the
+            # mask hole costs more than the garble (measured on the dense
+            # academic pages of the splice A/B).
+            if splice_enabled() and d.get('crop') is not None:
+                cw, ch = d['crop'].width, d['crop'].height
+                if ch >= 16 and cw >= 24 and (b[2] - b[0]) < 0.6 * (tb[2] - tb[0]):
+                    host.setdefault('inline_chips', []).append(
+                        {'bbox': [float(x) for x in b], 'crop': d.get('crop')})
+            continue
         out.append(d)
     return out
 
@@ -384,8 +404,6 @@ def _resolve_text_overlaps(detections):
     whited out of the text crop so text OCR doesn't garble it into the output.
     """
     fml = [d['bbox'] for d in detections if d['class_name'] == 'Formula']
-    if not fml:
-        return detections
     out = []
     for d in detections:
         if d['class_name'] != 'Text':
@@ -393,7 +411,8 @@ def _resolve_text_overlaps(detections):
             continue
         t = d['bbox']
         overlapping = [f for f in fml if _inter(f, t) > 0]
-        if not overlapping:
+        chips = d.get('inline_chips') or []
+        if not overlapping and not chips:
             out.append(d)
             continue
         covered = sum(_inter(f, t) for f in overlapping) / max(_area(t), 1.0)
@@ -404,15 +423,21 @@ def _resolve_text_overlaps(detections):
             sx = crop.width / max(t[2] - t[0], 1.0)
             sy = crop.height / max(t[3] - t[1], 1.0)
             masked = None
-            for f in overlapping:
-                if _inter(f, t) < 0.3 * _area(f):
-                    continue  # graze — leave it
+            # chip regions are masked too: the splice path re-reads the host
+            # with line OCR and must not see the math strokes. No padding —
+            # a 2px pad measurably chewed neighbouring letters ("defines" ->
+            # "deines" on the splice A/B).
+            regions = ([(f, 0) for f in overlapping if _inter(f, t) >= 0.3 * _area(f)]
+                       + [(c['bbox'], 0) for c in chips])
+            for f, pad in regions:
                 if masked is None:
                     masked = crop.copy()
-                mx1 = int((max(f[0], t[0]) - t[0]) * sx)
-                my1 = int((max(f[1], t[1]) - t[1]) * sy)
-                mx2 = int((min(f[2], t[2]) - t[0]) * sx)
-                my2 = int((min(f[3], t[3]) - t[1]) * sy)
+                mx1 = int((max(f[0], t[0]) - t[0]) * sx) - pad
+                my1 = int((max(f[1], t[1]) - t[1]) * sy) - pad
+                mx2 = int((min(f[2], t[2]) - t[0]) * sx) + pad
+                my2 = int((min(f[3], t[3]) - t[1]) * sy) + pad
+                mx1 = max(0, mx1); my1 = max(0, my1)
+                mx2 = min(crop.width, mx2); my2 = min(crop.height, my2)
                 if mx2 > mx1 and my2 > my1:
                     fill = 255 if masked.mode == 'L' else (255, 255, 255)
                     masked.paste(fill, (mx1, my1, mx2, my2))

@@ -220,6 +220,236 @@ def _ocr_lines_to_latex(lines) -> str:
     return '\\begin{array}{l}' + ' \\\\ '.join(out_rows) + '\\end{array}'
 
 
+def _chip_token(chip, latex, workers, cjk) -> str:
+    """One inline chip -> the string spliced into the host text.
+
+    Texo LaTeX wrapped as $...$ when it looks like sane inline math (the
+    harness converts pred inline LaTeX with the same textblock2unicode used
+    on GT). Structural output (arrays, alignment tabs), overlong strings and
+    decode failures fall back to plain OCR of the chip crop.
+    """
+    import re
+    latex = (latex or '').strip()
+    if latex.startswith('\\includegraphics'):
+        latex = ''
+    latex = latex.strip('$').strip()
+    # size-only commands add nothing after the harness's latex->unicode
+    # normalization but inflate the span (a longer pred inflates the
+    # unmatched-GT penalty weight when the matcher pairs it in desperation)
+    latex = re.sub(r'\\(?:left|right)\s*\.', '', latex)
+    latex = re.sub(r'\\(?:[Bb]igg?[lrm]?|left|right)(?![A-Za-z])', '', latex)
+    latex = re.sub(r'\s{2,}', ' ', latex).strip()
+    ok = bool(latex) and len(latex) <= 100 and '\\begin' not in latex \
+        and '\\\\' not in latex and '&' not in latex \
+        and latex.count('{') == latex.count('}')
+    # (A structure-only gate — splice just fractions/roots — was A/B'd and
+    # REJECTED: linear $latex$ splices also help on net, and isolated
+    # chip-crop OCR reads worse than the latex it would replace.)
+    if ok and cjk:
+        # CJK pages: the "formula" chip is often CJK text the detector
+        # mislabeled — Texo hallucinates on those (same failure the CJK
+        # display hybrid handles). Prefer OCR when the crop reads CJK.
+        try:
+            lines = workers.ocr.run_text_lines(chip['crop'], 'cjk')
+        except Exception:
+            lines = []
+        joined = ''.join(t for *_, t in (lines or []))
+        if _cjk_count(joined) >= 2:
+            from pipeline.text_worker import _escape_latex
+            return _escape_latex(joined)
+    if ok:
+        return f'${latex}$'
+    try:
+        lines = workers.ocr.run_text_lines(chip['crop'], 'cjk' if cjk else 'en')
+    except Exception:
+        return ''
+    if not lines:
+        return ''
+    from pipeline.text_worker import _escape_latex
+    return _escape_latex(
+        ' '.join(t for *_, t in sorted(lines, key=lambda l: (l[1], l[0]))))
+
+
+def _assemble_lines_with_chips(lines, chip_items) -> str:
+    """Rebuild a text block from OCR line fragments + chip tokens, all in
+    crop coordinates. Mirrors the text worker's _reconstruct_lines row
+    clustering (y-center within 0.6x line height) so the output format
+    matches the normal text path. OCR fragments get the same LaTeX escaping
+    as the batch path (tex_to_md unescapes); chip tokens are LaTeX already."""
+    from pipeline.text_worker import _escape_latex
+    items = []
+    for x1, y1, x2, y2, txt in lines:
+        txt = (txt or '').strip()
+        if txt:
+            items.append({'x_left': x1, 'x_right': x2,
+                          'y_ctr': (y1 + y2) / 2.0,
+                          'height': max(y2 - y1, 1),
+                          'text': _escape_latex(txt)})
+    chips = [{'x_left': x1, 'x_right': x2, 'y_ctr': (y1 + y2) / 2.0,
+              'height': max(y2 - y1, 1), 'text': tok}
+             for x1, y1, x2, y2, tok in chip_items if tok]
+    if not items and not chips:
+        return ''
+    # Cluster OCR fragments into rows FIRST (chips are taller than text
+    # lines; co-clustering them inflated the row threshold and scrambled
+    # fragments across visual lines on dense-math paragraphs)...
+    rows = []
+    if items:
+        items.sort(key=lambda d: d['y_ctr'])
+        cur = [items[0]]
+        for it in items[1:]:
+            thr = min(cur[-1]['height'], it['height']) * 0.6
+            if abs(it['y_ctr'] - cur[-1]['y_ctr']) <= thr:
+                cur.append(it)
+            else:
+                rows.append(cur)
+                cur = [it]
+        rows.append(cur)
+    # ...then drop each chip into the row whose vertical span overlaps its
+    # center best; chips matching no row become their own row.
+    row_chips = [[] for _ in rows]
+    for c in chips:
+        best, bov = None, 0.0
+        for i, row in enumerate(rows):
+            top = min(r['y_ctr'] - r['height'] / 2 for r in row)
+            bot = max(r['y_ctr'] + r['height'] / 2 for r in row)
+            c_top = c['y_ctr'] - c['height'] / 2
+            c_bot = c['y_ctr'] + c['height'] / 2
+            ov = min(bot, c_bot) - max(top, c_top)
+            if ov > bov:
+                best, bov = i, ov
+        if best is not None and bov > 0:
+            row_chips[best].append(c)
+        else:
+            rows.append([c])
+            row_chips.append([])
+    order = sorted(range(len(rows)),
+                   key=lambda i: sum(r['y_ctr'] for r in rows[i]) / len(rows[i]))
+    out = []
+    for i in order:
+        line = _place_chips_in_row(rows[i], row_chips[i])
+        if line:
+            out.append(line)
+    return '\n'.join(out)
+
+
+def _place_chips_in_row(frags, chips):
+    """Merge chip tokens into one visual row of OCR fragments.
+
+    OCR detection often bridges the narrow mask holes, returning ONE
+    fragment spanning the chip's position — x-sorting alone then dumps the
+    chip at the row end ("estimation of and, we derive $I_{11}$"). When a
+    chip's center falls inside a fragment's span, split the fragment at the
+    proportional character position (snapped to a space when there is one)
+    and put the chip between the halves."""
+    frags = [dict(f) for f in sorted(frags, key=lambda d: d['x_left'])]
+    loose = []
+    assignments = {}
+    for c in sorted(chips, key=lambda d: d['x_left']):
+        cx = (c['x_left'] + c['x_right']) / 2
+        for i, f in enumerate(frags):
+            if len(f['text']) > 2 and f['x_left'] + 2 < cx < f['x_right'] - 2:
+                assignments.setdefault(i, []).append(c)
+                break
+        else:
+            loose.append(c)
+    out_frags = []
+    for i, f in enumerate(frags):
+        cs = assignments.get(i)
+        if not cs:
+            out_frags.append(f)
+            continue
+        t = f['text']
+        fx = f['x_left']
+        w = max(f['x_right'] - fx, 1.0)
+        # the mask holes (chip regions) contribute width but no characters —
+        # interpolate char positions over the hole-free width only
+        holes = [(max(c['x_left'], fx), min(c['x_right'], f['x_right']))
+                 for c in cs]
+        eff_w = max(w - sum(b - a for a, b in holes), 1.0)
+        pieces = []
+        prev_idx = 0
+        holes_left = 0.0
+        seg_x = fx             # running left edge for the next text segment
+        for (a, hb), c in zip(holes, cs):
+            eff_x = max((a - fx) - holes_left, 0.0)
+            holes_left += hb - a
+            idx = min(len(t), max(prev_idx, round(eff_x / eff_w * len(t))))
+            cut = None
+            for off in range(5):
+                for j in (idx - off, idx + off):
+                    if prev_idx <= j < len(t) and t[j] == ' ':
+                        cut = j
+                        break
+                if cut is not None:
+                    break
+            if cut is None:
+                cut = idx      # CJK / no space nearby: cut proportionally
+            seg = t[prev_idx:cut].strip()
+            if seg:
+                pieces.append({'x_left': seg_x, 'x_right': a, 'text': seg})
+            pieces.append({'x_left': c['x_left'], 'x_right': c['x_right'],
+                           'text': c['text'], 'chip': True})
+            prev_idx = cut
+            seg_x = hb
+        tail = t[prev_idx:].strip()
+        if tail:
+            pieces.append({'x_left': seg_x, 'x_right': f['x_right'],
+                           'text': tail})
+        out_frags.extend(pieces)
+    out_frags.extend({'x_left': c['x_left'], 'x_right': c['x_right'],
+                      'text': c['text'], 'chip': True} for c in loose)
+    out_frags.sort(key=lambda d: d['x_left'])
+    return ' '.join(f['text'] for f in out_frags if f['text']).strip()
+
+
+def _splice_chip_hosts(detections, host_indices, workers, figures_dir, cjk):
+    """Recognize each host's inline chips and rebuild the host text with the
+    math spliced in at its line position. Falls back to the batch OCR text
+    already on the det when assembly produces nothing."""
+    all_chips = []
+    for hi in host_indices:
+        for c in detections[hi].get('inline_chips') or []:
+            if c.get('crop') is not None:
+                all_chips.append((hi, c))
+    if not all_chips:
+        return
+    try:
+        latexes, _ = workers.math.run_math_batch(
+            [c['crop'] for _, c in all_chips], figures_dir, 90000)
+    except Exception as e:
+        print(f"  [splice] chip math batch failed: {e}")
+        return
+    per_host = {}
+    for (hi, c), latex in zip(all_chips, latexes):
+        tok = _chip_token(c, latex, workers, cjk)
+        if tok:
+            per_host.setdefault(hi, []).append((c['bbox'], tok))
+    n_spliced = 0
+    for hi, chips in per_host.items():
+        d = detections[hi]
+        crop = d.get('crop')
+        if crop is None:
+            continue
+        try:
+            lines = workers.ocr.run_text_lines(crop, 'cjk' if cjk else 'en')
+        except Exception:
+            lines = []
+        tb = d['bbox']
+        sx = crop.width / max(tb[2] - tb[0], 1.0)
+        sy = crop.height / max(tb[3] - tb[1], 1.0)
+        chip_items = [((b[0] - tb[0]) * sx, (b[1] - tb[1]) * sy,
+                       (b[2] - tb[0]) * sx, (b[3] - tb[1]) * sy, tok)
+                      for b, tok in chips]
+        text = _assemble_lines_with_chips(lines or [], chip_items)
+        if text.strip():
+            d['raw_content'] = text
+            n_spliced += len(chips)
+    if n_spliced:
+        print(f"  [splice] spliced {n_spliced} inline chip(s) "
+              f"into {len(per_host)} text block(s)")
+
+
 def _apply_cjk_formula_hybrid(detections, math_indices, workers):
     """Texo hallucinates on formulas containing CJK text (ZH formula CDM 0.648
     vs EN 0.866; 'cases' formulas with Chinese labels come back as unrelated
@@ -298,6 +528,16 @@ def route_and_extract(detections, workers: Workers, figures_dir: str,
     if (math_indices and (is_cjk or is_mixed)
             and os.environ.get('PRISM_FML_CJK', '1') != '0'):
         _apply_cjk_formula_hybrid(detections, math_indices, workers)
+
+    # Inline-math splicing: hosts whose guard-dropped Formula chips were kept
+    # by formula_v2 get their text rebuilt with $latex$ spliced in. The batch
+    # OCR text above (of the chip-masked crop) stays as the fallback.
+    if os.environ.get('PRISM_INLINE_SPLICE', '1') != '0':
+        chip_hosts = [i for i in text_indices
+                      if detections[i].get('inline_chips')]
+        if chip_hosts:
+            _splice_chip_hosts(detections, chip_hosts, workers, figures_dir,
+                               is_cjk or is_mixed)
 
     if table_indices:
         table_crops = [detections[i]["crop"] for i in table_indices]

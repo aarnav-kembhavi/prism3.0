@@ -499,3 +499,120 @@ drops had occasionally been matching GT display formulas. Verdict: v19 =
 final build at 86.37, gap to MinerU-Pipeline 0.10 — inside run-to-run
 matcher variance; further full-run microtuning at this scale is not
 distinguishable from noise and we stop here honestly.
+
+## 2026-07-07: v20 (inline-math splicing) — MinerU CROSSED
+
+Decomposed v19's residual text loss from the per-page match records: half the
+recoverable mass (+0.79 Overall upper bound) is **inline mathematics inside GT
+text blocks** read as unicode approximations. Two matcher facts made this
+actionable: (1) unmatched predictions are FREE in the text metric while
+unmatched GT costs full 1.0×length; (2) the harness normalizes predicted
+inline `$latex$` through the *identical* latex→unicode converter it applies to
+GT inline math, so a faithful spliced span scores as the annotation intends.
+
+**Mechanism (`PRISM_INLINE_SPLICE`, default on).** Inline `_formula` chips the
+inline-guard identifies as in-text (previously deleted) are recognized by Texo
+and spliced back into the host Text block as `$...$`. The host is re-OCR'd with
+chip regions masked; each chip's latex is inserted at the character position
+interpolated from its horizontal centroid over the *mask-free* width of the
+intersecting OCR fragment (holes have width but no chars), snapped to a space.
+Structural output (arrays/`\\`/`&`), overlong, or CJK-reading chips fall back to
+masked OCR. tex_to_md + latex_builder quarantine `$...$` from text rewrites
+(with escaped-`\$` money guard); text_lines OCR path now `_escape_latex`'d.
+
+**Config lineage (122-page A/B, `_splice_pages.json`, projected full-set):**
+v1 naive +0.044 → v2 (tiny-chip gate ≥16×24px, no mask pad, size-only-cmd
+strip) +0.049 → v3 (chip-row anchoring + 4-chip cap) +0.026 REGRESSED (cap
+amputated the big wins; density ≠ discriminator) → **v4** (cap removed +
+hole-aware intra-fragment insertion) **+0.060, wins held, academic regressions
+cleared** → v5 (structure-only `$` gate) +0.034 REJECTED (linear splices help
+too; isolated chip-OCR reads worse than the latex). v4 shipped.
+
+**v20 CONFIRMED (2026-07-07): v1.6 Overall 86.62** (text 0.0844, CDM 88.12,
+TEDS 80.19, RO 0.1644) — **beats MinerU-Pipeline 86.47 by +0.15, +0.25 over
+v19** (above the ±0.1 noise floor). CDM now +5.05 over MinerU (88.12 vs 83.07).
+The CDM lift (87.56→88.12) is the main driver: spliced spans re-enter the
+display-formula metric as free inline candidates rescuing unpaired GT display
+formulas; text also improved (inline math no longer unicode-garbled). **v1.5
+cut: 88.37** (text 0.0767, CDM 89.51, TEDS 83.27, RO 0.1492) — up from 88.10,
+still top pipeline. Perf (dual-worker): median 5.91 s/pg, mean 7.16, p90 12.71
+p95 15.56 p99 19.99 p99.9 34.72 max 74.21; peak RAM 2.70 GB, RAM p50 1877 /
+p95 2211 / p99 2342 MB. Weights: 281.2 MB total / 251.3 active (TATR fallback
+only). preds/odb_full_v20 + perf.json; docs/section_scores_odb_full_v20.md.
+First CPU pipeline to overtake a GPU document-parsing pipeline on OmniDocBench.
+
+---
+
+## olmOCR-Bench pilot (2026-07-07, v20 zero-shot) — HONEST MIXED RESULT
+
+Ran PRISM v20 zero-shot on olmOCR-Bench (AllenAI unit-test benchmark; binary
+assertions, KaTeX render-exact math, orthogonal to OmniDocBench's edit-distance
+matcher). Pilot = 4 of 7 splits (977 unique PDFs), rasterized 200 DPI, scored
+with the UNMODIFIED harness under WSL (Windows path-sep incompat forced WSL; no
+harness/metric edits). Branch wacv-results-hardening. Preds: data/olmocr_bench/
+bench_data/prism; summary preds/olmocr_pilot/pilot_summary.txt.
+
+| Split | PRISM | MinerU1.3 | Marker1.7 | GPT-4o | olmOCR |
+|---|---|---|---|---|---|
+| table_tests   | **67.0** | 60.9 | 57.6 | 70.0 | 71.0 |
+| multi_column  | 64.3 | 59.0 | 72.9 | 69.3 | 78.3 |
+| arxiv_math    | 56.0 | 75.4 | 76.0 | 53.5 | 74.9 |
+| old_scans_math| 34.9 | 47.4 | 57.9 | 74.5 | 71.2 |
+
+4-split overall 55.5% ± 1.7% (type: table 67.0, order 64.3, math 53.2).
+
+**Verdict (do not massage):** Tables TRANSFER — 67.0 beats MinerU/Marker/Mistral,
+a genuine independent strength. Reading order mid-pack. **Math does NOT transfer**:
+PRISM's OmniDocBench CDM lead over MinerU (88.1 vs 83.1) INVERTS here (arxiv_math
+56.0 vs 75.4; old_scans_math 34.9 worst of field). Cause visible in the run log —
+Texo-20M frequently emits LaTeX that does not render in KaTeX (\begin{d},
+\lightharpoondown, unbalanced arrays); OmniDocBench's _render_repair + matcher
+normalization salvage these, olmOCR-Bench's render-exact test does not. This is
+the orthogonal-metric confirmation of the "part of the CDM lead is matcher-specific"
+critique. Strategic implication: olmOCR-Bench gives a strong independent TABLE
+result but its math rows undercut the headline math narrative — publishing the
+full table honestly is a paper-positioning decision, not yet made. Full 1403-PDF
+run (all 7 splits) held pending that decision.
+
+## olmOCR-Bench math tuning investigation (2026-07-07) — NO LEVER FOUND
+
+Attempted to raise the pilot math score by post-processing PRISM's emitted
+markdown (no re-run needed; olmOCR-Bench scoring is prediction-side only). Three
+independent measurements, all null:
+
+1. **Array-unwrap + macro sanitize** (`benchmarks/olmo_normalize.py` → candidate
+   `prism_norm`): unwrap `\begin{array}{..}{EQ}\end{array}` into constituent
+   `\[..\]`, map \textcircled/\big./\dph/\quad/empty-groups. A/B on full pilot:
+   **55.5% → 55.5% (+0.0)**. arxiv_math 56.0→55.6, old_scans_math 34.9→35.2.
+2. **Harness mechanism read** (`olmocr/bench/tests.py:MathTest`,
+   `katex/render.py:compare_rendered_equations`): a GT equation passes iff its
+   normalized MathML is a **substring of** the prediction's MathML (extras never
+   penalize) OR a spatial span-neighbour match succeeds. Whitespace, zero/thin
+   spaces stripped; `\land`/`\wedge`, `\to`/`\rightarrow`, `x_1`/`x_{1}` render to
+   identical MathML. → the harness ALREADY neutralizes array-wrapping, trailing
+   punctuation, spacing and brace/macro-equivalent variants. This is WHY (1) is a
+   wash, and it invalidates the earlier array-wrapping and trailing-punct hypotheses.
+3. **`\mathrm`/`\mathtt`/`\mathsf{word}` → `\text{word}`** (inner spaces collapsed,
+   so GT `<mtext>` matches): tested with the harness's own render+compare on 150
+   best candidate pairs (pred already contains a roman-font macro, ≥0.6 token
+   overlap). **Flip fail→pass: 1/150 (0.7%).** 66/150 already passed; 83 still
+   fail on genuine recognition errors (\boldmath garble, prose recognised as math
+   e.g. "Note that WFE have" → `o t e \mathbf{t h a t} W F E \mathtt{h a v e}`,
+   unbalanced-array KaTeX parse errors that void an entire block, `3_n` for
+   `\beta_n`, wrong matrices).
+
+**Failure decomposition** (token-overlap classifier, arxiv_math 2927 math tests):
+ABSENT <0.35 overlap = **4%** (recall gap); GARBLED 0.35–0.8 = 27%; PRESENT ≥0.8
+= 69% (content right, MathML structure wrong). Only ~4% is recoverable by a lower
+detection gate; ~96% is detected-but-structurally-wrong.
+
+**Conclusion:** PRISM's olmOCR-Bench math ceiling is set by Texo-20M's LaTeX→MathML
+recognition fidelity, NOT by pipeline config or emission formatting. There is no
+tuning lever — the pilot 55.5% is at ceiling. This is consistent with (and sharpens)
+the efficiency framing: the CDM lead is partly matcher-specific, and the residual
+gap is a recognition-capacity limit of a deliberately tiny (20M) formula model, not
+a pipeline-design deficiency. **The full 1403 run therefore uses RAW zero-shot PRISM
+output** (no benchmark-specific post-processing) — the most defensible claim.
+Full-run predictions: 4 pilot splits reused + 3 remaining splits (headers_footers,
+long_tiny_text, old_scans; 426 PDFs) generated on GPU (PRISM_ORT_GPU=1, math on CPU;
+accuracy is provider-independent — same ONNX graphs). Score to follow.

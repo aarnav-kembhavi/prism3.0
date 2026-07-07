@@ -50,3 +50,8 @@ paper/main.brf
 paper/main.log
 paper/main.out
 paper/main.pdf
+
+# background-session additions
+venvs/
+*.fls
+*.fdb_latexmk

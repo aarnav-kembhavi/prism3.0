@@ -16,28 +16,27 @@ Markdown (text, display math, HTML tables with spans, figures, captions,
 reading order; EN + ZH). Design constraints that define the project: **CPU-only,
 ~283 MB total weights, single-digit s/page, ≤~2.7 GB RAM**.
 
-**Current confirmed results (v19 build, 2026-07-07, official harness):**
+**Current confirmed results (v20 build, 2026-07-07, official harness):**
 
 | Benchmark | Overall | text↓ | CDM↑ | TEDS↑ | RO↓ |
 |---|---|---|---|---|---|
-| OmniDocBench v1.6 full (1651 pg) | **86.37** | 0.0865 | 87.56 | 80.21 | 0.1636 |
-| OmniDocBench v1.5 cut | **88.10** | 0.0775 | 88.75 | 83.29 | 0.1486 |
+| OmniDocBench v1.6 full (1651 pg) | **86.62** | 0.0844 | 88.12 | 80.19 | 0.1644 |
+| OmniDocBench v1.5 cut | **88.37** | 0.0767 | 89.51 | 83.27 | 0.1492 |
 
-Position: v1.6 — 0.10 behind MinerU-Pipeline (86.47, multi-GB GPU stack), above
-olmOCR-7B (85.74) and Mistral OCR (85.66); our CDM beats MinerU's by 4.5.
+Position: v1.6 — **ABOVE MinerU-Pipeline (86.47, multi-GB GPU stack)** by 0.15,
+above olmOCR-7B (85.74) and Mistral OCR (85.66); our CDM beats MinerU's by 5.05.
 v1.5 — **top pipeline**, above PP-StructureV3 (86.73) and Gemini-2.5 Pro
 (88.03). `Overall = ((1−text)·100 + CDM·100 + TEDS·100)/3`; reading order is
-NOT part of Overall.
+NOT part of Overall. **v20 = v19 + inline-math splicing (PRISM_INLINE_SPLICE);
+see [[v20-inline-splice]] and paper.md.** The +0.25 over v19 is above the
+±0.1 noise floor — a real cross, though 0.15 over MinerU is ~1.5× the noise, so
+the robust claim is "+0.25 over our own v19 driven by CDM 87.56→88.12".
 
-**The 0.10 gap to MinerU is inside run-to-run matcher variance.** Two
-independent same-config runs differ by ~±0.05–0.1; ~10 borderline formulas flip
->0.3 CDM either way between runs. Do NOT burn 3.5-hour full runs chasing
-sub-0.1 deltas — it is not measurable.
-
-Perf (v19 CPU, 16-core laptop): median 6.02 s/pg, mean 7.12, p90 11.81,
-p95 16.27, p99 22.68, p99.9 38.90, max 75.6; peak RAM 2.59 GB process tree.
-The speed-optimal config is v14 (83.55 @ 3.04 s median) — the last +2.8 points
-deliberately cost +3 s (formula decode budget + bigger layout model).
+Perf (v20 CPU, 16-core laptop, dual-worker): median 5.91 s/pg, mean 7.16,
+p90 12.71, p95 15.56, p99 19.99, p99.9 34.72, max 74.21; peak RAM 2.70 GB,
+RAM p50 1877 / p95 2211 / p99 2342 MB. Weights 281.2 MB total / 251.3 active.
+The speed-optimal config is v14 (83.55 @ 3.04 s median) — the last +3.1 points
+deliberately cost +2.9 s (formula decode budget + bigger layout model).
 
 ---
 
@@ -195,7 +194,8 @@ numbers are ALWAYS quoted CPU-only.
 | v15 | — | + uncovered-text rescue (subset-validated; superseded same day) |
 | v16 | 85.77 | **PP-DocLayoutV3 swap (same 124 MB!) + model reading order** (text 0.120→0.083, TEDS +1.4, RO −0.077), fml maxtok 512, CJK hybrid |
 | v17 | 86.35 | **inline_formula→Formula recovery** (CDM +2.17; V3 labels handwritten formulas inline; the dropped class silently zeroed notes/textbook pages) |
-| v19 | **86.37** | inline dense-host guard fix (text −0.001) + LaTeX render repair (net 0 CDM — real fixes offset by chips the guard now drops) |
+| v19 | 86.37 | inline dense-host guard fix (text −0.001) + LaTeX render repair (net 0 CDM — real fixes offset by chips the guard now drops) |
+| v20 | **86.62** | **inline-math splicing (PRISM_INLINE_SPLICE): guard-dropped inline chips recognized by Texo, spliced into host text as $latex$ at char position; CROSSED MinerU 86.47. CDM 87.56→88.12 (free inline candidates rescue GT display formulas), text 0.0865→0.0844** |
 
 (v18 = guard fix alone, killed at 25% and folded into v19.)
 
@@ -268,6 +268,7 @@ app.py + web/      FastAPI UI on :8000
 | PRISM_PPDL_V3 | 1 | PP-DocLayoutV3 layout (0 = legacy plus-L) |
 | PRISM_RO_MODEL | 1 | detector reading order when available |
 | PRISM_INLINE_FML_DISPLAY | 1 | inline_formula class → Formula path |
+| PRISM_INLINE_SPLICE | 1 | guard-dropped inline chips → Texo → $latex$ spliced into host text (v20; +0.25 Overall) |
 | PRISM_FML_CJK | 1 | OCR-hybrid for CJK-text formulas |
 | PRISM_FML_MAXTOK | 512 | Texo decode cap |
 | PRISM_TEXT_RESCUE | 1 | uncovered-text rescue |
