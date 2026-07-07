@@ -44,7 +44,7 @@ We are deliberate about the size of this claim. The margin over MinerU (0.15 poi
 \begin{figure}[t]
   \centering
   \resizebox{\linewidth}{!}{\input{fig/splice}}
-  \caption{Inline-math splicing. An in-text formula the inline-guard removes was previously read by OCR as a unicode approximation that the matcher fails to pair (center); v20 recognizes the chip and splices it back as an inline \LaTeX{} span at its recovered character position (right), which the harness normalizes exactly as the ground-truth annotation. Placeholder crops --- replace with exported benchmark page regions.}
+  \caption{Inline-math splicing (real benchmark example, page \texttt{cc37a835}). The input line (top) sets two subscripted variables inline in prose. v19 (left) transcribed them as the digit strings \texttt{111}/\texttt{112} --- a unicode approximation the matcher cannot pair; v20 (right) recognizes the chips and splices them back as inline \LaTeX{} spans ($I_{11}$, $I_{12}$) that the harness renders and pairs exactly like the ground-truth annotation.}
   \label{fig:splice}
 \end{figure}
 

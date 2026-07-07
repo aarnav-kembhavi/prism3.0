@@ -1,20 +1,21 @@
-% Qualitative: inline-math splicing (v19 -> v20). Replace the placeholder
-% panels with real page crops exported from the benchmark (suggested pages,
-% all in preds/odb_full_v20 vs preds/odb_full_v19):
-%   page-52875b3d-... (ZH exam, fractions), page-9cca07f9-... (textbook),
-%   page-cc37a835-... (EN academic, subscripted chips).
-% Each panel: (a) input crop, (b) v19 unicode-garble output, (c) v20 spliced.
-\begin{tikzpicture}[font=\scriptsize]
-  \tikzset{crop/.style={draw=black!40, rounded corners=1pt, inner sep=3pt,
-                    text width=0.27\linewidth, minimum height=1.9cm,
-                    align=center}}
-  \node[crop, fill=black!3] (in) at (0,0)
-    {\itshape [input crop]\\[2pt]\normalfont a fraction expression\\ set inline in prose};
-  \node[crop, fill=red!4, draw=red!40] (before) at (0.35\linewidth,0)
-    {\textbf{v19}\\[2pt]\ttfamily 14x312y1\\\normalfont\itshape unicode garble,\\ unmatched by harness};
-  \node[crop, fill=green!5, draw=green!45!black] (after) at (0.70\linewidth,0)
-    {\textbf{v20}\\[2pt]\ttfamily \textbackslash frac\{1\}\{4x{+}3\}\\\normalfont\itshape spliced inline latex,\\ matches ground truth};
-  \node[anchor=north, font=\tiny\itshape] at (in.south) {input region};
-  \node[anchor=north, font=\tiny, red!60!black] at (before.south) {before};
-  \node[anchor=north, font=\tiny, green!45!black] at (after.south) {after};
+% Qualitative: inline-math splicing (v19 -> v20), REAL benchmark example.
+% Page page-cc37a835-... (EN academic literature). GT annotates the inline chips
+% as $ {I}_{11} $ / $ {I}_{12} $. v19 OCR read them as the digit strings 111/112
+% (unmatched by the harness); v20 recognizes the chips and splices them back as
+% inline LaTeX, rendered/paired exactly like the ground truth. Input crop:
+% fig/splice_input.png (region [160,372,905,431] of the page image).
+\begin{tikzpicture}[font=\footnotesize]
+  \node[inner sep=0pt] (in) at (0,1.45) {\includegraphics[width=8.2cm]{fig/splice_input}};
+  \node[anchor=west, font=\tiny\itshape, text=black!55] at (in.north west)
+        {input region (benchmark page)};
+  \node[anchor=north, text width=3.7cm, draw=red!45, fill=red!4, rounded corners,
+        inner sep=4pt] (bef) at (-2.15,0.7)
+    {\textbf{v19}~{\scriptsize\itshape garble, unmatched}\\[3pt]
+     \normalfont\ttfamily\small \dots of {\color{red!75!black}\textbf{111}} and
+     {\color{red!75!black}\textbf{112}}, we can derive};
+  \node[anchor=north, text width=3.7cm, draw=green!50!black, fill=green!6,
+        rounded corners, inner sep=4pt] (aft) at (2.15,0.7)
+    {\textbf{v20}~{\scriptsize\itshape spliced \LaTeX{}, matches GT}\\[3pt]
+     \normalfont\small \dots of {\color{green!45!black}$I_{11}$} and
+     {\color{green!45!black}$I_{12}$}, we can derive};
 \end{tikzpicture}
