@@ -163,3 +163,11 @@ pre-existing predictions from an earlier comparison pass:
   made):** publish the full olmOCR-Bench table honestly (strong tables, weak math)
   or scope it to the table/reading-order strength. Full 1403 run held per D.
   Provenance: `preds/olmocr_pilot/pilot_summary.txt`, `paper.md` log entry.
+
+
+## olmOCR-Bench full 1403 — LANDED (2026-07-07)
+- **PRISM Overall 59.3% ± 1.1%** (raw zero-shot, unmodified harness, commit 54a96a6). Per-cat: AR 56.0 / OSM 34.9 / Tab 67.0 / OS 20.2 / HF 66.6 / MC 64.3 / LTT 69.2 / Base 96.0.
+- Wins vs old MinerU 1.3.10: LTT (69.2 vs 39.1), multi-col (64.3 vs 59), tables (67 vs 60.9). Losses: math (recognition-bound), headers_footers (66.6 vs 96.6).
+- Math post-process (normalize_v3) = +0.1 Overall → recognition-bound confirmed; report RAW.
+- Base is NOT a missing folder: it is the harness BaselineTest (96.0), already included.
+- VERSION CAVEAT: baselines are stale (MinerU 1.3.10); current MinerU 2.5.4=75.2. Framed honest/version-labeled, NO SOTA claim (user decision).

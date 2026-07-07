@@ -616,3 +616,38 @@ output** (no benchmark-specific post-processing) — the most defensible claim.
 Full-run predictions: 4 pilot splits reused + 3 remaining splits (headers_footers,
 long_tiny_text, old_scans; 426 PDFs) generated on GPU (PRISM_ORT_GPU=1, math on CPU;
 accuracy is provider-independent — same ONNX graphs). Score to follow.
+
+## olmOCR-Bench FULL 1403 run — RESULT (2026-07-07)
+
+Full 1403-PDF run completed on GPU (self-healing watchdog auto-stubbed 2 degenerate
+pages that hung the pipeline in a Texo repetition loop; 2/1403 = 0.14%). Scored with
+the UNMODIFIED harness under WSL, dataset commit 54a96a6 (current public release:
+7 document categories, 7,010 real tests + 1,403 auto-baseline coverage tests = 8,413).
+NOTE: the leaderboard "Base" column is NOT a born-digital folder; it is the harness's
+per-PDF BaselineTest (non-empty / non-repeating / valid-charset), confirmed by
+7010+1403=8413 and by tests.py:484. We already run it; our Overall includes it.
+
+PRISM raw zero-shot (candidate prism), Overall = 59.3% +/- 1.1% (mean of per-JSONL
+pass rates incl. baseline -- identical to the leaderboard aggregation):
+  arxiv_math 56.0 | old_scans_math 34.9 | table_tests 67.0 | old_scans 20.2 |
+  headers_footers 66.6 | multi_column 64.3 | long_tiny_text 69.2 | baseline(Base) 96.0
+vs MinerU 1.3.10 (as reported by olmOCR paper): tables 67.0>60.9 WIN, multicol
+64.3>59.0 WIN, long_tiny_text 69.2>39.1 BIG WIN, old_scans 20.2>17.3 ~tie;
+arxiv 56.0<75.4, osm 34.9<47.4, headers_footers 66.6<96.6 LOSS. Overall 59.3 beats
+GOT (48.3), ~2 under old MinerU (61.5).
+
+Math post-process A/B (candidate prism_v3 = normalize_v3, strong parse-survival +
+variant multiplier, AUGMENT-only): arxiv 56.0->56.5, osm 34.9->35.4, ALL other
+categories IDENTICAL, ZERO regressions, Overall 59.3->59.4 (+0.1). 17/3385 math tests
+flipped. => 4th independent confirmation olmOCR math is Texo-20M RECOGNITION-bound,
+not formatting/config (repair_v2 +1.7pp subsample; static 4.6% parse defects; active
+token cap already 512; full-set strong post-process +0.1). REPORTED NUMBER = RAW 59.3.
+
+VERSIONING CAVEAT (decided w/ user): Table 6 baselines are OLD tool versions from the
+olmOCR paper (MinerU 1.3.10, Marker 1.7.5). Per-category test counts match (7010) so
+per-category comparison is valid, but the CURRENT olmocr leaderboard has stronger
+baselines we do NOT beat (MinerU 2.5.4=75.2 tables 84.9; Marker 1.10.1=76.1;
+PaddleOCR-VL 80.0; Chandra 83.1). => framed honestly, version-labeled, NO SOTA claim;
+positioned as orthogonal validation + CPU efficiency. Biggest fixable non-math gap =
+headers_footers 66.6 vs 96.6 (shared-pipeline lever, not pursued -- OmniDocBench frozen).
+

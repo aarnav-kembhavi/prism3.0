@@ -152,11 +152,11 @@ Table fallback & TATR (INT8) & 29.9\,MB \\
 
 OmniDocBench and Fox both score against a reference transcription with edit-distance-family metrics, and \cref{sec:main_results} is explicit that inline-splicing exploits the matcher's normalization; a reviewer may reasonably ask whether the composite gain reflects genuine parsing quality or adaptation to that scoring regime. We therefore evaluate on olmOCR-Bench~\cite{olmocr}, whose 7{,}010 assertions replace edit distance with binary unit tests: specific strings must be \emph{present}, running headers and footers must be \emph{absent}, text-block pairs must appear in the correct reading order, table cells must have the correct neighbours, and equations must render (via KaTeX) to the same visual form as the reference. This is an orthogonal notion of correctness that matcher-aligned normalization cannot satisfy. We run PRISM zero-shot --- the identical OmniDocBench build, single-page PDFs rasterized at 200\,DPI --- and score with the official harness.
 
-\Cref{tab:olmobench} reports the standard per-category pass rates. \emph{[PRISM row pending: full 1403-PDF run in progress; the pilot covers the arXiv-math, old-scans-math, tables and multi-column categories.]}
+\Cref{tab:olmobench} reports per-category pass rates on the current public release (commit \texttt{54a96a6}; 7 categories, 7{,}010 tests plus 1{,}403 baseline checks). PRISM scores \textbf{59.3\%} overall, above GOT-OCR2.0 and within a few points of the MinerU~1.3.10 and Marker~1.7.5 versions reported by \citet{olmocr}. Its profile is uneven by design: it transfers strongly on long--tiny-text (69.2 vs.\ MinerU's 39.1), multi-column reading order (64.3 vs.\ 59.0) and tables (67.0), but its 20M-parameter formula model is recognition-limited on dense math (arXiv 56.0, old-scans-math 34.9) and it does not suppress running headers/footers as aggressively (66.6). We report this not as a leaderboard win --- newer baselines (MinerU~2.5.4, Marker~1.10.1, PaddleOCR-VL, Chandra) score above PRISM on the current leaderboard --- but as orthogonal evidence: because these unit tests replace edit distance with render-exact and presence/absence checks, PRISM's table and reading-order transfer here indicates the OmniDocBench composite gain is not merely an artifact of matcher normalization.
 
 \begin{table*}[t]
 \centering
-\caption{olmOCR-Bench~\cite{olmocr} pass rate (\%, higher is better) by category. AR = arXiv math, OSM = old-scans math, Tab = tables, OS = old scans, HF = header/footer removal, MC = multi-column reading order, LTT = long tiny text, Base = born-digital common-crawl PDFs; Overall is the pass rate over all assertions with a 95\% bootstrap confidence interval. Baseline rows as reported by \citet{olmocr} (anchored variants where the system offers document anchoring); PRISM is run zero-shot from the OmniDocBench build. As in \cref{tab:v16}, every system above PRISM runs on a GPU or hosted API; PRISM is the only CPU pipeline.}
+\caption{olmOCR-Bench~\cite{olmocr} pass rate (\%, higher is better) by category. AR = arXiv math, OSM = old-scans math, Tab = tables, OS = old scans, HF = header/footer removal, MC = multi-column reading order, LTT = long tiny text, Base = per-document baseline quality checks (non-empty, non-repeating, valid charset), auto-run by the harness across all categories; Overall is the pass rate over all assertions with a 95\% bootstrap confidence interval. Baseline rows as reported by \citet{olmocr} (anchored variants where the system offers document anchoring); PRISM is run zero-shot from the OmniDocBench build. As in \cref{tab:v16}, every system above PRISM runs on a GPU or hosted API; PRISM is the only CPU pipeline.}
 \label{tab:olmobench}
 \small
 \setlength{\tabcolsep}{4pt}
@@ -173,7 +173,7 @@ Marker 1.7.5      & Pipeline (GPU)  & 76.0 & 57.9 & 57.6 & 27.8 & 84.9 & 72.9 & 
 Mistral OCR       & VLM (API)       & 77.2 & 67.5 & 60.6 & 29.3 & 93.6 & 71.3 & 77.1 & 99.4 & 72.0{\scriptsize\,$\pm$1.1} \\
 olmOCR            & VLM (7B)        & 74.9 & 71.2 & 71.0 & 42.2 & 94.5 & 78.3 & 73.3 & 98.3 & 75.5{\scriptsize\,$\pm$1.0} \\
 \midrule
-\textbf{PRISM (ours)} & \textbf{Pipeline (CPU)} & -- & -- & -- & -- & -- & -- & -- & -- & \textbf{--} \\
+\textbf{PRISM (ours)} & \textbf{Pipeline (CPU)} & 56.0 & 34.9 & 67.0 & 20.2 & 66.6 & 64.3 & 69.2 & 96.0 & \textbf{59.3}{\scriptsize\,$\pm$1.1} \\
 \bottomrule
 \end{tabular}
 \end{table*}
