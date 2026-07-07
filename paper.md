@@ -651,3 +651,12 @@ PaddleOCR-VL 80.0; Chandra 83.1). => framed honestly, version-labeled, NO SOTA c
 positioned as orthogonal validation + CPU efficiency. Biggest fixable non-math gap =
 headers_footers 66.6 vs 96.6 (shared-pipeline lever, not pursued -- OmniDocBench frozen).
 
+
+
+## Leave-one-out ablation (subset, 2026-07-08)
+136-page stratified subset (seed 42), UNMODIFIED harness (Text/Formula/Order edit dist, TEDS; no CDM). Baseline final: Text 0.0889 / Fml 0.2164 / TEDS 76.26 / Order 0.1637. Remove one component:
+- -formula ink-geometry (PRISM_FML_V2=0): Fml 0.216->0.286 (+0.070), Text +0.004, Order +0.009.
+- -native reading order (PRISM_RO_MODEL=0): Order 0.164->0.242 (+0.078), Text +0.006.
+- -inline-math splicing (PRISM_INLINE_SPLICE=0): Text +0.004, Fml +0.003, Order ~0 (targeted, small on random subset).
+- -class-aware gates (PRISM_PPDL_CONF=0.50 uniform): Text 0.089->0.096 (+0.007, worst text), Order +0.007.
+TEDS 76.26 unchanged across all (none touch table recognizer). Each component degrades primarily its target metric. Subset-based, NOT comparable to full Table 9. -> paper tab:loo.

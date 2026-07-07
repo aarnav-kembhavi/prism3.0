@@ -257,6 +257,25 @@ Baseline (v9) & 70.37 & 0.158 & 56.90 & 69.96 & 0.323 \\
 \end{tabular}
 \end{table}
 
+\begin{table}[t]
+\centering
+\caption{Leave-one-out ablation on a fixed 136-page representative subset (stratified across all ten OmniDocBench document types; seed 42). Each row removes one component from the final v20 build, holding all else fixed. Text, formula and reading order are normalized edit distance ($\downarrow$); TEDS is $\times100$ ($\uparrow$). Subset-based and CDM-free (formula reported as edit distance) --- directional evidence complementary to the full-composite cumulative \cref{tab:ablation}, not comparable to it. Each component degrades primarily the metric it targets; TEDS is unchanged because none of these components touch the table recognizer.}
+\label{tab:loo}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
+\toprule
+Configuration & Text$\downarrow$ & Formula$\downarrow$ & TEDS$\uparrow$ & Order$\downarrow$ \\
+\midrule
+Final (v20, all components) & \textbf{0.089} & \textbf{0.216} & 76.3 & \textbf{0.164} \\
+\quad $-$ formula ink-geometry & 0.093 & 0.286 & 76.3 & 0.173 \\
+\quad $-$ native reading order & 0.095 & 0.216 & 76.3 & 0.242 \\
+\quad $-$ inline-math splicing & 0.093 & 0.220 & 76.3 & 0.164 \\
+\quad $-$ class-aware det.\ gates & 0.096 & 0.219 & 76.3 & 0.171 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \paragraph{What did not work.} We report failed directions with measurements, as they carry as much information as the successes:
 \begin{itemize}
 \item \textbf{Detector ensembling / dedicated formula detector.} Adding a YOLO-based math-formula detector raised CDM by 3.3 on formula pages but its false positives cost more text-edit than the CDM gained; net negative on the composite.
