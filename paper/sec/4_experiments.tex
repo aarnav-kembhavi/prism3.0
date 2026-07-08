@@ -123,6 +123,25 @@ max & 74.21 & throughput & 0.14\,pg/s \\
 
 \begin{table}[t]
 \centering
+\caption{Latency vs.\ thread budget (Table 4b). Full 1651-page run on the same i7-11800H, CPU-only, same dual-worker harness and 0.3\,s whole-tree RAM sampling as \cref{tab:perf}. The 4- and 8-core rows pin affinity to distinct \emph{physical} cores (no hyperthreading); ``16'' uses all 16 logical cores (8 physical + HT, since only 8 physical exist). \textbf{Caveat:} thread-capping keeps this CPU's clocks and cache, so these are an \emph{optimistic lower bound} for genuinely low-end budget silicon --- not an edge-device emulation. Latency in s/page.}
+\label{tab:perf_threads}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Budget & med. & mean & p90 & p95 & p99 & max & RAM$_{\text{pk}}$ \\
+\midrule
+4 cores (pinned)      & 9.29 & 11.20 & 21.8 & 25.0 & 35.7 & 192.0 & 2.69 \\
+8 cores (pinned)      & \textbf{7.07} & 9.15 & 17.9 & 21.7 & 28.3 & 91.2 & 2.72 \\
+16 (8\,phys.\ + HT)   & 8.11 & 10.77 & 21.7 & 26.1 & 36.2 & 84.5 & 2.69 \\
+\midrule
+WSL2 4\,core/8\,GB    & \multicolumn{7}{c}{\emph{[constrained-environment run pending]}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
 \caption{Complete model inventory (ONNX inference graphs). Total 281\,MB; the 30\,MB TATR structure model is a fallback loaded only when SLANet-plus emits no cells, so the common-path resident footprint is 251\,MB. No component exceeds the 124\,MB layout detector; the two generative recognizers (Texo) total 20M parameters.}
 \label{tab:weights}
 \small

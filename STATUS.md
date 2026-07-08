@@ -171,3 +171,25 @@ pre-existing predictions from an earlier comparison pass:
 - Math post-process (normalize_v3) = +0.1 Overall → recognition-bound confirmed; report RAW.
 - Base is NOT a missing folder: it is the harness BaselineTest (96.0), already included.
 - VERSION CAVEAT: baselines are stale (MinerU 1.3.10); current MinerU 2.5.4=75.2. Framed honest/version-labeled, NO SOTA claim (user decision).
+
+
+## Latency hardening — Phase 0 inventory (2026-07-08)
+- **CPU**: 11th Gen Intel Core i7-11800H @ 2.30GHz, **8 physical / 16 logical** (HT), homogeneous (Tiger Lake-H, no P/E). Affinity to distinct physical cores = even logical IDs (4->[0,2,4,6], 8->[0,2,4,6,8,10,12,14], 16=all logical incl. HT since only 8 physical exist).
+- **Thread control**: PRISM_ONNX_THREADS=N -> ORT intra_op_num_threads (onnx_config.py); apply_thread_env() sets OMP/OPENBLAS. Workers (1 OCR + 1 math + on-demand TATR) separate from ORT threads. psutil.cpu_affinity() works; launch via `start /affinity` so children inherit. **Default budget = min(4, cpu//2) = 4 threads/session -> Table 4 was already at 4 ORT threads.**
+- **Table 4 (tab:perf)** = preds/odb_full_v20/perf.json (median 5.908 s/pg, mean 7.156, p90 12.712, p95 15.561, p99 19.987, p99.9 34.716, max 74.205; RAM whole-tree @0.3s: median 1877.1MB, p95 2210.7, peak 2702.7; wall 11815s/1651pg). Latency=end-to-end/page; RAM=summed RSS process tree.
+- **WSL2**: available (v2.7.10, kernel 6.18, Ubuntu, WSL2). For Phase 2 constrained run.
+- **CAVEAT (must state in paper)**: thread-capping and WSL2 both keep THIS CPU's clocks+cache, so numbers are an OPTIMISTIC LOWER BOUND vs genuine low-end silicon. NOT an edge-device emulation.
+- Phase 1/2 gated on idle box (ablation finishing). CPU-only (no PRISM_ORT_GPU); accuracy unchanged.
+
+
+## Latency Phase 1 — thread scaling (bare Windows CPU, idle box, 2026-07-08)
+Full 1651-page run, i7-11800H (8P/16L), CPU-only (PRISM_ORT_GPU=0), PRISM_ONNX_THREADS=N,
+affinity-pinned to distinct physical cores (verified masks: 4c=85, 8c=21845, 16=all).
+Same harness/dual-worker/RAM-sampling as Table 4. perf.json per run.
+| Budget | median | mean | p90 | p95 | p99 | p99.9 | max | peak RAM MB | wall s |
+|--------|--------|------|-----|-----|-----|-------|-----|-------------|--------|
+| 4c pinned  | 9.288 | 11.195 | 21.815 | 24.954 | 35.66  | 80.09  | 191.987 | 2685.7 | 18482.6 |
+| 8c pinned  | 7.071 | 9.147  | 17.927 | 21.736 | 28.303 | 63.269 | 91.181  | 2721.9 | 15101.1 |
+| 16 (8P+HT) | 8.106 | 10.766 | 21.745 | 26.054 | 36.244 | -      | 84.495  | 2686.1 | 17774.8 |
+Reference Table 4 (default = 4 ORT threads, UNPINNED across all cores + worker parallelism): median 5.908.
+FINDINGS: (1) 8 physical cores is the sweet spot (median 7.07); 16 threads via HT is SLOWER (8.11) — HT contention on compute-bound ONNX. (2) 4-core pinned median 9.29 is single-digit but AT the ~10s/pg line; mean 11.2 and all tails exceed 10. Pinning workers to 4 cores adds ~3.4s vs Table 4's unpinned 4-thread. (3) RAM ~2.7GB peak everywhere -> 8GB WSL cap should hold. CAVEAT: optimistic lower bound (same clocks/cache), NOT edge emulation.

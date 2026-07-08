@@ -660,3 +660,15 @@ headers_footers 66.6 vs 96.6 (shared-pipeline lever, not pursued -- OmniDocBench
 - -inline-math splicing (PRISM_INLINE_SPLICE=0): Text +0.004, Fml +0.003, Order ~0 (targeted, small on random subset).
 - -class-aware gates (PRISM_PPDL_CONF=0.50 uniform): Text 0.089->0.096 (+0.007, worst text), Order +0.007.
 TEDS 76.26 unchanged across all (none touch table recognizer). Each component degrades primarily its target metric. Subset-based, NOT comparable to full Table 9. -> paper tab:loo.
+
+## Latency Phase 1 — thread scaling (bare Windows CPU, idle box, 2026-07-08)
+Full 1651-page run, i7-11800H (8P/16L), CPU-only (PRISM_ORT_GPU=0), PRISM_ONNX_THREADS=N,
+affinity-pinned to distinct physical cores (verified masks: 4c=85, 8c=21845, 16=all).
+Same harness/dual-worker/RAM-sampling as Table 4. perf.json per run.
+| Budget | median | mean | p90 | p95 | p99 | p99.9 | max | peak RAM MB | wall s |
+|--------|--------|------|-----|-----|-----|-------|-----|-------------|--------|
+| 4c pinned  | 9.288 | 11.195 | 21.815 | 24.954 | 35.66  | 80.09  | 191.987 | 2685.7 | 18482.6 |
+| 8c pinned  | 7.071 | 9.147  | 17.927 | 21.736 | 28.303 | 63.269 | 91.181  | 2721.9 | 15101.1 |
+| 16 (8P+HT) | 8.106 | 10.766 | 21.745 | 26.054 | 36.244 | -      | 84.495  | 2686.1 | 17774.8 |
+Reference Table 4 (default = 4 ORT threads, UNPINNED across all cores + worker parallelism): median 5.908.
+FINDINGS: (1) 8 physical cores is the sweet spot (median 7.07); 16 threads via HT is SLOWER (8.11) — HT contention on compute-bound ONNX. (2) 4-core pinned median 9.29 is single-digit but AT the ~10s/pg line; mean 11.2 and all tails exceed 10. Pinning workers to 4 cores adds ~3.4s vs Table 4's unpinned 4-thread. (3) RAM ~2.7GB peak everywhere -> 8GB WSL cap should hold. CAVEAT: optimistic lower bound (same clocks/cache), NOT edge emulation.
