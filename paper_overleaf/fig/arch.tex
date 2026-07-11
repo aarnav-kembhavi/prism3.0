@@ -1,0 +1,36 @@
+% PRISM architecture diagram (TikZ)
+\begin{tikzpicture}[
+  font=\scriptsize,
+  node distance=3.5mm and 4.5mm,
+  box/.style={draw, rounded corners=1pt, align=center, inner sep=2.5pt, minimum height=6.5mm},
+  model/.style={box, fill=blue!8},
+  algo/.style={box, fill=orange!12},
+  io/.style={box, fill=green!8},
+  lbl/.style={font=\tiny\itshape, text=black!60},
+  arr/.style={-{Latex[length=1.6mm]}, thick, black!70},
+]
+\node[io] (img) {Page image};
+\node[algo, right=of img] (norm) {Normalize\\[-1pt]{\tiny glare$\rightarrow$shadow$\rightarrow$rectify}};
+\node[model, right=of norm] (det) {RT-DETR layout\\[-1pt]{\tiny PP-DocLayout+ 124\,MB}};
+\node[algo, right=of det] (post) {Class-aware\\[-1pt]postprocess\\[-1pt]{\tiny gates, containment,}\\[-1pt]{\tiny formula geometry}};
+
+\node[model, below=6mm of det, xshift=-16mm] (ocr) {Text OCR\\[-1pt]{\tiny PP-OCRv6 31\,MB}};
+\node[model, right=of ocr] (texo) {Formula rec\\[-1pt]{\tiny Texo-20M 79\,MB}};
+\node[model, right=of texo] (slanet) {Table rec\\[-1pt]{\tiny SLANet+ 7\,MB}};
+
+\node[algo, below=6mm of texo] (order) {Reading order\\[-1pt]{\tiny column DAG / XY-cut}};
+\node[io, right=of order] (out) {\LaTeX\ $\rightarrow$ MD/HTML};
+
+\draw[arr] (img) -- (norm);
+\draw[arr] (norm) -- (det);
+\draw[arr] (det) -- (post);
+\draw[arr] (post.south) to[out=-90,in=45] (ocr.north east);
+\draw[arr] (post.south) to[out=-90,in=60] (texo.north east);
+\draw[arr] (post.south) to[out=-90,in=90] (slanet.north);
+\draw[arr] (ocr.south) to[out=-90,in=170] (order.west);
+\draw[arr] (texo) -- (order);
+\draw[arr] (slanet.south) to[out=-90,in=30] (order.east);
+\draw[arr] (order) -- (out);
+
+\node[lbl, above=0.5mm of ocr.north west, anchor=south west, xshift=-1mm] {persistent CPU worker subprocesses};
+\end{tikzpicture}
