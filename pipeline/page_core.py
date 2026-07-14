@@ -17,15 +17,34 @@ API-compatible) and the language/modality flags they determined their own way.
 """
 
 import os
+import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
+
+# Per-page stage-timing accumulator (PRISM_STAGE_TIMING=1; the benchmark
+# runner resets and reads it around each build_document call). Keys:
+# 'math' / 'text' / 'table' wall seconds. Off by default: zero overhead.
+stage_times: dict = {}
+
+
+def _timed(key, fn):
+    if os.environ.get('PRISM_STAGE_TIMING', '0') != '1':
+        return fn
+    def _wrap(*a, **k):
+        t0 = _time.perf_counter()
+        try:
+            return fn(*a, **k)
+        finally:
+            stage_times[key] = stage_times.get(key, 0.0) + (_time.perf_counter() - t0)
+    return _wrap
 
 from pipeline.layout_utils import (
     apply_semantic_reading_order, xyxy_to_pil_crop,
     detect_column_count, split_detections_by_column, split_detections_n_columns,
 )
-from pipeline.latex_builder import wrap_content, assemble_document
+from pipeline.latex_builder import (
+    wrap_content, assemble_document, assemble_columns_document)
 
 
 TEXT_CLASSES    = {"Text", "Title", "Section-header", "Caption",
@@ -125,8 +144,110 @@ def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list
                 [table_crops[i] for i in pending], workers, is_cjk=is_cjk)
             for i, res in zip(pending, fallback):
                 results[i] = res
-        return [r or '' for r in results]
+        results = [r or '' for r in results]
+        _append_geom_tables(results, table_crops, workers, is_cjk)
+        return results
     return _extract_tables_tatr(table_crops, workers, is_cjk=is_cjk)
+
+
+def _html_escape(s: str) -> str:
+    return (s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+
+def _table_grid_html(tokens, img_w) -> str:
+    """Geometric HTML grid from OCR token boxes: cluster rows by y-centre,
+    split columns at gaps in the sorted token x-centres, assign each token.
+
+    Complements SLANet, which sometimes predicts too few columns and merges a
+    whole row of values into one <td> (e.g. '0.001 (-0.014) 0.616 (16.367)*').
+    The olmOCR TableTest checks EVERY table in the content and passes if any
+    one has the right cell, so emitting this extra, geometry-separated grid is
+    additive — it can only add cell matches, never remove SLANet's."""
+    import numpy as np
+    toks = []
+    for t in tokens or []:
+        txt = (t['text'] or '').strip()
+        if not txt:
+            continue
+        toks.append({'x1': t['x1'], 'x2': t['x2'],
+                     'cy': (t['y1'] + t['y2']) / 2.0,
+                     'h': max(1.0, t['y2'] - t['y1']),
+                     'w': max(1.0, t['x2'] - t['x1']), 'text': txt})
+    if len(toks) < 4:
+        return ''
+    toks.sort(key=lambda t: t['cy'])
+    rows, cur, cy = [], [], None
+    for tk in toks:
+        if cy is None or abs(tk['cy'] - cy) < max(tk['h'], 10) * 0.6:
+            cur.append(tk)
+            cy = sum(t['cy'] for t in cur) / len(cur)
+        else:
+            rows.append(cur)
+            cur, cy = [tk], tk['cy']
+    if cur:
+        rows.append(cur)
+    if len(rows) < 2:
+        return ''
+    # Column boundaries from gaps in the sorted token x-centres. A gap wider
+    # than gap_thr (scaled to the typical token width) is a real column break.
+    # This separates columns whose ink touches (no zero-projection gap) — the
+    # case that makes SLANet merge a value-row into one cell.
+    non_wide = [t for t in toks if t['w'] <= 0.6 * max(1, img_w)]
+    if len(non_wide) < 4:
+        return ''
+    med_w = float(np.median([t['w'] for t in non_wide]))
+    centers = sorted((t['x1'] + t['x2']) / 2.0 for t in non_wide)
+    gap_thr = max(med_w * 0.8, 0.02 * max(1, img_w))
+    bounds = [0.0]
+    for a, b in zip(centers, centers[1:]):
+        if b - a > gap_thr:
+            bounds.append((a + b) / 2.0)
+    bounds.append(float(img_w) + 1.0)
+    if len(bounds) - 1 < 2:              # no column structure to add
+        return ''
+
+    def col_of(tk):
+        c = (tk['x1'] + tk['x2']) / 2.0
+        for i in range(len(bounds) - 1):
+            if bounds[i] <= c < bounds[i + 1]:
+                return i
+        return len(bounds) - 2
+
+    ncol = len(bounds) - 1
+    out = ['<table>']
+    for row in rows:
+        cells = [[] for _ in range(ncol)]
+        for tk in sorted(row, key=lambda t: t['x1']):
+            cells[col_of(tk)].append(tk['text'])
+        tds = ''.join('<td>' + _html_escape(' '.join(c)) + '</td>' for c in cells)
+        out.append('<tr>' + tds + '</tr>')
+    out.append('</table>')
+    return '\n'.join(out)
+
+
+def _append_geom_tables(results, table_crops, workers, is_cjk):
+    """For each table, append a geometry-reconstructed HTML grid (from OCR
+    token boxes) after SLANet's output. Additive coverage for olmOCR-Bench
+    cell tests SLANet loses to under-segmentation. PRISM_TABLE_GEOM=0 disables."""
+    if os.environ.get('PRISM_TABLE_GEOM', '1') == '0' or not table_crops:
+        return
+    try:
+        if is_cjk and hasattr(workers.ocr, 'run_table_tokens_batch_cjk'):
+            raw = workers.ocr.run_table_tokens_batch_cjk(table_crops)
+        else:
+            raw = workers.ocr.run_table_tokens_batch(table_crops)
+    except Exception as e:
+        print(f"  [table-geom] token OCR failed: {e}")
+        return
+    for i, crop in enumerate(table_crops):
+        toks = raw[i] if i < len(raw) else None
+        if not toks:
+            continue
+        geom = _table_grid_html(toks, crop.width)
+        # Only add when it introduces real column structure (>=2 cols) and the
+        # grid differs from what SLANet already emitted.
+        if geom and geom.count('</td>') >= 4:
+            results[i] = (results[i] + '\n\n' + geom) if results[i] else geom
 
 
 def _extract_tables_tatr(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
@@ -471,8 +592,7 @@ def _apply_cjk_formula_hybrid(detections, math_indices, workers):
         if latex:
             detections[idx]['raw_content'] = latex
             n_swapped += 1
-    if n_swapped:
-        print(f"  [fml-cjk] OCR-hybrid replaced {n_swapped} CJK formula(s)")
+    print(f"  [fml-cjk] OCR-hybrid replaced {n_swapped}/{len(math_indices)} formula crop(s)")
 
 
 def route_and_extract(detections, workers: Workers, figures_dir: str,
@@ -505,8 +625,9 @@ def route_and_extract(detections, workers: Workers, figures_dir: str,
         math_crops = [detections[i]["crop"] for i in math_indices]
         text_crops = [detections[i]["crop"] for i in text_indices]
         with ThreadPoolExecutor(max_workers=2) as exe:
-            math_fut = exe.submit(workers.math.run_math_batch, math_crops, figures_dir, math_counter[0])
-            text_fut = exe.submit(_text_fn, text_crops, is_screenshot)
+            math_fut = exe.submit(_timed('math', workers.math.run_math_batch),
+                                  math_crops, figures_dir, math_counter[0])
+            text_fut = exe.submit(_timed('text', _text_fn), text_crops, is_screenshot)
             math_results, math_counter[0] = math_fut.result()
             texts = text_fut.result()
         for idx, raw in zip(math_indices, math_results):
@@ -516,12 +637,13 @@ def route_and_extract(detections, workers: Workers, figures_dir: str,
     else:
         if math_indices:
             crops = [detections[i]["crop"] for i in math_indices]
-            results, math_counter[0] = workers.math.run_math_batch(crops, figures_dir, math_counter[0])
+            results, math_counter[0] = _timed('math', workers.math.run_math_batch)(
+                crops, figures_dir, math_counter[0])
             for idx, raw in zip(math_indices, results):
                 detections[idx]["raw_content"] = raw
         if text_indices:
             crops = [detections[i]["crop"] for i in text_indices]
-            texts = _text_fn(crops, is_screenshot)
+            texts = _timed('text', _text_fn)(crops, is_screenshot)
             for idx, txt in zip(text_indices, texts):
                 detections[idx]["raw_content"] = txt
 
@@ -541,7 +663,8 @@ def route_and_extract(detections, workers: Workers, figures_dir: str,
 
     if table_indices:
         table_crops = [detections[i]["crop"] for i in table_indices]
-        table_results = _extract_tables(table_crops, workers, is_cjk=(is_cjk or is_mixed))
+        table_results = _timed('table', _extract_tables)(
+            table_crops, workers, is_cjk=(is_cjk or is_mixed))
         for idx, raw in zip(table_indices, table_results):
             detections[idx]["raw_content"] = raw
 
@@ -777,6 +900,39 @@ def _order_by_model_ro(detections):
     return [d for _, _, d in keyed]
 
 
+def _assemble_fidelity_columns(detections, n_cols, col_lefts, img_width,
+                               img_height, workers, figures_dir,
+                               header_logo_fname, has_cjk, lang_kwargs):
+    """Route detections into an N-column visual-fidelity paracol document."""
+    from pipeline.layout_utils import split_detections_fidelity
+    top_full, columns, bottom_full = split_detections_fidelity(
+        detections, n_cols, col_lefts, img_width, img_height)
+
+    f_cnt = m_cnt = 0
+    top_parts, top_idx, f_cnt, m_cnt = route_and_extract(
+        top_full, workers, figures_dir, f_cnt, math_start=m_cnt, **lang_kwargs)
+    top_parts = _adjust_figure_paths(top_parts)
+
+    col_parts, col_idx = [], []
+    for col in columns:
+        parts, idx, f_cnt, m_cnt = route_and_extract(
+            col, workers, figures_dir, f_cnt, math_start=m_cnt, **lang_kwargs)
+        col_parts.append(_adjust_figure_paths(parts))
+        col_idx.append(idx)
+
+    bottom_parts, bottom_idx, f_cnt, m_cnt = route_and_extract(
+        bottom_full, workers, figures_dir, f_cnt, math_start=m_cnt, **lang_kwargs)
+    bottom_parts = _adjust_figure_paths(bottom_parts)
+
+    print(f"  [fidelity] {n_cols}-column layout "
+          f"(top={len(top_parts)}, cols={[len(c) for c in col_parts]}, "
+          f"bottom={len(bottom_parts)})")
+    return assemble_columns_document(
+        top_parts, top_idx, col_parts, col_idx,
+        bottom_parts, bottom_idx,
+        header_logo=header_logo_fname, has_cjk=has_cjk)
+
+
 def build_document(detections, img_width, img_height, workers: Workers,
                    figures_dir: str, *, is_screenshot: bool = False,
                    is_cjk: bool = False, is_mixed: bool = False,
@@ -805,9 +961,93 @@ def build_document(detections, img_width, img_height, workers: Workers,
     if os.environ.get('PRISM_DROP_MARGINALIA', '1') != '0':
         detections = [d for d in detections
                       if d['class_name'] not in ('Page-footer', 'Page-header')]
+        # Geometric band-drop: running heads/footlines the detector labels
+        # plain Text (or the text-rescue pass re-adds as a synthetic Text
+        # block — the dominant olmOCR headers_footers leak: a wrapped header
+        # banner whose 2nd line escapes the Page-header box and is rescued).
+        #
+        # A candidate is a short (<= HCAP page-height) Text/List-item block
+        # fully inside the top/bottom band. It is dropped ONLY if it is also
+        # VERTICALLY ISOLATED from the body — i.e. separated from the nearest
+        # content block toward page-centre by a whitespace gap >= GAP page-
+        # fractions. A running header/footer sits alone above/below a band of
+        # whitespace; a real first/last body line is immediately followed by
+        # more text, so it is never isolated and never dropped. This protects
+        # multi_column / long_tiny_text body lines that reach the band.
+        # By default only Text/List-item are eligible; Title, Section-header,
+        # Footnote, Caption are kept. PRISM_BAND_CLASSES (comma list) overrides
+        # the eligible set (e.g. add "Footnote" to also drop isolated journal
+        # footers / URL lines). The isolation guard still protects real content.
+        # PRISM_BAND_DROP="<top_frac>,<bottom_frac>" enables it.
+        band = os.environ.get('PRISM_BAND_DROP', '')
+        if band:
+            top_f, bot_f = (float(x) for x in band.split(','))
+            hcap = float(os.environ.get('PRISM_BAND_HCAP', '0.045'))
+            gap_min = float(os.environ.get('PRISM_BAND_GAP', '0.03')) * img_height
+            y_top, y_bot = img_height * top_f, img_height * (1.0 - bot_f)
+            _bc_env = os.environ.get('PRISM_BAND_CLASSES', '')
+            _band_classes = ({c.strip() for c in _bc_env.split(',') if c.strip()}
+                             if _bc_env else {'Text', LIST_ITEM_CLASS})
+            # Content blocks that define "the body" for the isolation test
+            # (everything with real text/structure, incl. the candidate set).
+            _content = TEXT_CLASSES | TABLE_CLASSES | MATH_CLASSES
+
+            def _is_band_marginalia(d):
+                if d['class_name'] not in _band_classes:
+                    return False
+                x1, y1, x2, y2 = d['bbox']
+                if (y2 - y1) > hcap * img_height:
+                    return False
+                in_top = y2 <= y_top
+                in_bot = y1 >= y_bot
+                if not (in_top or in_bot):
+                    return False
+                # Isolation: gap to the nearest OTHER content block on the
+                # body side must be >= gap_min (whitespace band under a header
+                # / over a footer). Body first/last lines fail this (adjacent
+                # text) and are kept.
+                if in_top:
+                    below = [o['bbox'][1] for o in detections
+                             if o is not d and o['class_name'] in _content
+                             and o['bbox'][1] >= y2 - 1]
+                    if not below:
+                        return True
+                    return (min(below) - y2) >= gap_min
+                else:
+                    above = [o['bbox'][3] for o in detections
+                             if o is not d and o['class_name'] in _content
+                             and o['bbox'][3] <= y1 + 1]
+                    if not above:
+                        return True
+                    return (y1 - max(above)) >= gap_min
+
+            detections = [d for d in detections if not _is_band_marginalia(d)]
     has_cjk   = is_cjk or is_mixed
     col_count = detect_column_count(detections, img_width)
     lang_kwargs = dict(is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed)
+
+    # Visual-fidelity mode (product / web UI): reproduce the page's column
+    # geometry in the OUTPUT rather than flattening it to a single reading
+    # column. Benchmarks want a single linearised stream (they score text +
+    # reading order, not visual layout), so the default stays flat; the UI
+    # sets PRISM_VISUAL_FIDELITY=1. In this mode a multi-column page bypasses
+    # the model-RO linearisation below and falls through to the geometric
+    # paracol column paths, so a 2-column input renders as 2 columns.
+    _fidelity = os.environ.get('PRISM_VISUAL_FIDELITY', '0') == '1'
+
+    # Visual-fidelity column reconstruction: a robust column detector (whitespace
+    # gutters over narrow body boxes only, independent of the benchmark-tuned
+    # detect_column_count) drives an N-column paracol layout so a 2/3-column
+    # input renders with that many columns. Only runs in fidelity mode; the
+    # benchmark path is untouched.
+    if _fidelity and detections:
+        from pipeline.layout_utils import detect_columns_fidelity
+        n_cols, col_bounds = detect_columns_fidelity(
+            detections, img_width, img_height)
+        if n_cols >= 2:
+            return _assemble_fidelity_columns(
+                detections, n_cols, col_bounds, img_width, img_height,
+                workers, figures_dir, header_logo_fname, has_cjk, lang_kwargs)
 
     # Model reading order (PP-DocLayoutV3): every layout box carries the
     # detector's own read_order. When enough boxes have it, use the model

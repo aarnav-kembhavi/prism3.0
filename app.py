@@ -8,6 +8,7 @@ Endpoints:
   GET  /pdf/{id}      → PDF bytes (when done)
 """
 
+import os
 import sys
 import threading
 import time
@@ -58,12 +59,16 @@ def _process_job(job_id: str) -> None:
 
         # ── Stage 1: OCR pipeline ──────────────────────────────────────────
         job["message"] = "Running OCR pipeline…"
+        # Visual-fidelity mode: reproduce the page's column layout in the output
+        # (2-column in → 2-column out) instead of the benchmark's flat stream.
+        pipeline_env = {**os.environ, "PRISM_VISUAL_FIDELITY": "1"}
         result = subprocess.run(
             [sys.executable, str(ROOT / "pipeline" / "orchestrate.py"), str(image_path)],
             cwd=str(ROOT),
             capture_output=True,
             text=True,
             timeout=300,
+            env=pipeline_env,
         )
 
         output_dir = ROOT / "outputs" / f"{stem}_output"

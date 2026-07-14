@@ -185,6 +185,114 @@ def _split_bullet_items(text: str) -> List[str]:
     return [text.strip()] if text.strip() else []
 
 
+_TABLE_LATEX_ESCAPES = [
+    ("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"), ("$", r"\$"),
+    ("#", r"\#"), ("_", r"\_"), ("{", r"\{"), ("}", r"\}"),
+    ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
+]
+
+
+def _escape_table_cell(text: str) -> str:
+    """Escape LaTeX-special characters in a plain-text table cell."""
+    # Backslash first so we don't double-escape the replacements themselves.
+    out = text.replace("\\", "\x00")
+    for ch, rep in _TABLE_LATEX_ESCAPES[1:]:
+        out = out.replace(ch, rep)
+    return out.replace("\x00", r"\textbackslash{}")
+
+
+def html_table_to_latex(html: str) -> str:
+    """Convert a RapidTable ``<table>…</table>`` HTML string to a LaTeX tabular.
+
+    RapidTable/SLANet emits final HTML which is valid inside Markdown (the
+    benchmark output) but is literal garbage to pdflatex — ``<`` and ``>`` render
+    as ``¡`` / ``¿`` in the default OT1 font.  When rendering a real PDF (the web
+    UI's visual-fidelity path) we must turn that HTML into an actual
+    ``tabular``.  colspan is honoured via ``\\multicolumn``; rowspan is flattened
+    (the value stays in its first row).  Wrapped in ``\\resizebox`` so a wide
+    table shrinks to the column width instead of overflowing.
+    """
+    from html.parser import HTMLParser
+    from html import unescape
+
+    class _TP(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.rows = []            # list[list[(text, colspan)]]
+            self._row = None
+            self._cell = None
+            self._span = 1
+        def handle_starttag(self, tag, attrs):
+            t = tag.lower()
+            if t == "tr":
+                self._row = []
+            elif t in ("td", "th"):
+                self._cell = []
+                self._span = 1
+                for k, v in attrs:
+                    if k.lower() == "colspan":
+                        try:
+                            self._span = max(1, int(v))
+                        except (TypeError, ValueError):
+                            self._span = 1
+            elif t == "br" and self._cell is not None:
+                self._cell.append(" ")
+        def handle_data(self, data):
+            if self._cell is not None:
+                self._cell.append(data)
+        def handle_endtag(self, tag):
+            t = tag.lower()
+            if t in ("td", "th") and self._cell is not None and self._row is not None:
+                self._row.append(("".join(self._cell).strip(), self._span))
+                self._cell = None
+            elif t == "tr" and self._row is not None:
+                self.rows.append(self._row)
+                self._row = None
+
+    p = _TP()
+    try:
+        p.feed(unescape(html))
+    except Exception:
+        return ""
+    rows = [r for r in p.rows if r]
+    if not rows:
+        return ""
+
+    ncols = max(sum(span for _, span in r) for r in rows)
+    if ncols < 1:
+        return ""
+
+    lines = []
+    for r in rows:
+        cells = []
+        used = 0
+        for text, span in r:
+            span = min(span, max(1, ncols - used))
+            body = _escape_table_cell(text)
+            if span > 1:
+                cells.append(f"\\multicolumn{{{span}}}{{l}}{{{body}}}")
+            else:
+                cells.append(body)
+            used += span
+        # pad short rows so every line has ncols &-separated fields
+        while used < ncols:
+            cells.append("")
+            used += 1
+        lines.append(" & ".join(cells) + r" \\")
+
+    colspec = "|" + "l|" * ncols
+    tabular = (
+        "\\begin{tabular}{" + colspec + "}\n\\hline\n"
+        + "\n\\hline\n".join(lines)
+        + "\n\\hline\n\\end{tabular}"
+    )
+    return (
+        "\n\\begin{center}\n\\resizebox{\\columnwidth}{!}{%\n"
+        + tabular
+        + "\n}\n\\end{center}\n"
+    )
+
+
 LATEX_WRAPPERS = {
     "Title": lambda c: (
         f"\n\\begin{{center}}\n"
@@ -209,9 +317,12 @@ LATEX_WRAPPERS = {
         else f"\n\\begin{{center}}\n{c}\n\\end{{center}}\n"
     ),
     "Table": lambda c: (
-        # RapidTable emits final HTML directly — pass it through untouched so
-        # tex_to_md's tabular conversion never sees it.
-        f"\n{c}\n"
+        # Visual-fidelity (PDF) path: RapidTable HTML is illegal LaTeX, so convert
+        # it to a real tabular.  Benchmark path: pass the HTML through untouched so
+        # tex_to_md's tabular conversion never sees it and scores stay identical.
+        (html_table_to_latex(c) or f"\n\\begin{{center}}\n\\ttfamily {_clean_ocr(c)}\n\\end{{center}}\n")
+        if (c.lstrip().startswith("<table") and os.environ.get("PRISM_VISUAL_FIDELITY", "0") == "1")
+        else f"\n{c}\n"
         if c.lstrip().startswith("<table")
         else f"\n\\begin{{center}}\n"
              f"\\resizebox{{\\columnwidth}}{{!}}{{\n{c}\n}}\n"
@@ -312,6 +423,75 @@ def assemble_document(
         )
     else:
         body = logo_block + _build_body(body_parts, list_regions)
+
+    return preamble + body + closing
+
+
+def assemble_columns_document(
+    top_parts: List[str],
+    top_list_regions,
+    col_parts: List[List[str]],
+    col_list_regions: List,
+    bottom_parts: List[str] = None,
+    bottom_list_regions=None,
+    header_logo: Optional[str] = None,
+    has_cjk: bool = False,
+) -> str:
+    """Assemble an N-column visual-fidelity document via paracol.
+
+    Layout: [full-width header block] → [N paracol columns] → [full-width
+    footer block]. Used by the web UI's PRISM_VISUAL_FIDELITY path so a
+    2/3-column input renders with that many columns.
+    """
+    n = max(1, len(col_parts))
+    if has_cjk:
+        preamble = (
+            "\\documentclass{article}\n"
+            "\\usepackage[margin=1.5cm]{geometry}\n"
+            "\\usepackage{amsmath}\n"
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{booktabs}\n"
+            "\\usepackage{xeCJK}\n"
+            "\\usepackage{ragged2e}\n"
+            "\\usepackage{paracol}\n"
+            "\\setlength{\\emergencystretch}{3em}\n"
+        )
+    else:
+        preamble = (
+            "\\documentclass{article}\n"
+            "\\usepackage[margin=1.5cm]{geometry}\n"
+            "\\usepackage{amsmath}\n"
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{booktabs}\n"
+            "\\usepackage[utf8]{inputenc}\n"
+            "\\usepackage{ragged2e}\n"
+            "\\usepackage{paracol}\n"
+            "\\setlength{\\emergencystretch}{3em}\n"
+        )
+    preamble += "\\begin{document}\n\\sloppy\n"
+    closing = "\n\\end{document}\n"
+
+    logo_block = ""
+    if header_logo:
+        logo_block = (
+            "\n\\noindent\\hfill"
+            f"\\includegraphics[height=1.8em]{{{header_logo}}}"
+            "\\par\\noindent\\hrule\\vspace{4pt}\n"
+        )
+
+    body = logo_block
+    if top_parts:
+        body += _build_body(top_parts, top_list_regions or []) + "\n"
+
+    body += f"\\begin{{paracol}}{{{n}}}\n"
+    for i, parts in enumerate(col_parts):
+        if i > 0:
+            body += "\n\\switchcolumn\n"
+        body += "\\RaggedRight\n" + _build_body(parts, col_list_regions[i] or [])
+    body += "\n\\end{paracol}\n"
+
+    if bottom_parts:
+        body += "\n" + _build_body(bottom_parts, bottom_list_regions or [])
 
     return preamble + body + closing
 

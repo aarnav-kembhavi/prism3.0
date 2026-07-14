@@ -37,8 +37,32 @@ _PROBE_SIDE = 640          # probe resolution (longer side)
 # measured on the 40-page synthetic study, mean block edit rose 0.177->0.185.
 _ACCEPT_GAIN = 1.02        # accept if score_after >= score_before * this
 _BIN_THRESH = 0.3
+# Probe-trust guard (Task-1B audit, 2026-07-14). Below this shorter side the
+# 640px probe sees the page at near-native scale, where corrections that
+# thicken strokes inflate detector surface while destroying recognition
+# (capture 5.jpeg: ratio 1.881 accepted, full-res OCR 1513->44 chars). At 450
+# the guard catches every audited bad accept reachable by resolution with zero
+# false rejections on 200 clean pages + 40x5 synth pages; a score-ratio cap
+# was rejected because any 5.jpeg-catching bound also flips legitimate
+# rectification gains (1.jpg at 2.132) and still misses the CLAHE cases.
+_MIN_TRUST_SIDE = int(os.environ.get("PRISM_PROBE_MIN_SIDE", "450"))
 
 _session = None
+
+# Opt-in proposal logging (PRISM_PROBE_LOG=<jsonl path>). Default off: the
+# product and benchmark paths write nothing. The driver sets log_context
+# before each page so records carry page identity.
+log_context = {}
+
+
+def _log_proposal(record):
+    path = os.environ.get("PRISM_PROBE_LOG", "")
+    if not path:
+        return
+    import json
+    record = {**log_context, **record}
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def available() -> bool:
@@ -92,18 +116,48 @@ def verified_apply(name, fn, image_bgr, score_before=None):
     """
     if score_before is None:
         score_before = probe_score(image_bgr)
+    # Probe-trust guards: with no confident text on the input the >=2% rule is
+    # vacuous (0 >= 0*1.02), and below _MIN_TRUST_SIDE the detector-surface
+    # proxy diverges from actual recognition. In both cases ship the input.
+    h, w = image_bgr.shape[:2]
+    if min(h, w) < _MIN_TRUST_SIDE:
+        print(f"  [norm-verify] {name}: SKIPPED (page {w}x{h} below "
+              f"{_MIN_TRUST_SIDE}px probe-trust floor)")
+        _log_proposal({"correction": name, "score_before": score_before,
+                       "score_after": None, "accepted": False,
+                       "outcome": "probe_untrusted_lowres"})
+        return image_bgr, score_before, False
+    if score_before <= 0.0:
+        print(f"  [norm-verify] {name}: SKIPPED (probe uninformative, "
+              f"score_before=0)")
+        _log_proposal({"correction": name, "score_before": score_before,
+                       "score_after": None, "accepted": False,
+                       "outcome": "probe_uninformative"})
+        return image_bgr, score_before, False
     try:
         candidate = fn(image_bgr)
     except Exception as exc:
         print(f"  [norm-verify] {name}: correction failed ({exc}); keeping input")
+        _log_proposal({"correction": name, "score_before": score_before,
+                       "score_after": None, "accepted": False,
+                       "outcome": "error", "error": str(exc)})
         return image_bgr, score_before, False
     if candidate is image_bgr:
+        _log_proposal({"correction": name, "score_before": score_before,
+                       "score_after": None, "accepted": False,
+                       "outcome": "noop"})
         return image_bgr, score_before, False
     score_after = probe_score(candidate)
     if score_after >= score_before * _ACCEPT_GAIN:
         print(f"  [norm-verify] {name}: accepted "
               f"({score_before:.4f} -> {score_after:.4f})")
+        _log_proposal({"correction": name, "score_before": score_before,
+                       "score_after": score_after, "accepted": True,
+                       "outcome": "accepted"})
         return candidate, score_after, True
     print(f"  [norm-verify] {name}: REJECTED "
           f"({score_before:.4f} -> {score_after:.4f})")
+    _log_proposal({"correction": name, "score_before": score_before,
+                   "score_after": score_after, "accepted": False,
+                   "outcome": "rejected"})
     return image_bgr, score_before, False

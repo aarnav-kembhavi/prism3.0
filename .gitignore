@@ -55,3 +55,5 @@ paper/main.pdf
 venvs/
 *.fls
 *.fdb_latexmk
+scratchpad_runs/
+figures/*.png

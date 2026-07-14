@@ -856,18 +856,42 @@ class MathOCRWorkerOnnx:
         self._conn = None
         print('[*] Math OCR worker (ONNX) stopped')
 
+    def _restart(self):
+        """Force-kill and re-spawn the child (used after a watchdog timeout)."""
+        try:
+            if self._proc is not None:
+                self._proc.terminate()
+                self._proc.join(timeout=5)
+        except Exception:
+            pass
+        self._proc = None
+        self._conn = None
+        self.start()
+
     def run_math_batch(
         self,
         crops: list,
         figures_dir: str,
         math_counter_val: int,
     ) -> tuple[list[str], int]:
-        """Returns (latex_strings, updated_counter). Same as MathOCRWorker."""
+        """Returns (latex_strings, updated_counter). Same as MathOCRWorker.
+
+        Watchdog: a batch that exceeds a size-scaled timeout (a Texo decode
+        that ran away, more likely on large high-DPI crops) kills and restarts
+        the child and stubs those crops with '' so one bad page can't stall a
+        long run. Tunable via PRISM_FML_TIMEOUT_BASE / _PER."""
         if not crops:
             return [], math_counter_val
         arrays = [np.array(c.convert('RGB')) for c in crops]
         self._conn.send((arrays, figures_dir, math_counter_val))
-        return self._conn.recv()
+        timeout = (float(os.environ.get('PRISM_FML_TIMEOUT_BASE', '45'))
+                   + float(os.environ.get('PRISM_FML_TIMEOUT_PER', '12')) * len(crops))
+        if self._conn.poll(timeout):
+            return self._conn.recv()
+        print(f'  [math-watchdog] batch of {len(crops)} crops exceeded '
+              f'{timeout:.0f}s — restarting math worker, stubbing crops')
+        self._restart()
+        return [''] * len(crops), math_counter_val + len(crops)
 
 
 class MathOCRWorkerOnnxDual:

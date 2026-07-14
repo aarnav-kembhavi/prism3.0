@@ -129,7 +129,7 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
         # Texo needs — costing several points of formula accuracy vs the
         # full-resolution skip-stage1 path. 1800-shorter preserves detail while
         # still bounding memory on unusually large captures. Never upscale.
-        SCREENSHOT_MAX_SHORTER = 1800
+        SCREENSHOT_MAX_SHORTER = int(os.environ.get('PRISM_MAX_SHORTER', '1800'))
         # Resolution FLOOR: low-DPI renders (Fox pages are ~857x1109) starve
         # detection and OCR of stroke detail — dense two-column pages lost
         # half their text (pred 1397 chars vs GT 5807 on the worst page).
@@ -187,7 +187,7 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
 
             # Light cap: phone photos can be 12MP+; cap shorter side at 1800px
             # for YOLO memory management without the full DPI-based resize.
-            PHOTO_MAX_SHORTER = 1800
+            PHOTO_MAX_SHORTER = int(os.environ.get('PRISM_MAX_SHORTER', '1800'))
             shorter = min(img.shape[:2])
             if shorter > PHOTO_MAX_SHORTER:
                 scale = PHOTO_MAX_SHORTER / shorter
@@ -214,9 +214,10 @@ def normalize_image(input_path, target_dpi=250, source_dpi=96):
             # and Hough rectification on a 9 MP capture cost 20-30 s/page for
             # no quality gain — the end of this branch capped to 1800px shorter
             # side anyway. Capping first makes every step pay on ≤1800px.
+            _cap = int(os.environ.get('PRISM_MAX_SHORTER', '1800'))
             _shorter = min(img.shape[:2])
-            if _shorter > 1800:
-                _scale = 1800 / _shorter
+            if _shorter > _cap:
+                _scale = _cap / _shorter
                 img = cv2.resize(img, (int(img.shape[1] * _scale),
                                        int(img.shape[0] * _scale)),
                                  interpolation=cv2.INTER_AREA)

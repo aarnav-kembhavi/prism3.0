@@ -150,16 +150,44 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from pipeline.layout_utils import xyxy_to_pil_crop
     from pipeline.latex_builder import save_tex
     from pipeline.detection_postprocess import postprocess_detections
-    from pipeline.text_worker import TextOCRWorkerDual
-    from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual
     from pipeline.tatr_worker_onnx import TATROnnxWorker
     from pipeline.page_core import Workers, build_document, MATH_CLASSES, IMAGE_CLASSES
     from pipeline.tex_to_md import tex_to_omnidocbench_md
 
-    ocr_worker = TextOCRWorkerDual()
-    math_worker = MathOCRWorkerOnnxDual()
+    # PRISM_SINGLE_WORKER=1 → product/single-worker config (1 OCR + 1 math),
+    # matching orchestrate.py and the isolated single-process competitor rows in
+    # Table 3 (tab:cpu_frontier). Default keeps the dual-worker benchmark config.
+    _single = os.environ.get('PRISM_SINGLE_WORKER', '0') == '1'
+    if _single:
+        from pipeline.text_worker import TextOCRWorker as _OCRCls
+        from pipeline.math_worker_onnx import MathOCRWorkerOnnx as _MathCls
+    else:
+        from pipeline.text_worker import TextOCRWorkerDual as _OCRCls
+        from pipeline.math_worker_onnx import MathOCRWorkerOnnxDual as _MathCls
+
+    # PRISM_AFFINITY="0-7" (or "0,1,2,..") → pin the whole process tree to those
+    # logical cores; children inherit affinity, so this is the 8-thread-budget
+    # affinity pin used for the Windows sweeps. Set before workers spawn.
+    _aff = os.environ.get('PRISM_AFFINITY', '')
+    if _aff:
+        import psutil
+        cores = []
+        for tok in _aff.split(','):
+            tok = tok.strip()
+            if '-' in tok:
+                a, b = tok.split('-'); cores.extend(range(int(a), int(b) + 1))
+            elif tok:
+                cores.append(int(tok))
+        try:
+            psutil.Process().cpu_affinity(cores)
+            print(f'[*] CPU affinity pinned to {cores}')
+        except Exception as _e:
+            print(f'[!] affinity pin failed: {_e}')
+
+    ocr_worker = _OCRCls()
+    math_worker = _MathCls()
     tatr_worker = TATROnnxWorker()
-    print('[*] Starting workers...')
+    print(f'[*] Starting workers ({"single" if _single else "dual"}-worker)...')
     ocr_worker.start()
     math_worker.start()
     tatr_worker.start()
@@ -209,6 +237,15 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
         t0 = time.perf_counter()
         print(f'[>] {stem}')
 
+        _stage_on = os.environ.get('PRISM_STAGE_TIMING', '0') == '1'
+        _st = {}
+
+        def _mark(key, since):
+            now = time.perf_counter()
+            if _stage_on:
+                _st[key] = _st.get(key, 0.0) + (now - since)
+            return now
+
         try:
             work_dir = Path(pred_dir) / f'_tmp_{stem}'
             work_dir.mkdir(parents=True, exist_ok=True)
@@ -217,7 +254,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             figures_dir.mkdir(parents=True, exist_ok=True)
 
             # Stage 1: normalise (or bypass for ablation)
+            _tm = time.perf_counter()
             image_norm, image_fidelity, modality_result = _normalise_fn(img_path_str)
+            _tm = _mark('normalize', _tm)
             is_screenshot = (modality_result.modality == CaptureModality.SCREENSHOT) or (stem in (ppt_pages or set()))
             norm_path = str(assets_dir / 'normalized.png')
             image_norm.save(norm_path)
@@ -225,7 +264,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             # Stage 2: YOLO detection (raw onnxruntime by default; no torch)
             img_width, img_height = image_norm.width, image_norm.height
             # PP-DocLayout_plus-L is the sole layout detector.
+            _tm = time.perf_counter()
             detections = _layout_from_cache(stem, image_norm, image_fidelity, formula_from_fidelity, norm_path=norm_path)
+            _tm = _mark('layout', _tm)
             print(f'  [PPDL-LAYOUT] {len(detections)} boxes')
 
             detections = postprocess_detections(detections, img_width, img_height)
@@ -264,11 +305,32 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             is_cjk  = stem in (cjk_pages  or set())
             is_mixed = stem in (mixed_pages or set())
             workers = Workers(ocr=ocr_worker, math=math_worker, tatr=tatr_worker)
+            if _stage_on:
+                from pipeline import page_core as _pc
+                _pc.stage_times.clear()
+            _tm = time.perf_counter()
             document = build_document(
                 detections, img_width, img_height, workers, str(figures_dir),
                 is_screenshot=is_screenshot, is_cjk=is_cjk, is_mixed=is_mixed,
                 page_image=_rescue_page,
             )
+            _tm = _mark('build_document', _tm)
+            if _stage_on:
+                for _k, _v in _pc.stage_times.items():
+                    _st[_k] = _st.get(_k, 0.0) + _v
+            # Block-level sidecar dump (offline tuning of geometric filters):
+            # class/bbox/extracted text per detection, plus page dims.
+            if os.environ.get('PRISM_DUMP_BLOCKS', '0') == '1':
+                _blocks = [{'class': d.get('class_name'),
+                            'bbox': [round(float(v), 1) for v in d.get('bbox', [0, 0, 0, 0])],
+                            'read_order': d.get('read_order'),
+                            'raw': d.get('raw_content', '')}
+                           for d in detections]
+                (Path(pred_dir) / f'{stem}.blocks.json').write_text(
+                    _json.dumps({'w': img_width, 'h': img_height,
+                                 'blocks': _blocks}, ensure_ascii=False),
+                    encoding='utf-8')
+
             del image_norm, _rescue_page
             gc.collect()
 
@@ -312,6 +374,14 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
             elapsed = time.perf_counter() - t0
             _perf_latencies.append((stem, round(elapsed, 3)))
+            if _stage_on:
+                _st['total'] = round(elapsed, 3)
+                _st['assembly_other'] = round(
+                    elapsed - sum(v for k, v in _st.items()
+                                  if k in ('normalize', 'layout', 'build_document')), 3)
+                with open(Path(pred_dir) / '_stage_timing.jsonl', 'a', encoding='utf-8') as _sf:
+                    _sf.write(_json.dumps({'page': stem,
+                                           **{k: round(v, 3) for k, v in _st.items()}}) + '\n')
             print(f'    done in {elapsed:.1f}s → {md_path.name}')
 
         except Exception as e:
@@ -412,6 +482,8 @@ def _run_evaluation(config_path: str) -> None:
     eval_dir = str(EVAL_DIR)
     orig_cwd = os.getcwd()
     os.chdir(eval_dir)
+    if eval_dir not in sys.path:
+        sys.path.insert(0, eval_dir)
     try:
         sys.argv = ['pdf_validation.py', '--config', config_path]
         from src.cli import main as eval_main

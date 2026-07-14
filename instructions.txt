@@ -1,48 +1,366 @@
-You are working in the PRISM document parsing repo. Goal: close the results gaps that decide accept/reject for a WACV 2027 submission. An olmOCR-Bench evaluation run is CURRENTLY EXECUTING on this machine (CPU bound). Do not disrupt it and do not measure anything latency sensitive while it runs.
+1) I need two statistics extracted from the recognition-verified normalization experiment 
+for a WACV submission. Both come from runs that already exist. Do not re-run the OCR.
 
-## Hard constraints (violating any of these invalidates results)
-1. Identify the running olmOCR-Bench process, its PID, its output directory, and its core usage. Do NOT kill, restart, renice it downward, or write into its output directory. Poll for its completion.
-2. Do NOT modify the OmniDocBench or olmOCR-Bench scoring harness, the matcher config, or the metric definitions. You may extract per page granularity from harness output, but the numbers must come from the unmodified metric.
-3. No fabricated or estimated numbers anywhere. Every number that lands in a table must be traceable to a logged run. If a result weakens the paper, surface it plainly with the numbers, do not massage it.
-4. Do all work on a new git branch. Never overwrite existing result logs or the current LaTeX tables in place; write new versions and diff them.
-5. Append every configuration change and its measured effect to the existing cumulative experiment log (find it first). Keep the format consistent.
+CONTEXT
+The synthetic-defect study evaluates 3 arms (none / open-loop / verified) across 5 
+conditions (clean, shadow, glare, tungsten cast, shadow+cast) on 40 text-heavy pages 
+(20 EN / 20 ZH). Current reported table has only point estimates:
 
-## Phase 0: inventory and report (do this first, no heavy compute)
-Produce a STATUS.md at repo root answering:
-- The exact harness invocation used for the paper's v1.6 numbers, the harness version, and the TeX Live version.
-- Whether the harness emits or can dump per page component scores (Text edit, CDM, TEDS, Order). This is required for bootstrap CIs. If it only emits aggregates, find where per page scores exist upstream and plan to collect them WITHOUT changing the metric.
-- The config system that produces the cumulative Table 9 stages. How is the final v20 config assembled? Can individual components be disabled to build leave one out variants?
-- Which baselines are installed or runnable: MinerU pipeline, Marker, PP-StructureV3. What is missing.
-- Which datasets are present locally: OmniDocBench v1.6, the Fox set, any photographed/camera capture document set, the 44 uncontrolled captures referenced in Sec 4.6.
-- How thread count is controlled for onnxruntime (intra_op_num_threads, OMP_NUM_THREADS) and whether CPU affinity restriction is available on this OS.
-1b. Set up MinerU pipeline and Marker for a same harness accuracy re-run. Run their INFERENCE on the Vast.ai RTX 6000 Ada box so local CPU stays free for the olmOCR job. Accuracy is provider independent, so GPU inference for the accuracy composite is fine and does not contaminate the same harness provenance claim. Score the outputs with the identical harness + TeX Live 2026 you found in Phase 0. Do NOT measure MinerU/Marker latency here; CPU latency for Table 3 is a Phase 2 task on this machine.
+            none    open    verified
+clean       0.177   0.184   0.185
+shadow      0.181   0.185   0.188
+glare       0.187   0.197   0.199
+tungsten    0.187   0.183   0.185
+shadow+cast 0.180   0.185   0.187
 
-1c. Build leave one out ablation configs from the final v20 config: one variant each with formula geometry disabled, native reading order disabled (fall back to geometric stack), verified normalization disabled, inline math splicing disabled, class aware detection gates disabled. Hold everything else at final. Do not run yet.
+TASK A: BOOTSTRAP CONFIDENCE INTERVALS
+1. Locate the raw per-block or per-page OCR edit distances behind those 15 cell means.
+   Find where they are cached (JSON/CSV/pickle). If only aggregate means were saved and 
+   the per-page values are gone, tell me immediately and stop - do NOT fabricate them or 
+   re-run anything without asking.
+2. Reduce to per-PAGE mean edit distance so each cell is an array of length 40.
+3. For each of the 15 cells, compute a 95% bootstrap CI by resampling the 40 pages with 
+   replacement, 10000 iterations, fixed seed:
 
-1d. Prepare the thread capped latency harness: same machine, PRISM final build, with thread count set to 4, 8, 16 via onnxruntime intra op threads plus OMP_NUM_THREADS plus affinity restriction where available. Do not run yet.
+   rng = np.random.default_rng(0)
+   idx = rng.integers(0, 40, size=(10000, 40))
+   means = x[idx].mean(axis=1)
+   lo, hi = np.percentile(means, [2.5, 97.5])
 
-1e. Prepare a full benchmark end to end verified vs open loop vs none normalization run config (extends the 40 page block level Sec 4.6 study to the full 1651 page composite, end to end). Do not run yet.
+   IMPORTANT: resample PAGES, not blocks, and use the SAME resampled page indices across 
+   all three arms within a condition (paired bootstrap). The arms are evaluated on 
+   identical pages, so pairing is correct and gives tighter, honest intervals.
+4. Additionally compute, for each condition, the paired bootstrap CI on the DIFFERENCE 
+   (verified - none) and (verified - open). This is the number that actually matters: 
+   if those CIs straddle zero, the arms are statistically indistinguishable.
+5. Output a LaTeX-ready table with mean [lo, hi] per cell, and a separate small table of 
+   the paired differences with their CIs.
 
-1f. Mechanical fixes, safe now:
-   - Export the real v19/v20 benchmark page crops that replace the Figure 3 placeholder ("replace with exported benchmark page regions").
-   - Add an N column (count of scorable instances per category) to Tables 11, 12, 13 by counting from existing harness output. Flag any category with very small N (for example historical document at 0.560) so it reads as localized, not hidden.
-   - Recover the truncated TEDS column in Table 9.
+TASK B: PROBE ACCEPTANCE RATE
+1. Find where the recognition-verification gate makes its accept/reject decision (the 
+   DBNet probe scoring confident-text surface before/after, kept only if score improves 
+   >= 2%). Search for the threshold constant.
+2. Instrument it to log every proposal: page id, page class (clean benchmark page vs 
+   camera capture), correction type (glare inpaint / shadow flatten / rectify / contrast), 
+   probe score before, probe score after, accepted bool.
+3. Run the gate ONLY (no full parse - just preprocessing + probe) over:
+   (a) the 40 synthetic-defect pages in all 5 conditions
+   (b) the 44 uncontrolled camera captures
+   (c) a sample of ~200 clean OmniDocBench pages
+4. Report for each group: total proposals generated, number accepted, rejection rate, and 
+   a breakdown by correction type. I specifically need the sentence "on clean benchmark 
+   pages the probe rejects XX% of the corrections it is offered."
+5. Also report the distribution of probe score ratios (after/before) for rejected vs 
+   accepted proposals, so I can state the separation.
 
-## Phase 2: measurements, ONLY after the olmOCR-Bench run completes (exclusive clean CPU)
-Poll until the running job exits. Then, in this order, one at a time, nothing else consuming CPU during latency runs:
+Report actual numbers. If a number cannot be recovered from existing artifacts, say so 
+explicitly rather than estimating.
 
-2a. Populate the olmOCR-Bench PRISM row (Table 6) from the finished run. This is the highest priority result; the empty row is currently a reject on its own. Report the full per category pass rates with the 95 percent bootstrap CI.
-2b. Feed real per page scores into the 1a bootstrap script and produce the PRISM minus MinerU composite CI. Write the verdict.
-2c. Latency vs thread count curve (4/8/16), clean, median and tail per page. Then, if the Vast.ai or a cloud 4 vCPU 8 GB instance is reachable, one honest low core low RAM datapoint (real machine, not thread capped) since memory bandwidth differs from thread capping. Report both and label which is simulated.
-2d. Table 3 refresh: current PRISM build on a larger page set, same machine, adding MinerU and Marker CPU latency and peak RAM. This CPU vs CPU comparison against the systems the paper is actually about is the money table and is currently missing.
-2e. Leave one out ablations (1c), full harness each. Warn me before starting: each full run is roughly 2.5 to 3 hours single stream, so five variants is most of a day or overnight. If I approve a fixed representative subset instead of full runs to save time, use the SAME subset for all variants and label the table as subset based, not comparable to the full Table 9.
-2f. Full benchmark verified vs open vs none end to end (1e). If the verified loop does not move the full composite, say so bluntly: that is the signal to demote recognition verified normalization from a headline contribution to a secondary one rather than defend it on 8 rescues.
 
-## Deliverables
-- Updated STATUS.md with every verdict, including the ones that hurt.
-- New LaTeX table files for Tables 3, 6, 9, 11 to 13, and the Figure 3 crops, on the branch, diffed against current.
-- The cumulative experiment log appended with all Phase 2 runs.
-- A short RESULTS_SUMMARY.md: for each of the tasks above, the number, whether it strengthens or weakens the paper, and the one line implication for the submission.
-Two blunt execution notes:
-The compute math is not trivial. olmOCR-Bench on 1403 PDFs, five full leave one out runs at ~2.7 hours each, the full benchmark normalization run, and MinerU/Marker scoring is on the order of a full day or two of wall clock even with the GPU offload. Decide before you start whether ablations run full (comparable to Table 9, honest, slow) or on a fixed subset (fast, but you must relabel Table 9 context or reviewers will notice the mismatch). Do not mix.
-The prompt will hit real decision points at the Phase 0 checkpoint: whether MinerU/Marker are actually installed, whether any camera capture set exists, whether the harness dumps per page scores. If the harness only emits aggregates, the bootstrap CI (your crux statistic) needs per page extraction, and that is the one place Claude Code might be tempted to touch scoring code. Watch that it extracts granularity without altering the metric, or the "indistinguishable from MinerU" number becomes unciteable.
+2) Build a publication-quality 4-panel figure for a WACV 2027 submission showing the 
+deterministic formula geometry layer ("formula v2") operating on a REAL example from 
+OmniDocBench. This is the paper's largest deterministic gain (+21.2 CDM, zero added 
+parameters) and is currently described only in prose.
+
+SELECT THE EXAMPLE
+Search the OmniDocBench v1.6 predictions for a Formula detection box that exercises 
+MULTIPLE stages of the geometry layer at once. Ideal candidate:
+  - multi-line derivation (so row-band splitting fires)
+  - contains at least one fraction (so fraction-bar fusion fires)
+  - ideally has a trailing equation number (so trimming fires)
+  - decodes correctly in the final build
+Print 5-10 candidate page ids + box coords with a one-line description of which stages 
+fire, and let me pick before you render. Do not pick a toy or synthetic formula - it must 
+be a real crop from the benchmark.
+
+PANELS (left to right, single row, or 2x2 if aspect ratio demands)
+(a) RAW DETECTION: the original page crop with the PP-DocLayoutV3 Formula box drawn. 
+    Caption the box with its confidence score.
+(b) INK PROJECTION: the Otsu-binarized crop with the horizontal ink-mass projection 
+    plotted alongside (rotated 90deg so it aligns with rows). Mark the detected row-band 
+    split points with horizontal lines. Annotate the gap threshold max(6px, 0.25*band 
+    height). Show at least one gap that was NOT split because a vertical ink bridge 
+    spanned it (matrix/tall delimiter case) - annotate that too if the example has one.
+(c) FUSION AND TRIMMING: show the resulting bands as colored overlays. Highlight the 
+    fraction-bar triple that got re-fused (numerator / bar / denominator merged into one 
+    band) in a distinct color. If an equation number was trimmed, show it struck through 
+    or greyed.
+(d) FINAL OUTPUT: the recognized LaTeX rendered (compile it, don't just print the source), 
+    with the raw LaTeX string shown in monospace beneath. Optionally show the naive 
+    baseline output (whole box decoded without the geometry layer) alongside it so the 
+    contrast is visible - if you can cheaply produce that by disabling the geometry layer 
+    for this one crop, do it, it makes the figure argue for itself.
+
+STYLE REQUIREMENTS (WACV / CVF camera-ready standard)
+- matplotlib, vector output, save as PDF (not PNG) so it stays sharp under zoom
+- fits a single column (3.25in) OR full text width (6.9in) - build the full-width version, 
+  I'll decide placement
+- font: match the paper body, ~8pt for annotations, no font smaller than 6pt
+- colorblind-safe palette, no red/green as the only distinguishing channel
+- panel labels (a)(b)(c)(d) in bold, top-left of each panel
+- no chartjunk, no gridlines, no titles inside panels (the caption carries the text)
+- tight_layout / constrained_layout, minimal whitespace - space is at a premium
+- Every annotation must be legible when the figure is printed at actual size on paper. 
+  Assume a reviewer prints in greyscale.
+
+Save to figures/formula_geometry.pdf and also dump the intermediate arrays so I can 
+regenerate without re-running detection.
+
+3) Build a publication-quality qualitative figure for a WACV 2027 submission showing the 
+recognition-verification gate accepting and rejecting photometric corrections on REAL 
+camera captures. This figure defends the paper's title mechanism, so it must be honest 
+and must include a case where the gate REJECTS a correction.
+
+SOURCE
+The 44 uncontrolled defect captures (hand shadows, tungsten lamps, page curl, deep corner 
+shadows, receipts). Find where these live.
+
+SELECT 4-6 ROWS. Required cases (search the probe logs to find them):
+  1. HAND SHADOW, REJECTED: the page where the shadow-divide's background estimate 
+     contained text ink and the probe rejected with a ~7x score drop. This is the money 
+     row - it shows the gate preventing damage that an open-loop stack would ship.
+  2. RECEIPT / EMPTY-TO-READABLE: a capture whose end-to-end output was previously empty 
+     and became fully readable. 
+  3. ACCEPTED SHADOW FLATTEN: one of the 8 pages that pixel-statistics routing 
+     misclassified as clean but the probe correctly accepted correction on.
+  4. CLEAN PAGE / SLIDE, REJECTED: a benchmark slide with a strong background gradient 
+     that scores HIGH on shadow statistics (the paper claims up to 0.60 dimming, higher 
+     than genuine shadows at 0.06-0.29) but which the probe correctly leaves alone. This 
+     is the inseparability argument made visual.
+  5-6. Optional: glare inpainting case, page-curl/rectification case.
+
+Print the candidate page ids with their probe scores before/after and the accept/reject 
+decision, and let me confirm the selection before rendering.
+
+LAYOUT
+Rows = captures. Columns:
+  (1) RAW capture (downscaled, but keep enough resolution that the defect is visible)
+  (2) OPEN-LOOP output (correction applied unconditionally)
+  (3) VERIFIED output (what PRISM actually uses - which for rejections is identical to 
+      column 1; make that visually explicit rather than confusing)
+Beneath or beside each row: a short OCR text excerpt (10-15 words) from each arm, with 
+character errors highlighted, so the reader can SEE that the open-loop correction damaged 
+the text in the rejection cases.
+Annotate each row with the probe score ratio and a clear ACCEPTED / REJECTED badge.
+
+CRITICAL HONESTY CONSTRAINT
+Do not cherry-pick only wins. The figure must show at least one case where correction 
+genuinely helps (accepted) and at least one where it would have hurt (rejected). If the 
+probe made a WRONG call anywhere in the 44 captures, tell me - I would rather know and 
+decide whether to show it than have a reviewer find it.
+
+STYLE (WACV / CVF camera-ready standard)
+- full text width (6.9in), vector PDF where possible (images will raster, that's fine, 
+  but keep them >=150 DPI at final print size)
+- crop tightly to the informative region of each page; do not show acres of background
+- consistent image scale within a column
+- 8pt annotations minimum, colorblind-safe, legible in greyscale print
+- badges/labels must not obscure the document content they annotate
+
+Save to figures/camera_verification_grid.pdf
+
+4) Build a small honest failure-mode figure for a WACV 2027 submission, to sit next to the 
+Limitations section. Reviewers trust papers that show their own failures; this figure 
+exists to make the paper's stated boundary concrete rather than to hide anything.
+
+SOURCE
+The final v20 OmniDocBench v1.6 predictions vs ground truth. The paper localizes the 
+residual gap to specific capacity-bound cells:
+  - dense newspaper stock listings (three-column TEDS 57.1, newspaper TEDS 67.9)
+  - handwritten / note-page formulas (note CDM 73.5 vs 91.2 on printed exams)
+  - simplified-Chinese embedded formulas (CDM 77.0 vs 90.9 English)
+  - old scans / degraded type (olmOCR-Bench old-scans 20.2)
+
+SELECT 3 CASES, one per failure class, choosing the ones that are most DIAGNOSTIC (i.e. 
+where the failure mode is visually obvious and clearly attributable to recognizer capacity 
+rather than to a bug):
+  1. Dense agate newspaper table where structure is partly recovered but cell content 
+     degrades. Find a low-TEDS table and print its per-table score.
+  2. Handwritten or CJK-embedded formula where the 20M Texo recognizer produces wrong 
+     symbols. Print its CDM.
+  3. An old-scan / degraded-type page where a character-level slip costs a unit test but 
+     almost no edit distance (the paper cites "demanded" -> "demsded" - find the real 
+     instance or an equivalent).
+
+Print candidates with their scores first, let me confirm.
+
+LAYOUT
+Per case, side by side:
+  (left) the input page/crop region
+  (right) PRISM's output rendered, with the errors highlighted against ground truth 
+          (diff-highlight the wrong characters/cells in a muted color)
+  Below: one line stating the metric value and the attributed cause, e.g. 
+  "TEDS 0.31 - structure recovered, cell content lost to 6pt type at 200 DPI"
+
+The point of the figure is to show these are RECOGNITION-capacity failures, not 
+orchestration failures. If any of the three cases turns out to actually be an 
+orchestration or assembly bug rather than a capacity limit, TELL ME - that's a bug 
+I should fix before submission, not a limitation I should illustrate.
+
+STYLE (WACV / CVF camera-ready standard)
+- single column (3.25in) preferred so it can sit inside the Limitations section; build 
+  single-column, tell me if it's illegible and needs full width
+- vector PDF, >=150 DPI for rastered page images at final print size
+- 8pt minimum annotations, colorblind-safe, greyscale-legible
+- tight crops, no wasted whitespace
+
+Save to figures/failure_gallery.pdf
+
+5) Build the efficiency frontier figure for a WACV 2027 submission. This is the paper's 
+central visual argument: PRISM occupies a region of the accuracy/size plane that no other 
+system reaches. All data already exists - no new experiments.
+
+DATA: OmniDocBench v1.6 full, from Table 1 of the paper.
+  System            Type            Weights   Overall
+  MinerU2.5-Pro     VLM 1.2B        2.4 GB    95.75
+  PaddleOCR-VL      VLM 0.9B        1.8 GB    94.18
+  dots.ocr          VLM 3B          6 GB      90.77
+  PRISM (ours)      Pipeline CPU    0.25 GB   86.62
+  MinerU-Pipeline   Pipeline GPU    ~2 GB     86.47
+  olmOCR            VLM 7B          14 GB     85.74
+  Nanonets-OCR-s    VLM 3B          6 GB      83.61
+  POINTS-Reader     VLM 3B          6 GB      83.37
+  Marker            Pipeline GPU    ~3 GB     78.44
+  (Exclude API-only models - Gemini, GPT-5.2, Mistral OCR - they have no weight figure. 
+   Note their exclusion in the caption.)
+  Also include the sub-300M CPU VLMs from Table 3 if you can source an OmniDocBench-
+  comparable Overall for them; if not, omit and say so.
+
+DESIGN
+- X: model weights, LOG scale (0.1 GB to 20 GB). Y: Overall score.
+- Marker SHAPE encodes hardware: filled circle = GPU required, square = CPU-only.
+- Marker COLOR encodes family: VLM vs pipeline.
+- PRISM drawn larger, in a distinct accent color, clearly labeled.
+- Draw the Pareto frontier as a stepped line through the non-dominated points 
+  (maximizing accuracy, minimizing weights). Verify PRISM is actually ON the frontier 
+  before drawing it - if it is dominated by something, tell me immediately, do not hide it.
+- Shade or bracket the region "within 10x of PRISM's weight budget" (0.025 to 2.5 GB) and 
+  make visible that PRISM is the highest-accuracy system in that band by a wide margin.
+- Label every point with its system name; use adjustText or manual offsets so labels do 
+  not collide.
+- Optionally encode latency as marker size, but ONLY if you have same-machine latency for 
+  every point - do not mix measured and reported latency. If you cannot, drop the 
+  encoding rather than faking it.
+
+STYLE (WACV / CVF camera-ready standard)
+- matplotlib, vector PDF, single column (3.25in) - build single-column first, tell me if 
+  the labels are illegible and it needs full width
+- 8pt fonts, colorblind-safe, greyscale-legible (shape must carry the CPU/GPU distinction 
+  independent of color)
+- no gridlines beyond faint log-scale minor ticks
+Save to figures/efficiency_frontier.pdf
+
+6) Run a latency vs thread-count scaling sweep for PRISM on the Windows machine and produce 
+both the numbers and a publication-quality figure for a WACV 2027 submission.
+
+WHY THIS MATTERS: PRISM is the only CPU-only system in the comparison, so it is the only 
+one that can report this. A deployment reader wants to know what happens on the 4-core 
+office machine they actually own, not the 16-core dev box.
+
+SETUP
+- Same 16-logical-core Windows 11 machine, onnxruntime, CPU only.
+- Use affinity pinning to restrict the process tree to N logical cores, for 
+  N in {1, 2, 4, 6, 8, 12, 16}.
+- Set the onnxruntime intra-op thread count to match N (do not let it oversubscribe the 
+  pinned core set - verify with a sanity check that the process is actually using only 
+  N cores, e.g. via perf counters, before trusting the numbers).
+- Use a FIXED representative subset of OmniDocBench v1.6 - I suggest ~100 pages stratified 
+  across document types so the formula-heavy and table-heavy tails are represented. Use 
+  the SAME pages at every thread count. Print which pages you selected.
+- Single-worker configuration (not the dual-worker benchmark config) so the measurement 
+  is interpretable.
+- 3 repeats per thread count. Report mean and stdev.
+
+MEASURE per thread count
+- median, mean, p90, p99 latency per page
+- peak RSS
+- accuracy on the subset (Overall composite) - to CONFIRM it is invariant to thread count. 
+  If accuracy shifts with thread count, that is a nondeterminism bug and I need to know 
+  immediately.
+
+ALSO: stage breakdown at N=4 and N=16
+  Time spent in layout detection / OCR / formula decode / table / assembly. This tells the 
+  reader which stage is the bottleneck at low core counts.
+
+FIGURE
+- X: thread count (log2 or linear). Y: median latency per page, with p90 as a shaded band.
+- Overlay a dashed ideal-scaling line (latency at N=1 divided by N) so the reader sees 
+  where scaling saturates and by how much.
+- Annotate the 4-core point explicitly - that is the deployment-relevant number.
+- Single column, vector PDF, 8pt fonts, colorblind-safe, greyscale-legible.
+Save to figures/thread_scaling.pdf and dump the raw numbers as CSV.
+
+Report the actual numbers. If scaling saturates badly (e.g. no gain past 8 threads), say 
+so plainly - that is a real finding about the pipeline's parallelism and I would rather 
+report it honestly than discover it in review.
+
+7)Ablate the recognition-verification gate at the two sites where it has never been measured. 
+This is the highest-priority experiment for a WACV 2027 submission: the paper's title is 
+"Verification-Gated Orchestration" and claims the gate is the system's organizing 
+principle recurring at three sites, but only ONE (photometric preprocessing) has a 
+controlled measurement, and that one currently looks unfavorable.
+
+THE THREE SITES (per the paper):
+  1. Photometric preprocessing - probe-verified corrections   [already measured]
+  2. Formula OOD routing - the CJK escape hatch, where a formula crop is probed with line 
+     OCR and if it reads >=2 confident CJK characters, PRISM emits OCR-derived LaTeX 
+     instead of decoding with Texo                            [NOT measured]
+  3. Empty-page rescue - if assembled body has <30 content characters, the full normalized 
+     page is OCR'd as a single block                          [NOT measured]
+
+RUNS (each a full 1651-page OmniDocBench v1.6 run, official harness, identical build 
+otherwise, CPU-only, same hardware):
+  A. Full system (should reproduce 86.62 - verify it does before trusting anything else; 
+     if it does not reproduce, STOP and tell me, we have a nondeterminism problem)
+  B. CJK escape hatch DISABLED (always decode formulas with Texo, never route to OCR)
+  C. Empty-page rescue DISABLED (no whole-page OCR fallback)
+  D. Both disabled
+
+For each run report: Overall, Text edit, CDM, TEDS, Order edit. Also report the 
+per-language breakdown for run B (the CJK hatch should show up almost entirely in 
+simplified_chinese CDM) and the count of pages affected by run C (the paper says empty-page 
+rescue fires on pathological pages; I want to know on how many of the 1651 it actually 
+fires, and what those pages score with and without it).
+
+ALSO INSTRUMENT: how often does each gate FIRE?
+  - CJK hatch: of all formula crops on CJK pages, what fraction get routed to OCR?
+  - Empty-page rescue: how many of 1651 pages trigger it?
+
+DELIVERABLE: a LaTeX table with rows A-D and the delta from full system, plus the firing 
+rates. This lets the paper state "the verification gate is worth +X composite overall" 
+with three measured sites instead of one.
+
+HONESTY REQUIREMENT: if disabling a gate IMPROVES the score, report that plainly. If the 
+gate is worth nothing, I need to know before a reviewer tells me - it would mean 
+restructuring the paper's central claim, and it is far better to find that out now.
+
+8) Run a sensitivity sweep on PRISM's per-class detection confidence gates for a WACV 2027 
+submission. The purpose is defensive: the paper currently reports gates of 0.30 (formulas) 
+/ 0.50 (all other classes) with no evidence that these were not tuned on the test set. A 
+reviewer will raise this. Showing the composite is FLAT across a broad plateau removes the 
+objection.
+
+SWEEP
+- Formula gate: {0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50}
+- Other-class gate: {0.30, 0.40, 0.45, 0.50, 0.55, 0.60, 0.70}
+- Run the cross product if affordable; if not, sweep each axis independently holding the 
+  other at its reported value, and say so.
+- Full 1651-page OmniDocBench v1.6, official harness, CPU, identical build otherwise.
+- Report Overall / Text / CDM / TEDS / Order for every configuration.
+
+WHAT I EXPECT AND WHAT WOULD WORRY ME
+The paper's argument is that formula false negatives are catastrophic (region gets OCR'd 
+as garbled text) while formula false positives are cheap, hence the asymmetric gate. If 
+that is right, the composite should be relatively flat over a wide formula-gate range and 
+degrade sharply only at high thresholds.
+
+If instead the composite has a SHARP PEAK exactly at 0.30/0.50, tell me immediately. That 
+would mean the gates ARE overfit to the benchmark and the honest move is to report the 
+sensitivity curve and soften the claim, not to bury it.
+
+DELIVERABLE
+- A small figure: composite vs threshold, one line per gate, with the reported operating 
+  point marked. Single column, vector PDF, 8pt, colorblind-safe, greyscale-legible.
+- A one-line summary I can put in the paper: "the composite varies by less than X points 
+  across formula gates in [a, b] and other-class gates in [c, d]."
+Save to figures/threshold_sensitivity.pdf

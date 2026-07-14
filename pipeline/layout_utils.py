@@ -516,6 +516,160 @@ def split_detections_by_column(
     return full_width, left_col, right_col
 
 
+_FIDELITY_BODY_CLASSES = {"Text", "List-item", "Section-header", "Caption"}
+
+
+def detect_columns_fidelity(
+    detections: List[Dict[str, Any]],
+    image_width: int,
+    image_height: int = 0,
+) -> tuple:
+    """Robust column detector for VISUAL-FIDELITY output.
+
+    Unlike detect_column_count() (whitespace-gutter + centroid heuristics tuned
+    to fire conservatively for benchmark reading-order), this clusters the LEFT
+    EDGES of body-text boxes. Column starts align almost perfectly (a 3-column
+    page has left edges tightly grouped at e.g. x≈77/437/796), so left-edge
+    clustering is far more reliable than centroids (which a non-full-width
+    title/headline pollutes) or gutters (which dense text fills).
+
+    Method: find vertical whitespace gutters over the NARROW body boxes only
+    (excluding full-width titles/banners/figures). This is the key: a spanning
+    title fills the gutter and hides it (which is exactly why the benchmark
+    detector reports "1 column" on a 3-column IRS form), so those boxes must be
+    removed before looking for the gutter. A genuine 2/3-column page then shows
+    clean empty vertical corridors; a single-column page whose paragraphs merely
+    start at different x has overlapping x-spans (once unioned) and NO empty
+    corridor, so it correctly stays 1 column.
+
+    Returns (n_cols, col_lefts) where col_lefts is the sorted list of the
+    representative left-edge x-position (pixels) of each detected column.
+    n_cols == 1 (col_lefts == []) means "not multi-column — use the normal path".
+    """
+    if image_width == 0 or not detections:
+        return 1, []
+    W = image_width
+    # Body boxes narrower than half the page.  The lower bound (5% width) drops
+    # margin artefacts — line-number bars, rotated side labels, stray slivers —
+    # that would otherwise seed a phantom column at the page edge.
+    narrow = [d for d in detections
+              if d['class_name'] in _FIDELITY_BODY_CLASSES
+              and 0.05 * W <= (d['bbox'][2] - d['bbox'][0]) < 0.5 * W]
+    if len(narrow) < 3:
+        return 1, []
+
+    # Coverage histogram over the narrow body boxes only.  A genuine multi-column
+    # page shows tall content plateaus separated by sharp corridors that dip to
+    # (near) zero coverage.  Those corridors can be razor-thin — a single 0.5%
+    # bin — because the detector's bboxes fill nearly the whole column width, so
+    # the fixed 1.5% floor in _find_gutters() misses them.  Here we instead look
+    # for INTERIOR corridors: runs of (near-)zero coverage that lie strictly
+    # between the first and last covered bin.  Margin whitespace falls outside
+    # that content span and is ignored automatically, and a single-column page
+    # (whose unioned x-spans leave no interior corridor) correctly stays 1.
+    BIN_COUNT = 200
+    cov = np.zeros(BIN_COUNT, dtype=int)
+    for d in narrow:
+        x1, _, x2, _ = d['bbox']
+        l = max(0, int(x1 / W * BIN_COUNT))
+        r = min(BIN_COUNT - 1, int(x2 / W * BIN_COUNT))
+        if l <= r:
+            cov[l:r + 1] += 1
+
+    covered = np.nonzero(cov > 0)[0]
+    if covered.size == 0:
+        return 1, []
+    c_lo, c_hi = int(covered[0]), int(covered[-1])
+
+    def _interior_boundaries(max_cov: int) -> List[float]:
+        bnds: List[float] = []
+        in_run = False
+        r_start = 0
+        for i in range(c_lo + 1, c_hi):        # strictly interior to content
+            if cov[i] <= max_cov and not in_run:
+                in_run, r_start = True, i
+            elif cov[i] > max_cov and in_run:
+                in_run = False
+                bnds.append((r_start + i - 1) / 2 / BIN_COUNT * W)
+        return bnds
+
+    boundaries = _interior_boundaries(0) or _interior_boundaries(1)
+    if not boundaries:
+        return 1, []
+
+    n = len(boundaries) + 1
+    cols: List[List[Dict[str, Any]]] = [[] for _ in range(n)]
+    for d in narrow:
+        xc = (d['bbox'][0] + d['bbox'][2]) / 2
+        ci = sum(1 for b in boundaries if xc > b)
+        cols[min(ci, n - 1)].append(d)
+
+    # Keep non-empty columns.  A real multi-column page may leave one side with a
+    # single body box (the other side being a figure/table/full-width caption),
+    # so we do not demand >= 2 per column; instead we require >= 2 columns AND >= 3
+    # body boxes total, and rely on the band-overlap check below to reject a
+    # single-column page that happened to split on a spurious corridor.
+    kept = [c for c in cols if len(c) >= 1]
+    if len(kept) < 2 or sum(len(c) for c in kept) < 3:
+        return 1, []
+
+    # Validation: adjacent columns must occupy roughly non-overlapping x-bands.
+    # A single-column page split on a spurious corridor would produce columns
+    # whose bands interleave heavily — reject those.
+    kept.sort(key=lambda c: np.median([d['bbox'][0] for d in c]))
+    tol = 0.04 * W
+    for a, b in zip(kept, kept[1:]):
+        a_right = float(np.median([d['bbox'][2] for d in a]))
+        b_left  = float(np.median([d['bbox'][0] for d in b]))
+        if a_right > b_left + tol:
+            return 1, []
+
+    col_lefts = sorted(min(d['bbox'][0] for d in c) for c in kept)
+    return min(len(kept), 6), col_lefts
+
+
+def split_detections_fidelity(
+    detections: List[Dict[str, Any]],
+    n_cols: int,
+    col_lefts: List[float],
+    image_width: int,
+    image_height: int = 0,
+) -> tuple:
+    """Assign detections to (top_full, columns, bottom_full) for fidelity render.
+
+    - A box wider than ~1.7× the typical column width (or ≥55% page width) spans
+      columns → it is "full width" (title, abstract banner, page-wide figure).
+    - Every other box joins the column whose representative left edge is nearest
+      its own left edge (left edges align tightly, so this is unambiguous).
+    - Full-width boxes above the first column line render as a full-width header
+      block; the rest render full-width after the columns.
+    """
+    W = image_width
+    cand_w = [d['bbox'][2] - d['bbox'][0] for d in detections
+              if d['class_name'] in _FIDELITY_BODY_CLASSES
+              and (d['bbox'][2] - d['bbox'][0]) < 0.55 * W]
+    typ = float(np.median(cand_w)) if cand_w else 0.30 * W
+    span_thr = max(0.55 * W, 1.7 * typ)
+
+    full: List[Dict] = []
+    columns: List[List[Dict]] = [[] for _ in range(n_cols)]
+    for d in detections:
+        x1, _, x2, _ = d['bbox']
+        if (x2 - x1) >= span_thr:
+            full.append(d)
+        else:
+            ci = min(range(n_cols), key=lambda i: abs(x1 - col_lefts[i]))
+            columns[ci].append(d)
+
+    columns = [sort_detections_geometric(c) if c else c for c in columns]
+
+    col_top = min((d['bbox'][1] for c in columns for d in c), default=0.0)
+    band = 0.02 * image_height
+    top = sort_detections_geometric([d for d in full if d['bbox'][3] <= col_top + band])
+    bottom = sort_detections_geometric([d for d in full if d['bbox'][3] > col_top + band])
+    return top, columns, bottom
+
+
 def split_detections_n_columns(
     detections: List[Dict[str, Any]],
     image_width: int,

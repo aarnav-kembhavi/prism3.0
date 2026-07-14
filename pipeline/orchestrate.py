@@ -107,7 +107,8 @@ def run_detection(image_norm: Image.Image, image_fidelity: Image.Image, image_pa
         # Detect down to the class-specific gates (Formula/Table 0.30,
         # validated); everything else still requires the 0.50 base.
         _tbl_conf = float(os.environ.get('PRISM_PPDL_TBL_CONF', '0.50'))
-        for d in det.detect(image_path, conf=min(0.50, _PPDL_FORMULA_CONF, _tbl_conf)):
+        _base_conf = float(os.environ.get('PRISM_PPDL_BASE_CONF', '0.50'))
+        for d in det.detect(image_path, conf=min(_base_conf, _PPDL_FORMULA_CONF, _tbl_conf)):
             class_name = d['class_name']; confidence = d['confidence']
             x1, y1, x2, y2 = d['bbox']
             if class_name in MATH_CLASSES:
@@ -116,7 +117,7 @@ def run_detection(image_norm: Image.Image, image_fidelity: Image.Image, image_pa
             elif class_name in TABLE_CLASSES:
                 if confidence < _tbl_conf:
                     continue
-            elif confidence < 0.50:
+            elif confidence < _base_conf:
                 continue
             if class_name in IMAGE_CLASSES:
                 crop = xyxy_to_pil_crop(image_fidelity, [x1, y1, x2, y2])

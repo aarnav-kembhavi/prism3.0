@@ -152,7 +152,8 @@ def _sauvola_binarize(gray_np: np.ndarray, window: int = 31, k: float = 0.2, R: 
 
 def _preprocess_crop(crop: Image.Image, is_screenshot: bool) -> np.ndarray:
     border   = 10 if is_screenshot else 30
-    max_side = 960 if is_screenshot else 1500
+    max_side = (int(os.environ.get('PRISM_OCR_MAX_SIDE_SS', '960')) if is_screenshot
+                else int(os.environ.get('PRISM_OCR_MAX_SIDE', '1500')))
 
     if is_screenshot:
         result = crop.convert('RGB')
@@ -293,8 +294,9 @@ def _worker_main(conn):
         pass
 
     from rapidocr_onnxruntime import RapidOCR
-    base_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
-    cjk_kwargs = dict(det_limit_type='max', det_limit_side_len=1280)
+    _det_limit = int(os.environ.get('PRISM_DET_LIMIT', '1280'))
+    base_kwargs = dict(det_limit_type='max', det_limit_side_len=_det_limit)
+    cjk_kwargs = dict(det_limit_type='max', det_limit_side_len=_det_limit)
 
     # PP-OCRv6-small det+rec (unified charset, reads its dict from ONNX
     # metadata). Block-level A/B vs the v4 stack on 1354 GT text blocks:
@@ -353,7 +355,7 @@ def _worker_main(conn):
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             engine = _get_engine('en', is_screenshot)
             results = [''] * len(crops)
-            chunk_size = 20
+            chunk_size = int(os.environ.get('PRISM_STITCH_CHUNK', '20'))
             for start in range(0, len(crops), chunk_size):
                 chunk = processed[start:start + chunk_size]
                 per_crop = _stitch_and_run(engine, chunk)
@@ -370,7 +372,7 @@ def _worker_main(conn):
                 processed = list(exe.map(lambda c: _preprocess_crop(c, is_screenshot), crops))
             engine = _get_engine('cjk', is_screenshot)
             results = [''] * len(crops)
-            chunk_size = 20
+            chunk_size = int(os.environ.get('PRISM_STITCH_CHUNK', '20'))
             for start in range(0, len(crops), chunk_size):
                 chunk = processed[start:start + chunk_size]
                 per_crop = _stitch_and_run(engine, chunk)
@@ -393,7 +395,7 @@ def _worker_main(conn):
             cjk_engine = _get_engine('cjk', is_screenshot)
             en_results  = [''] * len(crops)
             cjk_results = [''] * len(crops)
-            chunk_size = 20
+            chunk_size = int(os.environ.get('PRISM_STITCH_CHUNK', '20'))
             # English pass on all blocks
             for start in range(0, len(crops), chunk_size):
                 chunk = processed[start:start + chunk_size]
