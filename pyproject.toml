@@ -5,10 +5,11 @@ description = "PRISM — CPU-only document-to-LaTeX/Markdown orchestration pipel
 readme = "README.md"
 requires-python = ">=3.12"
 
-# Inference runtime only. The pipeline runs its specialist models through
-# ONNX Runtime (RapidOCR, Texo, TATR) plus ultralytics for YOLO layout
-# detection. Training/export/benchmark-only packages live in the optional
-# groups below so a deployment install stays small.
+# Inference runtime only. The pipeline runs its specialist models through ONNX
+# Runtime (PP-DocLayout, PP-OCRv6, Texo) -- there is no torch in the default
+# path. Every package here is imported by pipeline/ or normalization/; the
+# heavier optional backends live in the extras below so a deployment install
+# stays small.
 dependencies = [
     "numpy>=2.0",
     "onnxruntime>=1.24.4",
@@ -16,14 +17,19 @@ dependencies = [
     "pillow>=12.1.1",
     "psutil>=7.2.2",
     "scipy>=1.11.0",
-    "pdf2image>=1.17.0",
     "rapidocr-onnxruntime>=1.3.0",   # actual text/table OCR backend
-    "tokenizers>=0.19.0",             # Texo ONNX math worker decode
-    "ultralytics>=8.4.24",            # YOLO + DocLayout layout detection
-    "torch>=2.10.0",                  # required by ultralytics
-    "torchvision>=0.25.0",
-    "transformers>=4.57.6",           # GOT high-quality mode + Texo torch path
+    "tokenizers>=0.19.0",            # Texo ONNX math worker decode
+    "pyyaml>=6.0",                   # benchmark harness reads/writes eval configs
+    "rapidfuzz>=3.14.5",             # benchmark harness scoring
 ]
+
+# Dropped from core (RESTRUCTURE_PLAN.md section 7.2): torch, torchvision and
+# transformers are lazy-only, reached solely by the Texo torch fallback in
+# models_interface.py -- run_omnidocbench.py notes the main process is
+# torch-free. ultralytics and pdf2image were never imported at all; the YOLO
+# detector ultralytics served was replaced by PP-DocLayout. Together they were
+# roughly 3 GB of install for a pipeline whose weights total ~283 MB. Install
+# them via the `torch-fallback` extra if you need that path.
 
 [project.optional-dependencies]
 # Full-page GOT-OCR2 high-quality mode and the torch Texo fallback pull the
@@ -38,10 +44,26 @@ train = [
     "albumentations>=2.0.8",
 ]
 benchmark = [
-    "pyyaml>=6.0",
-    "rapidfuzz>=3.14.5",
     "evaluate>=0.4.6",
     "ftfy>=6.3.1",
+    "Levenshtein>=0.25.0",   # TEDS / edit-distance scoring
+]
+# The Texo torch fallback in models_interface.py, and the full-page GOT-OCR2
+# high-quality mode. Not needed by the default ONNX path.
+torch-fallback = [
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "transformers>=4.57.6",
+]
+# RapidTable (SLANet-plus) table structure recognition. These are installed into
+# a SEPARATE interpreter, not the main env -- see SETUP.md, "RapidTable child
+# venv". Listed here so the versions are recorded somewhere.
+rtable = [
+    "rapid-table>=1.0.0",
+    "rapidocr>=1.3.0",
+    "apted>=1.0.3",
+    "lxml>=5.0.0",
+    "Levenshtein>=0.25.0",
 ]
 export = [
     "optimum-onnx>=0.1.0",
