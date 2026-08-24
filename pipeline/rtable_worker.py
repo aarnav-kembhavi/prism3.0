@@ -72,9 +72,8 @@ def available() -> bool:
             + "".join(f"  {p}\n" for p in _VENV_CANDIDATES)
             + "\nThis venv is not part of the repo; build it once (SETUP.md, "
             '"RapidTable child venv"):\n'
-            "  python -m venv .venv_rtable\n"
-            "  .venv_rtable\\Scripts\\python -m pip install "
-            "rapid-table rapidocr apted lxml Levenshtein\n"
+            "  python -m venv venvs/rtable\n"
+            "  venvs\\rtable\\Scripts\\python -m pip install rapid_table rapidocr\n"
             "\nOr run without table structure recognition - tables fall back to "
             "the coordinate heuristic and TEDS drops substantially:\n"
             "  set PRISM_RTABLE=0\n"
