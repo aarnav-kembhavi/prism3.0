@@ -21,23 +21,66 @@ import threading
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _CHILD_SCRIPT = os.path.join(ROOT_DIR, "pipeline", "rtable_child.py")
+
 # Preferred location is venvs/rtable; the legacy root path is the fallback so
-# the venv can be relocated without breaking a running deployment.
-_VENV_PYTHON = next(
-    (p for p in (os.path.join(ROOT_DIR, "venvs", "rtable", "Scripts", "python.exe"),
-                 os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe"))
-     if os.path.exists(p)),
-    os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe"))
+# the venv can be relocated without breaking a running deployment. Windows
+# layouts (Scripts/python.exe) are listed first because that is the only
+# configuration this has been run on; the POSIX bin/python paths are there so a
+# Linux/macOS venv is at least found rather than silently ignored.
+_VENV_CANDIDATES = (
+    os.path.join(ROOT_DIR, "venvs", "rtable", "Scripts", "python.exe"),
+    os.path.join(ROOT_DIR, "venvs", "rtable", "bin", "python"),
+    os.path.join(ROOT_DIR, ".venv_rtable", "Scripts", "python.exe"),
+    os.path.join(ROOT_DIR, ".venv_rtable", "bin", "python"),
+)
+_VENV_PYTHON = next((p for p in _VENV_CANDIDATES if os.path.exists(p)),
+                    _VENV_CANDIDATES[0])
 
 _REQUEST_TIMEOUT_S = 30.0
 
 
+class RapidTableUnavailable(RuntimeError):
+    """RapidTable is enabled but its child interpreter is missing."""
+
+
 def available() -> bool:
-    return (
-        os.environ.get("PRISM_RTABLE", "1") != "0"
-        and os.path.exists(_VENV_PYTHON)
-        and os.path.exists(_CHILD_SCRIPT)
-    )
+    """True if the RapidTable child can run.
+
+    SLANet-plus is the primary table structure recognizer (+29 TEDS on a
+    stratified 60-table A/B). It runs in a separate venv, which is not part of
+    the repo and has to be built once. Previously a missing venv made this
+    return False and the pipeline quietly dropped to the coordinate heuristic —
+    no error, no warning, just materially worse table scores that were very hard
+    to attribute. Now an unbuilt venv is a hard failure and opting out is
+    explicit.
+    """
+    if os.environ.get("PRISM_RTABLE", "1") == "0":
+        return False          # explicit opt-out: coordinate heuristic, no error
+
+    if not os.path.exists(_CHILD_SCRIPT):
+        raise RapidTableUnavailable(
+            f"RapidTable child script missing: {_CHILD_SCRIPT}\n"
+            "This means the checkout is incomplete — pipeline/rtable_child.py "
+            "ships with the repo."
+        )
+
+    if not os.path.exists(_VENV_PYTHON):
+        raise RapidTableUnavailable(
+            "RapidTable is enabled (PRISM_RTABLE is not 0) but its interpreter "
+            "was not found.\n"
+            "Looked for:\n"
+            + "".join(f"  {p}\n" for p in _VENV_CANDIDATES)
+            + "\nThis venv is not part of the repo; build it once (SETUP.md, "
+            '"RapidTable child venv"):\n'
+            "  python -m venv .venv_rtable\n"
+            "  .venv_rtable\\Scripts\\python -m pip install "
+            "rapid-table rapidocr apted lxml Levenshtein\n"
+            "\nOr run without table structure recognition - tables fall back to "
+            "the coordinate heuristic and TEDS drops substantially:\n"
+            "  set PRISM_RTABLE=0\n"
+        )
+
+    return True
 
 
 class RapidTableWorker:
