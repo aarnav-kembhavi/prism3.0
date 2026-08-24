@@ -57,3 +57,7 @@ venvs/
 *.fdb_latexmk
 scratchpad_runs/
 figures/*.png
+
+# Rebuttal experiment output (scripts/rebuttal/ writes here; ~2.7 GB, regenerable).
+# The scripts and the written-up findings are tracked; the raw run output is not.
+/results/
