@@ -61,3 +61,6 @@ figures/*.png
 # Rebuttal experiment output (scripts/rebuttal/ writes here; ~2.7 GB, regenerable).
 # The scripts and the written-up findings are tracked; the raw run output is not.
 /results/
+
+# 300dpi preview rasters the figure generators drop next to themselves
+scripts/figures/*.png
