@@ -1,9 +1,11 @@
 """Run MinerU (pipeline backend, CPU) on the 20-page subset with RAM/latency
 instrumentation. Collects per-image markdown into a pred dir.
-Run with the .venv_mineru python (for MetricsTracker deps psutil)."""
+Run with the venvs/mineru_cpu python (for MetricsTracker deps psutil)."""
 import os, sys, json, time, shutil, subprocess, glob, threading
-sys.path.insert(0, os.path.join(r"C:\PROJECTS\s2l2\testprism", "benchmarks", "compare"))
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "benchmarks" / "compare"))
+os.chdir(ROOT)
 import psutil
 
 SUBSET = "benchmarks/compare/compare20_subset.json"
@@ -11,7 +13,13 @@ IMAGES = "data/omnidocbench/images"
 IN_DIR = "benchmarks/compare/mineru_in_full"
 OUT_DIR = "benchmarks/compare/mineru_out_full"
 PRED_DIR = "benchmarks/compare/preds_mineru"
-MINERU = r"C:\PROJECTS\s2l2\testprism\.venv_mineru\Scripts\mineru.exe"
+# MinerU CPU baseline venv (see SETUP.md). Windows layout first, POSIX fallback.
+_MINERU_VENV = ROOT / "venvs" / "mineru_cpu"
+MINERU = next(
+    (str(p) for p in (_MINERU_VENV / "Scripts" / "mineru.exe",
+                      _MINERU_VENV / "bin" / "mineru")
+     if p.exists()),
+    str(_MINERU_VENV / "Scripts" / "mineru.exe"))
 
 for d in (IN_DIR, OUT_DIR, PRED_DIR):
     os.makedirs(d, exist_ok=True)

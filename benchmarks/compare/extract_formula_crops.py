@@ -1,9 +1,10 @@
 """Extract isolated-formula crops (English pages) from OmniDocBench with GT LaTeX.
 Writes crops/*.png + gt.json {crop_id: latex}."""
 import os, sys, json, ast
+from pathlib import Path
 from PIL import Image
 
-ROOT = r"C:\PROJECTS\s2l2\testprism"
+ROOT = str(Path(__file__).resolve().parents[2])
 GT = os.path.join(ROOT, "data/omnidocbench/OmniDocBench_available.json")
 IMGDIR = os.path.join(ROOT, "data/omnidocbench/images")
 OUT = os.path.join(ROOT, "benchmarks/compare/formula_eval")

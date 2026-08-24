@@ -5,9 +5,11 @@ normalized-image space, so the benchmark can add them directly. Run in .venv_ppo
 usage: python ppdl_build_cache.py <preds_dir_with_tmp> <out_cache.json>
 """
 import os, sys, json, glob
+from pathlib import Path
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-sys.path.insert(0, r"C:\PROJECTS\s2l2\testprism")
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+ROOT = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
 
 preds_dir = sys.argv[1]
 out_path = sys.argv[2]

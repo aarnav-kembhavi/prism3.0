@@ -1,7 +1,9 @@
 """Run Texo on the extracted formula crops, save predictions + latency."""
 import os, sys, json, time, glob
-sys.path.insert(0, r"C:\PROJECTS\s2l2\testprism")
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+from pathlib import Path
+ROOT = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
 import onnxruntime as ort
 from PIL import Image
 from tokenizers import Tokenizer

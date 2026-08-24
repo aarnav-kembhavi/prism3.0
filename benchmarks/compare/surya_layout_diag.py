@@ -4,8 +4,10 @@ Same methodology as formula_detection_diag.py so results are comparable to the
 Surya layout label for display math is 'Equation'.
 """
 import os, sys, json, ast, time, statistics
-sys.path.insert(0, r"C:\PROJECTS\s2l2\testprism")
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+from pathlib import Path
+ROOT = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
 os.environ.setdefault('TORCH_DEVICE', 'cpu')
 from PIL import Image
 

@@ -1,8 +1,9 @@
 """Run PP-FormulaNet-S on the extracted formula crops, save predictions + latency."""
 import os, sys, json, time, glob, statistics
+from pathlib import Path
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
-ROOT = r"C:\PROJECTS\s2l2\testprism"
+ROOT = str(Path(__file__).resolve().parents[2])
 OUT = os.path.join(ROOT, "benchmarks/compare/formula_eval")
 
 import paddle

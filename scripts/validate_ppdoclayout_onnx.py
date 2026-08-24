@@ -3,8 +3,10 @@ cached boxes (ppdl_full_cache.json, in PRISM class vocab) on the same normalized
 images. Reports per-page box-count match + mean IoU of best matches.
 """
 import os, sys, json, glob
-sys.path.insert(0, r"C:\PROJECTS\s2l2\testprism")
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+from pathlib import Path
+ROOT = str(Path(__file__).resolve().parents[1])
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
 from pipeline.ppdoclayout_onnx import PPDocLayoutOnnxDetector
 
 CACHE = "benchmarks/compare/formula_eval/ppdl_full_cache.json"

@@ -468,10 +468,21 @@ def _write_eval_config(gt_json: str, pred_dir: str, no_cdm: bool) -> str:
             },
         }
     }
-    # Use absolute paths so _run_evaluation's os.chdir() doesn't break resolution
+    # _run_evaluation chdirs into EVAL_DIR before the harness reads this file, so
+    # write the paths relative to EVAL_DIR rather than absolute. Relative keeps the
+    # config portable across clones (it used to bake in one machine's checkout
+    # path); it still resolves correctly because the cwd is pinned.
+    def _rel_to_eval_dir(p: str) -> str:
+        target = Path(p).resolve()
+        try:
+            return os.path.relpath(target, EVAL_DIR.resolve()).replace(os.sep, '/')
+        except ValueError:
+            # Different drive on Windows — no relative path exists; keep absolute.
+            return str(target)
+
     config_path = str(Path(pred_dir).resolve() / 'eval_config.yaml')
-    cfg['end2end_eval']['dataset']['ground_truth']['data_path'] = str(Path(gt_json).resolve())
-    cfg['end2end_eval']['dataset']['prediction']['data_path'] = str(Path(pred_dir).resolve())
+    cfg['end2end_eval']['dataset']['ground_truth']['data_path'] = _rel_to_eval_dir(gt_json)
+    cfg['end2end_eval']['dataset']['prediction']['data_path'] = _rel_to_eval_dir(pred_dir)
     with open(config_path, 'w') as f:
         yaml.dump(cfg, f, default_flow_style=False)
     return config_path

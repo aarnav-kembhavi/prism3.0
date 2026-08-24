@@ -5,9 +5,11 @@ boxes (mapped to PRISM class names) keyed by image stem — for validating the
 usage: python ppdl_build_full_cache.py <preds_dir_with_tmp> <out_cache.json>
 """
 import os, sys, json, glob
+from pathlib import Path
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-sys.path.insert(0, r"C:\PROJECTS\s2l2\testprism")
-os.chdir(r"C:\PROJECTS\s2l2\testprism")
+ROOT = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
 
 # PP-DocLayout_plus-L (20 labels) -> PRISM class vocab
 PPDL2PRISM = {

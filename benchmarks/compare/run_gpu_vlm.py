@@ -9,6 +9,7 @@ model_key in: got2 | qwen25vl | olmocr | nougat | florence2 | dots
 Run in .venv_gpu.  Eval separately via run_omnidocbench.py --eval-only.
 """
 import os, sys, json, time, argparse, statistics, traceback
+from pathlib import Path
 os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 os.environ.setdefault('PYTHONUTF8', '1')
 
@@ -16,7 +17,7 @@ os.environ.setdefault('PYTHONUTF8', '1')
 _MAX_PIXELS = 768 * 28 * 28   # ~602k px (~776px square-equivalent)
 _MIN_PIXELS = 256 * 28 * 28
 
-ROOT = r"C:\PROJECTS\s2l2\testprism"
+ROOT = str(Path(__file__).resolve().parents[2])
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "benchmarks", "compare"))
 os.chdir(ROOT)
