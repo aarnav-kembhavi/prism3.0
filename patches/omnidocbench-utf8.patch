@@ -1,0 +1,26 @@
+diff --git a/src/core/pipeline_eval.py b/src/core/pipeline_eval.py
+index af737b6..d934471 100644
+--- a/src/core/pipeline_eval.py
++++ b/src/core/pipeline_eval.py
+@@ -22,7 +22,7 @@ class End2EndEval():
+         else:
+             md_flag = False
+         if not md_flag:
+-            with open(page_info_path, 'r') as f:
++            with open(page_info_path, 'r', encoding='utf-8') as f:
+                 pages = json.load(f)
+ 
+             for page in pages:
+diff --git a/src/dataset/end2end_dataset.py b/src/dataset/end2end_dataset.py
+index 633a28a..94aab94 100644
+--- a/src/dataset/end2end_dataset.py
++++ b/src/dataset/end2end_dataset.py
+@@ -74,7 +74,7 @@ class End2EndDataset():
+         }
+         filtered_types = cfg_task['dataset'].get('filter')
+ 
+-        with open(gt_path, 'r') as f:
++        with open(gt_path, 'r', encoding='utf-8') as f:
+             gt_samples = json.load(f)
+ 
+         filtered_gt_samples = []

@@ -1,0 +1,3 @@
+[submodule "omnidocbench_eval"]
+	path = omnidocbench_eval
+	url = https://github.com/opendatalab/OmniDocBench.git
