@@ -139,3 +139,98 @@ Median s/page on this machine varies run to run for an identical configuration
 (the fp32 decoder variant measured 7.03 s and 9.49 s on two runs of the same
 graphs). `variants/fp32_repeat/` is a full fp32 re-run kept as the noise floor —
 compare any latency or similarity delta against it before believing it.
+
+---
+
+# fp16 pass
+
+Same harness, same frozen 30 eval pages, same comparison against `quant/baseline/`.
+The fp32 graphs and the `fp32-baseline` tag are untouched.
+
+Two variants, because they trade differently:
+
+| | on disk | at run time | cost |
+|---|---|---|---|
+| **A** | fp16 | fp32 (back-converted in memory at load) | fp16 weight rounding only |
+| **B** | fp16 | fp16 (native) | rounding **+** fp16 kernels |
+
+```bash
+python quant/fp16_convert.py                                   # build *_fp16.onnx
+python quant/run_variant.py --name fp16_all --fp16 all         # Variant A (default)
+python quant/run_variant.py --name fp16_b --fp16 all --fp16-runtime fp16
+```
+
+`PRISM_FP16` mirrors `PRISM_QUANT` exactly (`all`, a comma list, or a per-graph
+`PRISM_FP16_<KEY>` override). Naming a graph in **both** raises rather than
+silently picking one.
+
+## How Variant A works
+
+`convert_float_to_float16(keep_io_types=True)` writes the half-size graph.
+`pipeline/fp16_runtime.py` inverts it at load time -- fp16 initializers and
+attribute tensors back to fp32, fp16 tensor types back to fp32, and
+`Cast(to=float16)` rewritten to `Cast(to=float)` so the topology is unchanged
+and the identity casts fold away. The result is the original graph with every
+weight rounded through fp16, which is exactly the cost Variant A is meant to
+isolate.
+
+Interception is a monkeypatch on `ort.InferenceSession`, not a path swap: only
+three stages build their own session, and the rest hand a *path* to RapidOCR or
+RapidTable, so returning bytes from `graph_path()` could not have worked.
+
+### Two ordering traps this hit
+
+- **`ort.InferenceSession` is bound before arguments are evaluated.** A lazy
+  install from inside `graph_path()` is already too late for call sites shaped
+  like `ort.InferenceSession(graph_path(...), ...)` -- `math_worker_onnx.py:713`,
+  i.e. both Texo graphs. The patch installs at `pipeline.quant_select` import
+  instead, which every call site does on a line above its session creation.
+- **`rapidocr_onnxruntime/utils/infer_engine.py` does
+  `from onnxruntime import InferenceSession` at import time**, copying the name
+  into its own namespace where a later rebind of `onnxruntime.InferenceSession`
+  cannot reach it. The codebase's own patches survive this only by luck of
+  ordering (`text_worker.py` patches before it imports RapidOCR). Variant A is
+  imported later, so `fp16_runtime.sweep_modules()` walks `sys.modules` and
+  rebinds every copy of the exact function it wrapped.
+
+  Symptom when this was missed: **all 30 pages empty**, 1.1 s/page instead of
+  7.4 -- caught by the manifest, which recorded 3 back-conversions where there
+  should have been 5.
+
+## Conversion findings
+
+- **`max_finite_val` must be raised to 65504.** The library default clamps at
+  1e4, far below fp16's real ceiling. PP-DocLayoutV3 stores `FLT_MAX` and `1e8`
+  scalars as `Clip` bounds for box coordinates and the Texo decoder stores
+  `FLT_MAX` as its attention-mask fill; crushing those to 1e4 is a semantic
+  change rather than rounding. At 65504 they stay saturating.
+- **`Resize` breaks unless its unused optional inputs are restored.** ONNX marks
+  an unused optional input with `""` *or* a zero-length tensor; slanet-plus uses
+  the latter for `roi`/`scales` (`helper.constant.16/17`, float32 shape `(0,)`).
+  The converter reroutes them through `Cast` nodes, after which ORT reports
+  "Either sizes or scales must be provided, but not both". Block-listing the op
+  does not help. `restore_empty_optional_inputs()` points the inputs back and
+  forces those tensors to stay fp32 -- opset-14 `Resize` types `scales` as
+  `tensor(float)` exactly, not as a type variable.
+- **SLANet-plus converts cleanly to fp16.** It is the one graph the INT8 sweep
+  had to skip entirely.
+- **`.venv_rtable` needs `onnx` installed** for Variant A, since the back
+  conversion runs inside the RapidTable child. Without it the child dies and
+  tables silently fall back to the coordinate heuristic -- which shows up as
+  `TABLE COUNT` structural failures, not as an fp16 accuracy cost.
+
+## Verification, before any page is run
+
+`quant/fp16_convert.py` reverses each conversion, builds a real
+`InferenceSession` from the result, and compares every weight against the
+original fp32 graph. Differences are classified: rounding, subnormal clamp
+(`|w| < 1e-7`), over-range clamp (`|w| > 65504`), or **unexplained**. All seven
+graphs come back with zero unexplained differences.
+
+Two bugs in the verifier itself were caught this way and are worth not
+reintroducing:
+
+- comparing only `initializer`s finds **zero** weights in `en_PP-OCRv4_rec` and
+  `slanet-plus`, which store theirs in `Constant` **nodes** -- a vacuous pass;
+- keying those by `node.name` collapses all 299 unnamed `Constant` nodes onto
+  one dict entry. They are keyed by output tensor name instead.

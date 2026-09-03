@@ -80,3 +80,6 @@ quant/**/_tmp_*/
 # The fp32 originals are never modified.
 **/*_int8.onnx
 models/ppdoclayoutv3/PP-DocLayoutV3_int8_heads.onnx
+
+# fp16 ONNX graphs (~115 MB). Regenerable: python quant/fp16_convert.py
+**/*_fp16.onnx

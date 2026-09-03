@@ -1,0 +1,226 @@
+{
+  "texo_encoder": {
+    "key": "texo_encoder",
+    "src": "Texo/model/onnx/encoder_model.onnx",
+    "dst": "encoder_model_fp16.onnx",
+    "src_mb": 54.17,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.48,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 27.12,
+    "saved_mb": 27.05,
+    "shrink_pct": 49.9,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 160,
+        "attr_tensors": 0,
+        "casts": 1
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.16,
+      "n_weights_compared": 160,
+      "max_abs_weight_err": 0.0019435882568359375,
+      "max_rel_weight_err": 11.800763,
+      "n_clamped_subnormal": 47,
+      "n_clamped_overrange": 0,
+      "overrange_clamps": [],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "texo_decoder": {
+    "key": "texo_decoder",
+    "src": "Texo/model/onnx/decoder_model_merged.onnx",
+    "dst": "decoder_model_merged_fp16.onnx",
+    "src_mb": 27.72,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.22,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 14.01,
+    "saved_mb": 13.71,
+    "shrink_pct": 49.5,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 61,
+        "attr_tensors": 24,
+        "casts": 0
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.17,
+      "n_weights_compared": 78,
+      "max_abs_weight_err": 3.4028234663852886e+38,
+      "max_rel_weight_err": 9.603393,
+      "n_clamped_subnormal": 17,
+      "n_clamped_overrange": 1,
+      "overrange_clamps": [
+        "/decoder/decoder/ConstantOfShape_output_0: 1 value(s) over-range clamped (max 3.403e+38)"
+      ],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "ppocr_rec": {
+    "key": "ppocr_rec",
+    "src": "weights/PP-OCRv6_rec_small.onnx",
+    "dst": "PP-OCRv6_rec_small_fp16.onnx",
+    "src_mb": 21.23,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.16,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 10.7,
+    "saved_mb": 10.53,
+    "shrink_pct": 49.6,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 204,
+        "attr_tensors": 0,
+        "casts": 1
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.1,
+      "n_weights_compared": 204,
+      "max_abs_weight_err": 0.0308990478515625,
+      "max_rel_weight_err": 11.920929,
+      "n_clamped_subnormal": 434,
+      "n_clamped_overrange": 0,
+      "overrange_clamps": [],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "ppocr_det": {
+    "key": "ppocr_det",
+    "src": "weights/PP-OCRv6_det_small.onnx",
+    "dst": "PP-OCRv6_det_small_fp16.onnx",
+    "src_mb": 9.93,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.09,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 5.03,
+    "saved_mb": 4.9,
+    "shrink_pct": 49.3,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 201,
+        "attr_tensors": 0,
+        "casts": 7
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.07,
+      "n_weights_compared": 213,
+      "max_abs_weight_err": 0.00780487060546875,
+      "max_rel_weight_err": 11.920929,
+      "n_clamped_subnormal": 390422,
+      "n_clamped_overrange": 0,
+      "overrange_clamps": [],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "ppocr_rec_en": {
+    "key": "ppocr_rec_en",
+    "src": "weights/en_PP-OCRv4_rec.onnx",
+    "dst": "en_PP-OCRv4_rec_fp16.onnx",
+    "src_mb": 7.65,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.08,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 3.88,
+    "saved_mb": 3.77,
+    "shrink_pct": 49.3,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 0,
+        "attr_tensors": 253,
+        "casts": 1
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.11,
+      "n_weights_compared": 253,
+      "max_abs_weight_err": 0.2503662109375,
+      "max_rel_weight_err": 11.920929,
+      "n_clamped_subnormal": 95619,
+      "n_clamped_overrange": 0,
+      "overrange_clamps": [],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "ppdoclayout_v3": {
+    "key": "ppdoclayout_v3",
+    "src": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+    "dst": "PP-DocLayoutV3_fp16.onnx",
+    "src_mb": 130.5,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 1.14,
+    "empty_optional_inputs_restored": 0,
+    "dst_mb": 65.5,
+    "saved_mb": 65.0,
+    "shrink_pct": 49.8,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 958,
+        "attr_tensors": 0,
+        "casts": 14
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.82,
+      "n_weights_compared": 974,
+      "max_abs_weight_err": 3.4028234663852886e+38,
+      "max_rel_weight_err": 11.920929,
+      "n_clamped_subnormal": 5897,
+      "n_clamped_overrange": 16,
+      "overrange_clamps": [
+        "helper.squeeze.10: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.12: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.16: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.18: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.22: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.24: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.28: 1 value(s) over-range clamped (max 3.403e+38)",
+        "helper.squeeze.30: 1 value(s) over-range clamped (max 3.403e+38)"
+      ],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  },
+  "slanet_plus": {
+    "key": "slanet_plus",
+    "src": ".venv_rtable/Lib/site-packages/rapid_table/models/slanet-plus.onnx",
+    "dst": "slanet-plus_fp16.onnx",
+    "src_mb": 7.76,
+    "source_cast_to_fp16_nodes": 0,
+    "convert_s": 0.11,
+    "empty_optional_inputs_restored": 6,
+    "dst_mb": 3.98,
+    "saved_mb": 3.78,
+    "shrink_pct": 48.7,
+    "verify": {
+      "reverse_stats": {
+        "initializers": 0,
+        "attr_tensors": 410,
+        "casts": 4
+      },
+      "session_built": true,
+      "back_convert_and_load_s": 0.17,
+      "n_weights_compared": 416,
+      "max_abs_weight_err": 1.7711300426541744e+27,
+      "max_rel_weight_err": 1.0,
+      "n_clamped_subnormal": 0,
+      "n_clamped_overrange": 2,
+      "overrange_clamps": [
+        "undefined_var_0.1: 1 value(s) over-range clamped (max 1.771e+27)",
+        "undefined_var_1.1: 1 value(s) over-range clamped (max 1.771e+27)"
+      ],
+      "unexplained_diffs": [],
+      "is_rounding_or_clamp_only": true
+    },
+    "status": "ok"
+  }
+}

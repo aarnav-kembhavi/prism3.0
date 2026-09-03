@@ -24,9 +24,27 @@ VARIANT_GRAPH = {
     "slanet_plus": "slanet_plus",
 }
 
+# fp16 pass: one variant per graph, same names with an fp16_ prefix.
+for _g in ["texo_encoder", "texo_decoder", "ppocr_rec", "ppocr_det",
+           "ppdoclayout_v3", "slanet_plus"]:
+    VARIANT_GRAPH["fp16_" + _g] = _g
+
 ORDER = ["texo_decoder", "texo_encoder", "ppocr_rec", "ppocr_det",
          "ppdoclayout_v3", "ppdoclayout_v3_heads_fp32", "slanet_plus",
-         "combo_conservative", "combo_greedy"]
+         "combo_conservative", "combo_greedy",
+         "fp16_texo_encoder", "fp16_texo_decoder", "fp16_ppocr_rec",
+         "fp16_ppocr_det", "fp16_ppdoclayout_v3", "fp16_slanet_plus",
+         "fp16_all"]
+
+
+def precision_of(meta):
+    """What this variant actually ran: int8, fp16 (+ its runtime), or fp32."""
+    g = meta.get("graphs", {})
+    if any(v.get("fp16") for v in g.values()):
+        return "fp16/" + (meta.get("PRISM_FP16_RUNTIME") or "fp32")
+    if any(v.get("int8") for v in g.values()):
+        return "int8"
+    return "fp32"
 
 
 def load(name):
@@ -57,12 +75,14 @@ def main():
             gcol = "%.1f -> %.1f" % (before, after)
             saved = before - after
         else:
-            int8 = [k for k, v in meta["graphs"].items() if v["int8"]]
-            gcol = "%d graphs INT8" % len(int8)
+            red = [k for k, v in meta["graphs"].items()
+                   if v.get("int8") or v.get("fp16")]
+            gcol = "%d graphs %s" % (len(red), precision_of(meta).split("/")[0].upper())
             saved = base_stack - meta["total_stack_mb"]
 
         row = {
             "variant": n,
+            "precision": precision_of(meta),
             "graph_mb": gcol,
             "stack_mb": meta["total_stack_mb"],
             "stack_saved_mb": round(base_stack - meta["total_stack_mb"], 1),
@@ -80,16 +100,17 @@ def main():
         rows.append(row)
         roll[n] = row
 
-    hdr = ("| variant | graph MB (before -> after) | stack MB | saved MB | median s/pg "
-           "| peak RAM MB | mean sim | min sim | pages <0.95 | struct fails |")
-    sep = "|" + "---|" * 11
+    hdr = ("| variant | precision | graph MB (before -> after) | stack MB | saved MB "
+           "| median s/pg | peak RAM MB | mean sim | min sim | pages <0.95 | struct fails |")
+    sep = "|" + "---|" * 12
     lines = [hdr, sep]
-    lines.append("| **fp32 baseline** | %.1f (all) | %.1f | 0.0 | %s | %s | 1.00000 | 1.00000 | 0 | 0 |"
+    lines.append("| **fp32 baseline** | fp32 | %.1f (all) | %.1f | 0.0 | %s | %s "
+                 "| 1.00000 | 1.00000 | 0 | 0 |"
                  % (base_stack, base_stack, base["latency_s_per_page"]["median"],
                     base["peak_ram_mb_process_tree"]))
     for r in rows:
-        lines.append("| %s | %s | %.1f | %.1f | %s | %s | %s | %s | %s | %s |" % (
-            r["variant"], r["graph_mb"], r["stack_mb"], r["stack_saved_mb"],
+        lines.append("| %s | %s | %s | %.1f | %.1f | %s | %s | %s | %s | %s | %s |" % (
+            r["variant"], r["precision"], r["graph_mb"], r["stack_mb"], r["stack_saved_mb"],
             r["median_lat_s"], r["peak_ram_mb"],
             "%.5f" % r["mean_sim"] if r["mean_sim"] is not None else "-",
             "%.5f" % r["min_sim"] if r["min_sim"] is not None else "-",
@@ -105,14 +126,20 @@ def main():
                     "variants": roll}, indent=2), encoding="utf-8")
     print(table)
 
-    scored = [r for r in rows if r.get("cost_per_mb") is not None
-              and r["variant"] in VARIANT_GRAPH]
-    if scored:
-        worst = max(scored, key=lambda r: r["cost_per_mb"])
-        print("\nworst quality per MB saved: %s "
-              "(mean sim %.5f, %.1f MB saved, %.2e similarity lost per MB)"
-              % (worst["variant"], worst["mean_sim"], worst["saved_mb"],
-                 worst["cost_per_mb"]))
+    # Ranked separately per precision: an int8 and an fp16 variant of the same
+    # graph save different amounts, so one combined ranking would compare
+    # quantities that are not alternatives to each other.
+    for tag in ("int8", "fp16"):
+        scored = [r for r in rows if r.get("cost_per_mb") is not None
+                  and r["variant"] in VARIANT_GRAPH
+                  and r["precision"].startswith(tag)]
+        if not scored:
+            continue
+        print("")
+        print("%s -- quality cost per MB saved (worst first):" % tag.upper())
+        for r in sorted(scored, key=lambda r: -r["cost_per_mb"]):
+            print("  %-28s mean sim %.5f  %6.1f MB saved  %.2e sim lost/MB"
+                  % (r["variant"], r["mean_sim"], r["saved_mb"], r["cost_per_mb"]))
 
 
 if __name__ == "__main__":

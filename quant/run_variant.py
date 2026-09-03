@@ -43,7 +43,10 @@ def resolve_graphs(env):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True)
-    ap.add_argument("--quant", default="", help="value for PRISM_QUANT")
+    ap.add_argument("--quant", default="", help="value for PRISM_QUANT (INT8)")
+    ap.add_argument("--fp16", default="", help="value for PRISM_FP16")
+    ap.add_argument("--fp16-runtime", default="fp32", choices=["fp32", "fp16"],
+                    help="fp32 = Variant A (back-convert at load); fp16 = Variant B (native)")
     ap.add_argument("--env", action="append", default=[], help="extra KEY=VALUE")
     ap.add_argument("--images-dir", default="data/omnidocbench_full/images")
     a = ap.parse_args()
@@ -53,6 +56,8 @@ def main():
 
     env = dict(os.environ)
     env["PRISM_QUANT"] = a.quant
+    env["PRISM_FP16"] = a.fp16
+    env["PRISM_FP16_RUNTIME"] = a.fp16_runtime
     env["PRISM_PROBE_LOG"] = str(outdir / "probe.jsonl")
     env["PRISM_QUANT_MANIFEST"] = str(outdir / "graph_manifest.jsonl")
     for kv in a.env:
@@ -107,32 +112,47 @@ def main():
 
     manifest = outdir / "graph_manifest.jsonl"
     loaded = {}
+    back_converts = []
     if manifest.exists():
         for line in manifest.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                r = json.loads(line)
-                loaded.setdefault(r["key"], set()).add(
-                    (r["file"], r["int8"], r.get("caller", "?")))
-    want_int8 = set()
-    if a.quant.strip().lower() == "all":
-        want_int8 = set(GRAPHS)
-    elif a.quant.strip():
-        want_int8 = {t.strip() for t in a.quant.split(",") if t.strip()}
-    unproven = sorted(k for k in want_int8
-                      if not any(i for _, i, _c in loaded.get(k, ())))
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r.get("event") == "fp16_to_fp32":
+                back_converts.append(r["file"])
+                continue
+            loaded.setdefault(r["key"], set()).add(
+                (r["file"], bool(r.get("int8")) or bool(r.get("fp16")),
+                 r.get("caller", "?")))
+    def _wanted(spec):
+        if spec.strip().lower() == "all":
+            return set(GRAPHS)
+        return {t.strip() for t in spec.split(",") if t.strip()}
+
+    want_int8 = _wanted(a.quant)
+    want_fp16 = _wanted(a.fp16)
+    # A reduced-precision graph that no process actually opened is the failure
+    # mode this sweep already hit once: it looks exactly like "the conversion
+    # cost us nothing". Check per requested graph, not per run.
+    unproven = sorted(k for k in (want_int8 | want_fp16)
+                      if not any(r for _, r, _c in loaded.get(k, ())))
     if unproven:
-        print("[!] WARNING: no process recorded loading INT8 for: %s" % ", ".join(unproven))
+        print("[!] WARNING: no process recorded loading a reduced-precision "
+              "graph for: %s" % ", ".join(unproven))
 
     meta = {
         "variant": a.name,
         "PRISM_QUANT": a.quant,
+        "PRISM_FP16": a.fp16,
+        "PRISM_FP16_RUNTIME": a.fp16_runtime,
         "extra_env": a.env,
         "returncode": rc,
         "n_pages": len(list(outdir.glob("*.md"))),
         "graphs": {k: {"path": str(Path(p).relative_to(ROOT)).replace("\\", "/"),
                        "bytes": sizes[k],
                        "mb": round(sizes[k] / 1e6, 2) if sizes[k] else None,
-                       "int8": "_int8" in Path(p).name}
+                       "int8": "_int8" in Path(p).name,
+                       "fp16": "_fp16" in Path(p).name}
                    for k, p in resolved.items()},
         "total_stack_bytes": sum(v for v in sizes.values() if v),
         "total_stack_mb": round(sum(v for v in sizes.values() if v) / 1e6, 2),
@@ -145,7 +165,11 @@ def main():
             k: sorted(f"{c}: {f}" + (" (int8)" if i else "") for f, i, c in v)
             for k, v in sorted(loaded.items())},
         "requested_int8": sorted(want_int8),
-        "int8_load_unproven": unproven,
+        "requested_fp16": sorted(want_fp16),
+        "load_unproven": unproven,
+        "int8_load_unproven": [k for k in unproven if k in want_int8],
+        "fp16_back_conversions": sorted(set(back_converts)),
+        "n_fp16_back_conversions": len(back_converts),
         "probe": {"proposals": total, "accepted": accepted,
                   "acceptance_rate": round(accepted / total, 4) if total else None},
     }
