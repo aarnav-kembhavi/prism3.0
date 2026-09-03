@@ -70,3 +70,7 @@ scripts/figures/*.png
 # PP-DocLayoutV3.onnx and the PP-OCRv6 graphs already tracked in LFS.
 prism_supplementary.zip
 prism_supplementary_clean/
+
+# Quantization sweep: per-page pipeline scratch dirs (figure crops etc.).
+# The markdown predictions, perf.json and meta.json next to them ARE tracked.
+quant/**/_tmp_*/

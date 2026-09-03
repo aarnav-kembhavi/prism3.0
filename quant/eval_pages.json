@@ -1,0 +1,469 @@
+{
+  "description": "Frozen 30-page eval set for the PRISM quantization sweep. Chosen for diversity, not difficulty. Do not regenerate.",
+  "source_json": "data/omnidocbench_full/OmniDocBench.json",
+  "image_dir": "data/omnidocbench_full/images",
+  "buckets": {
+    "degraded": 6,
+    "formula": 6,
+    "table": 6,
+    "text_multicol": 6,
+    "cjk": 6
+  },
+  "pages": [
+    {
+      "id": "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006",
+      "image": "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006.png",
+      "bucket": "degraded",
+      "source": "PPT2PDF",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "watermark"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 4
+    },
+    {
+      "id": "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927",
+      "image": "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927.png",
+      "bucket": "degraded",
+      "source": "academic_literature",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "table_hard",
+      "special_issue": [
+        "geometric_deformation"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 7
+    },
+    {
+      "id": "book_zh_GB12082006_extracted_page_8",
+      "image": "book_zh_GB12082006_extracted_page_8.png",
+      "bucket": "degraded",
+      "source": "book",
+      "language": "simplified_chinese",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "watermark"
+      ],
+      "n_equations": 1,
+      "n_tables": 0,
+      "n_text_blocks": 33
+    },
+    {
+      "id": "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006",
+      "image": "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006.png",
+      "bucket": "degraded",
+      "source": "colorful_textbook",
+      "language": "en_ch_mixed",
+      "layout": "other_layout",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_full_line",
+        "table_horizontal",
+        "watermark"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 9
+    },
+    {
+      "id": "exam_paper_2004-2019上海高考英语听力原文和答案_page_010",
+      "image": "exam_paper_2004-2019上海高考英语听力原文和答案_page_010.png",
+      "bucket": "degraded",
+      "source": "exam_paper",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "fuzzy_scan"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 12
+    },
+    {
+      "id": "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556",
+      "image": "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556.png",
+      "bucket": "degraded",
+      "source": "historical_document",
+      "language": "traditional_chinese",
+      "layout": "other_layout",
+      "subset": "layout_hard",
+      "special_issue": [
+        "fuzzy_content",
+        "geometric_deformation"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 42
+    },
+    {
+      "id": "PPT_StewartCalcET7e_03_02_page_010",
+      "image": "PPT_StewartCalcET7e_03_02_page_010.png",
+      "bucket": "formula",
+      "source": "PPT2PDF",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 3,
+      "n_tables": 0,
+      "n_text_blocks": 2
+    },
+    {
+      "id": "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14",
+      "image": "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14.jpg",
+      "bucket": "formula",
+      "source": "academic_literature",
+      "language": "english",
+      "layout": "1andmore_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 4,
+      "n_tables": 0,
+      "n_text_blocks": 4
+    },
+    {
+      "id": "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115",
+      "image": "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115.png",
+      "bucket": "formula",
+      "source": "book",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 4,
+      "n_tables": 0,
+      "n_text_blocks": 6
+    },
+    {
+      "id": "docstructbench_enbook-zlib-o.O-19091739.pdf_181",
+      "image": "docstructbench_enbook-zlib-o.O-19091739.pdf_181.jpg",
+      "bucket": "formula",
+      "source": "colorful_textbook",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "colorful_backgroud"
+      ],
+      "n_equations": 8,
+      "n_tables": 0,
+      "n_text_blocks": 13
+    },
+    {
+      "id": "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001",
+      "image": "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001.png",
+      "bucket": "formula",
+      "source": "exam_paper",
+      "language": "english",
+      "layout": "1andmore_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 7,
+      "n_tables": 0,
+      "n_text_blocks": 24
+    },
+    {
+      "id": "notes_1ba14cb325bc448f7201b20502ecf2b5_16",
+      "image": "notes_1ba14cb325bc448f7201b20502ecf2b5_16.jpg",
+      "bucket": "formula",
+      "source": "note",
+      "language": "simplified_chinese",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [],
+      "n_equations": 3,
+      "n_tables": 0,
+      "n_text_blocks": 3
+    },
+    {
+      "id": "PPT_PresentationSpecification_page_010",
+      "image": "PPT_PresentationSpecification_page_010.png",
+      "bucket": "table",
+      "source": "PPT2PDF",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 2,
+      "n_text_blocks": 4
+    },
+    {
+      "id": "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4",
+      "image": "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4.jpg",
+      "bucket": "table",
+      "source": "academic_literature",
+      "language": "english",
+      "layout": "1andmore_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_fewer_line",
+        "table_horizontal",
+        "table_span",
+        "table_with_formula"
+      ],
+      "n_equations": 0,
+      "n_tables": 3,
+      "n_text_blocks": 2
+    },
+    {
+      "id": "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188",
+      "image": "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188.png",
+      "bucket": "table",
+      "source": "book",
+      "language": "english",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 5
+    },
+    {
+      "id": "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006",
+      "image": "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006.png",
+      "bucket": "table",
+      "source": "colorful_textbook",
+      "language": "english",
+      "layout": "other_layout",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_full_line",
+        "table_horizontal"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 6
+    },
+    {
+      "id": "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003",
+      "image": "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003.png",
+      "bucket": "table",
+      "source": "exam_paper",
+      "language": "en_ch_mixed",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_full_line",
+        "table_horizontal"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 6
+    },
+    {
+      "id": "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185",
+      "image": "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185.jpg",
+      "bucket": "table",
+      "source": "magazine",
+      "language": "simplified_chinese",
+      "layout": "other_layout",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_horizontal",
+        "table_omission_line",
+        "table_span",
+        "table_with_formula"
+      ],
+      "n_equations": 0,
+      "n_tables": 1,
+      "n_text_blocks": 5
+    },
+    {
+      "id": "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7",
+      "image": "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7.jpg",
+      "bucket": "text_multicol",
+      "source": "academic_literature",
+      "language": "english",
+      "layout": "double_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 9
+    },
+    {
+      "id": "docstructbench_enbook-zlib-o.O-19221575.pdf_1173",
+      "image": "docstructbench_enbook-zlib-o.O-19221575.pdf_1173.jpg",
+      "bucket": "text_multicol",
+      "source": "book",
+      "language": "english",
+      "layout": "double_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 15
+    },
+    {
+      "id": "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003",
+      "image": "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003.png",
+      "bucket": "text_multicol",
+      "source": "colorful_textbook",
+      "language": "english",
+      "layout": "double_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 4
+    },
+    {
+      "id": "docstructbench_enbook-zlib-o.O-21353024.pdf_39",
+      "image": "docstructbench_enbook-zlib-o.O-21353024.pdf_39.jpg",
+      "bucket": "text_multicol",
+      "source": "magazine",
+      "language": "english",
+      "layout": "double_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 17
+    },
+    {
+      "id": "newspaper_0edcd83c195557b43279fa73edaa59aa_1",
+      "image": "newspaper_0edcd83c195557b43279fa73edaa59aa_1.jpg",
+      "bucket": "text_multicol",
+      "source": "newspaper",
+      "language": "english",
+      "layout": "three_column",
+      "subset": "v1.5",
+      "special_issue": [],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 33
+    },
+    {
+      "id": "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10",
+      "image": "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10.jpg",
+      "bucket": "text_multicol",
+      "source": "academic_literature",
+      "language": "english",
+      "layout": "double_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 14
+    },
+    {
+      "id": "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11",
+      "image": "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11.jpg",
+      "bucket": "cjk",
+      "source": "PPT2PDF",
+      "language": "simplified_chinese",
+      "layout": "1andmore_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "watermark"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 3
+    },
+    {
+      "id": "page-28657a85-95cc-4bfa-8156-cc98518a0b4c",
+      "image": "page-28657a85-95cc-4bfa-8156-cc98518a0b4c.png",
+      "bucket": "cjk",
+      "source": "academic_literature",
+      "language": "simplified_chinese",
+      "layout": "single_column",
+      "subset": "table_hard",
+      "special_issue": [],
+      "n_equations": 1,
+      "n_tables": 1,
+      "n_text_blocks": 5
+    },
+    {
+      "id": "book_zh_CNASGL0072018_extracted_page_48",
+      "image": "book_zh_CNASGL0072018_extracted_page_48.png",
+      "bucket": "cjk",
+      "source": "book",
+      "language": "simplified_chinese",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 6,
+      "n_tables": 0,
+      "n_text_blocks": 6
+    },
+    {
+      "id": "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087",
+      "image": "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087.png",
+      "bucket": "cjk",
+      "source": "colorful_textbook",
+      "language": "en_ch_mixed",
+      "layout": "1andmore_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "None"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 9
+    },
+    {
+      "id": "exam_paper_2016年安徽省中考英语试题（解析）_page_012",
+      "image": "exam_paper_2016年安徽省中考英语试题（解析）_page_012.png",
+      "bucket": "cjk",
+      "source": "exam_paper",
+      "language": "en_ch_mixed",
+      "layout": "single_column",
+      "subset": "v1.5",
+      "special_issue": [
+        "table_full_line",
+        "table_horizontal",
+        "table_with_img"
+      ],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 9
+    },
+    {
+      "id": "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53",
+      "image": "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53.png",
+      "bucket": "cjk",
+      "source": "historical_document",
+      "language": "traditional_chinese",
+      "layout": "single_column",
+      "subset": "layout_hard",
+      "special_issue": [],
+      "n_equations": 0,
+      "n_tables": 0,
+      "n_text_blocks": 3
+    }
+  ]
+}

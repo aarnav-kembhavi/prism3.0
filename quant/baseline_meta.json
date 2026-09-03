@@ -1,0 +1,168 @@
+{
+  "description": "fp32 baseline for the PRISM quantization sweep. All later variants are compared against quant/baseline/*.md.",
+  "git_tag": "fp32-baseline",
+  "eval_set": "quant/eval_pages.json",
+  "n_pages": 30,
+  "graphs": {
+    "texo_encoder": {
+      "path": "Texo/model/onnx/encoder_model.onnx",
+      "bytes": 54168538,
+      "mb": 54.17,
+      "exists": true
+    },
+    "texo_decoder": {
+      "path": "Texo/model/onnx/decoder_model_merged.onnx",
+      "bytes": 27718980,
+      "mb": 27.72,
+      "exists": true
+    },
+    "ppocr_rec": {
+      "path": "weights/PP-OCRv6_rec_small.onnx",
+      "bytes": 21234383,
+      "mb": 21.23,
+      "exists": true
+    },
+    "ppocr_det": {
+      "path": "weights/PP-OCRv6_det_small.onnx",
+      "bytes": 9929594,
+      "mb": 9.93,
+      "exists": true
+    },
+    "ppocr_rec_en": {
+      "path": "weights/en_PP-OCRv4_rec.onnx",
+      "bytes": 7652836,
+      "mb": 7.65,
+      "exists": true
+    },
+    "ppdoclayout_v3": {
+      "path": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+      "bytes": 130502049,
+      "mb": 130.5,
+      "exists": true
+    },
+    "slanet_plus": {
+      "path": ".venv_rtable/Lib/site-packages/rapid_table/models/slanet-plus.onnx",
+      "bytes": 7758305,
+      "mb": 7.76,
+      "exists": true
+    }
+  },
+  "total_stack_bytes": 258964685,
+  "total_stack_mb": 258.96,
+  "wall_s": 237.8,
+  "latency_s_per_page": {
+    "mean": 7.927,
+    "median": 7.377,
+    "p90": 14.5,
+    "p95": 18.587,
+    "p99": 18.731,
+    "p99.9": 18.731,
+    "min": 2.428,
+    "max": 18.731
+  },
+  "peak_ram_mb_process_tree": 2101.2,
+  "ram_mb_process_tree": {
+    "n_samples": 749,
+    "sample_interval_s": 0.3,
+    "median": 1459.9,
+    "p90": 1704.1,
+    "p95": 1801.4,
+    "p99": 1916.3,
+    "max": 2101.2
+  },
+  "per_page_latency_s": {
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556": 6.465,
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53": 2.428,
+    "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927": 11.605,
+    "page-28657a85-95cc-4bfa-8156-cc98518a0b4c": 7.516,
+    "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11": 4.529,
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7": 14.5,
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10": 18.731,
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14": 6.392,
+    "docstructbench_enbook-zlib-o.O-19221575.pdf_1173": 7.399,
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": 9.495,
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181": 10.977,
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": 18.587,
+    "docstructbench_enbook-zlib-o.O-21353024.pdf_39": 8.269,
+    "notes_1ba14cb325bc448f7201b20502ecf2b5_16": 4.183,
+    "newspaper_0edcd83c195557b43279fa73edaa59aa_1": 11.697,
+    "PPT_StewartCalcET7e_03_02_page_010": 3.129,
+    "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006": 3.772,
+    "book_zh_CNASGL0072018_extracted_page_48": 4.417,
+    "book_zh_GB12082006_extracted_page_8": 4.128,
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115": 8.24,
+    "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188": 7.916,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087": 7.017,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006": 4.421,
+    "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006": 7.377,
+    "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003": 4.791,
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010": 7.171,
+    "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003": 8.641,
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": 7.277,
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001": 11.386,
+    "PPT_PresentationSpecification_page_010": 5.344
+  },
+  "latency_by_bucket_s": {
+    "cjk": {
+      "n": 6,
+      "median": 5.773,
+      "mean": 5.531
+    },
+    "degraded": {
+      "n": 6,
+      "median": 6.818,
+      "mean": 6.753
+    },
+    "formula": {
+      "n": 6,
+      "median": 7.316,
+      "mean": 7.385
+    },
+    "table": {
+      "n": 6,
+      "median": 8.279,
+      "mean": 9.067
+    },
+    "text_multicol": {
+      "n": 6,
+      "median": 9.983,
+      "mean": 10.898
+    }
+  },
+  "per_page_output_chars": {
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115": 2510,
+    "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188": 3626,
+    "book_zh_CNASGL0072018_extracted_page_48": 1333,
+    "book_zh_GB12082006_extracted_page_8": 784,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006": 679,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087": 568,
+    "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003": 970,
+    "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006": 3280,
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": 2621,
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181": 3865,
+    "docstructbench_enbook-zlib-o.O-19221575.pdf_1173": 3436,
+    "docstructbench_enbook-zlib-o.O-21353024.pdf_39": 3962,
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": 15677,
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7": 5188,
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10": 7436,
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14": 1789,
+    "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11": 358,
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010": 2285,
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": 2138,
+    "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003": 1987,
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001": 4933,
+    "newspaper_0edcd83c195557b43279fa73edaa59aa_1": 6557,
+    "notes_1ba14cb325bc448f7201b20502ecf2b5_16": 543,
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556": 446,
+    "page-28657a85-95cc-4bfa-8156-cc98518a0b4c": 1143,
+    "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927": 5055,
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53": 117,
+    "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006": 753,
+    "PPT_PresentationSpecification_page_010": 1047,
+    "PPT_StewartCalcET7e_03_02_page_010": 419
+  },
+  "n_empty_outputs": 0,
+  "notes": [
+    "PRISM_NORM_STRICT=1 is set by benchmarks/run_omnidocbench.py, which disables the recognition-verified normalization path (normalization/pipeline.py:234). The 640px PP-OCRv6 det verification probe therefore does NOT run on this eval path; probe acceptance is measured separately by quant/probe_rate.py."
+  ]
+}
