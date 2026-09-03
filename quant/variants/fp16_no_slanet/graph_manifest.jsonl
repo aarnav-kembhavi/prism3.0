@@ -1,0 +1,36 @@
+{"pid": 6000, "key": "texo_encoder", "caller": "<string>", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 6000, "key": "texo_decoder", "caller": "<string>", "file": "decoder_model_merged_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 6000, "key": "ppocr_rec", "caller": "<string>", "file": "PP-OCRv6_rec_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 6000, "key": "ppocr_det", "caller": "<string>", "file": "PP-OCRv6_det_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 6000, "key": "ppocr_rec_en", "caller": "<string>", "file": "en_PP-OCRv4_rec_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 6000, "key": "ppdoclayout_v3", "caller": "<string>", "file": "PP-DocLayoutV3_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 13880, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 13880, "key": "ppocr_rec", "caller": "text_worker.py", "file": "PP-OCRv6_rec_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 30408, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 30408, "key": "ppocr_rec", "caller": "text_worker.py", "file": "PP-OCRv6_rec_small_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 24672, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 24672, "event": "fp16_to_fp32", "file": "encoder_model_fp16.onnx", "initializers": 160, "attr_tensors": 0, "casts": 1}
+{"pid": 24672, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 24672, "event": "fp16_to_fp32", "file": "decoder_model_merged_fp16.onnx", "initializers": 61, "attr_tensors": 24, "casts": 0}
+{"pid": 31804, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 31804, "event": "fp16_to_fp32", "file": "encoder_model_fp16.onnx", "initializers": 160, "attr_tensors": 0, "casts": 1}
+{"pid": 31804, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 31804, "event": "fp16_to_fp32", "file": "decoder_model_merged_fp16.onnx", "initializers": 61, "attr_tensors": 24, "casts": 0}
+{"pid": 17256, "key": "ppdoclayout_v3", "caller": "models_interface.py", "file": "PP-DocLayoutV3_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 17256, "event": "fp16_to_fp32", "file": "PP-DocLayoutV3_fp16.onnx", "initializers": 958, "attr_tensors": 0, "casts": 14}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 13880, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_det_small_fp16.onnx", "initializers": 201, "attr_tensors": 0, "casts": 7}
+{"pid": 30408, "event": "fp16_to_fp32", "file": "PP-OCRv6_rec_small_fp16.onnx", "initializers": 204, "attr_tensors": 0, "casts": 1}

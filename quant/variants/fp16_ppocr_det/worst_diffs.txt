@@ -1,0 +1,77 @@
+===================================================================================================================================================================
+ docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185   similarity=0.96344
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 54.3%；长度在1000m及以上的侵蚀沟道数量14.70万条，占总数的22.0%，                                     | 54.3%；长度在1000m及以上的侵蚀沟道数量14.70万条，占总数的22.0%，                                    
+ 面积8.56 $\mathbf { \sum k m ^ { 2 } }$ 万，占总面积的45.7%。西北黄土高原区侵蚀沟道数量、长度            | 面积8.56 $\mathbf { \sum k m ^ { 2 } }$ 万，占总面积的45.7%。西北黄土高原区侵蚀沟道数量、长度           
+   ... 10 identical lines ...                                                   | ...
+ <table>                                                                        | <table>                                                                       
+ <tr><td></td><td></td><td>沟道数量/万条</td><td></td><td></td><td>沟道长度/万km</td><td>< | <tr><td></td><td></td><td>沟道数量/万条</td><td></td><td></td><td>沟道长度/万km</td><td><
+-<tr><td>侵蚀沟道 级别①</td><td>丘陵</td><td>高原</td><td>合计</td><td>丘陵</td><td>高原</td><t |+<tr><td>侵蚀沟道</td><td></td><td></td><td></td><td></td><td></td><td></td><td></t
+-                                                                               |+<tr><td>级别①</td><td>丘陵</td><td>高原</td><td>合计</td><td>丘陵</td><td>高原</td><td>合计<
+ <tr><td></td><td>沟壑区</td><td>沟壑区</td><td></td><td>沟壑区</td><td>沟壑区</td><td></td | <tr><td></td><td>沟壑区</td><td>沟壑区</td><td></td><td>沟壑区</td><td>沟壑区</td><td></td
+ <tr><td>合计</td><td>55.64</td><td>11.03</td><td>66.67</td><td>47.1</td><td>9.23 | <tr><td>合计</td><td>55.64</td><td>11.03</td><td>66.67</td><td>47.1</td><td>9.23
+   ... 29 identical lines ...                                                   | ...
+ 19.93%、14.06%，沟壑密度分别为 $3 . 4 \sim 7 . ~ 6 \mathrm { k m } / \mathrm { k m } ^  | 19.93%、14.06%，沟壑密度分别为 $3 . 4 \sim 7 . ~ 6 \mathrm { k m } / \mathrm { k m } ^ 
+ 三、第四副区主要分布于青海省东部、甘肃省中部、河南省西部，平均沟道纵                                             | 三、第四副区主要分布于青海省东部、甘肃省中部、河南省西部，平均沟道纵                                            
+
+===================================================================================================================================================================
+ exam_paper_2004-2019上海高考英语听力原文和答案_page_010   similarity=0.96373
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Section B                                                                      | Section B                                                                     
+                                                                                |                                                                               
+   ... 27 identical lines ...                                                   | ...
+ ouO                                                                            | ouO                                                                           
+                                                                                |                                                                               
+-I . Listening Comprehension                                                    |+I. Listening Comprehension                                                    
+ Sections A                                                                     | Sections A                                                                    
+                                                                                |                                                                               
+   ... 5 identical lines ...                                                    | ...
+ answers on your paper, and decide which one is the best answer to the question | answers on your paper, and decide which one is the best answer to the question
+                                                                                |                                                                               
+-1. M: So, what do you think of the new shopping center?                        |+1. M: So, what do you think of the new shopping center?bliud                  
+ F: I went there yesterday, and it is not as good as I expected.                | F: I went there yesterday, and it is not as good as I expected.               
+ Q: What does the woman think of the shopping center?                           | Q: What does the woman think of the shopping center?                          
+                                                                                |                                                                               
+-                                                                               |+lod                                                                           
+-                                                                               |+                                                                              
+ 2. M: How long will we stay at the camp?                                       | 2. M: How long will we stay at the camp?                                      
+-F: We will stay there for one night. That means we will leave the camp at Aug  |+F: We will stay there for one night. That means we will leave the camp at Aug 
+ Q: When will the speakers arrive at the camp?                                  | Q: When will the speakers arrive at the camp?                                 
+                                                                                |                                                                               
+ 3. M: We are famous for our barbecue pork with the rice, would you like to hav | 3. M: We are famous for our barbecue pork with the rice, would you like to hav
+-F: Uhh, I don't think so. I am not the big fan of barbecue pork.elriem         |+F: Uhh, I don't think so. I am not the big fan of barbecuepork.elrerol        
+-Q: Who is most probably the man? ar rguortt A enottseuO                        |+Q: Who is most probably the man? 8 or riguortt A enottseu                     
+                                                                                |                                                                               
+ 4. M: Can I just stay here for a just another minute? I really need to look up | 4. M: Can I just stay here for a just another minute? I really need to look up
+ F: Sorry, everyone is supposed to put books back to the shelf when the closing | F: Sorry, everyone is supposed to put books back to the shelf when the closing
+-Q:Where is the conversation most probably taking place?omo skqooq vaaM  to yti |+Q:Where is the conversation most probably taking place?omo skooq vaaMto tirota
+                                                                                |                                                                               
+-dod5. M: Wasn'tthe show any good?l ad i .looroe srolod sbiatuo risw ot sbam ne |+dor5. M: Wasn't the show any good?l nad i .loorbe srolod sbiatwo risw ot sbam 
+-woF: The show was good. But I could hardly see the stage from my seat. gai obi |+woF: The show was good. But I could hardly see the stage from my seat. yai obi
+-olloQ:What doesthe woman mean?bosgo                                            |+allooQ:What does the woman mean? bonsqo a ssoomy uM odt  m i wn s nn          
+                                                                                |                                                                               
+-d 6. M:Do you have your breakfast, lunch and dinner at the cafeteria? d wo aoo |+6. M: Do you have your breakfast, lunch and dinner at the cafeteria?d ed wo  b
+-i F: I'have lunch and dinner there, but I always get breakfast.len erom doun t |+i F: I'have lunch and dinner there, but I always get breakfast.len eromdoun td
+
+===================================================================================================================================================================
+ book_zh_GB12082006_extracted_page_8   similarity=0.99475
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GB/T 16927.1—1997 高压试验技术 第一部分：—般试验要求(eqvIEC 60060-1:1989)GB/T 17623—1998 绝缘油中溶 | GB/T 16927.1—1997 高压试验技术 第一部分：—般试验要求(eqvIEC 60060-1:1989)GB/T 17623—1998 绝缘油中溶
+                                                                                |                                                                               
+   ... 26 identical lines ...                                                   | ...
+ 3.1.8                                                                          | 3.1.8                                                                         
+                                                                                |                                                                               
+-额定二次电流ratedsydary cacren作为电流互感器性能基次电流值。                                        |+额定二次电流ratedndary cacren作为电流互感器性能基次电流值。                                        
+                                                                                |                                                                               
+-实际电流比actual transfornauon ratio实际一次电流与实标二次电流之比。                                |+实际电流比 actual transfornauon ratio实际一次电流与实际二次电流之比。                              
+                                                                                |                                                                               
+ 3.1.9                                                                          | 3.1.9                                                                         
+   ... 10 identical lines ...                                                   | ...
+ \text{电流误差}(\%)(K21,-10)×100                                                   | \text{电流误差}(\%)(K21,-10)×100                                                  
+ \]                                                                             | \]                                                                            

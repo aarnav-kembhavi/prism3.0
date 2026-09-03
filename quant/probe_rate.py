@@ -45,7 +45,7 @@ for p in pages:
 '''
 
 
-def run_arm(name, quant_value, pageset):
+def run_arm(name, quant_value, pageset, var="PRISM_QUANT"):
     log = ROOT / "quant" / f"probe_{name}.jsonl"
     if log.exists():
         log.unlink()
@@ -53,8 +53,11 @@ def run_arm(name, quant_value, pageset):
     env["PRISM_NORM_STRICT"] = "0"          # enable the verified path
     env["PRISM_NORM_VERIFY"] = "1"
     env["PRISM_PROBE_LOG"] = str(log)
-    env["PRISM_QUANT"] = quant_value
-    print(f"[*] probe arm '{name}' (PRISM_QUANT={quant_value!r}) ...")
+    env["PRISM_QUANT"] = ""
+    env["PRISM_FP16"] = ""
+    env[var] = quant_value
+    env["PRISM_FP16_RUNTIME"] = "fp32"
+    print(f"[*] probe arm '{name}' ({var}={quant_value!r}) ...")
     r = subprocess.run([sys.executable, "-c", CHILD.format(root=str(ROOT), pageset=str(pageset))],
                        cwd=str(ROOT), env=env, capture_output=True, text=True)
     if r.returncode != 0:
@@ -128,27 +131,39 @@ def main():
     pageset = build_pageset()
     fp32 = summarize(run_arm("fp32", "", pageset))
     int8 = summarize(run_arm("det_int8", "ppocr_det", pageset))
+    fp16 = summarize(run_arm("det_fp16", "ppocr_det", pageset, var="PRISM_FP16"))
 
-    delta = None
-    if fp32["acceptance_rate"] is not None and int8["acceptance_rate"] is not None:
-        delta = round((int8["acceptance_rate"] - fp32["acceptance_rate"]) * 100, 2)
+    def _delta(arm):
+        if fp32["acceptance_rate"] is None or arm["acceptance_rate"] is None:
+            return None
+        return round((arm["acceptance_rate"] - fp32["acceptance_rate"]) * 100, 2)
 
-    flips = []
-    for page, a in fp32["per_page"].items():
-        b = int8["per_page"].get(page, {"accepted": None})
-        if b["accepted"] != a["accepted"]:
-            flips.append({"page": page, "fp32_accepted": a["accepted"],
-                          "int8_accepted": b["accepted"]})
+    def _flips(arm, tag):
+        out = []
+        for page, a in fp32["per_page"].items():
+            b = arm["per_page"].get(page, {"accepted": None})
+            if b["accepted"] != a["accepted"]:
+                out.append({"page": page, "fp32_accepted": a["accepted"],
+                            tag + "_accepted": b["accepted"]})
+        return out
+
+    delta = _delta(int8)
+    delta_fp16 = _delta(fp16)
+    flips = _flips(int8, "int8")
+    flips_fp16 = _flips(fp16, "fp16")
 
     report = {
         "description": "PP-OCRv6 det 640px verification-probe acceptance, fp32 vs INT8, "
                        "on camera/defect captures (the 30 OmniDocBench eval pages are "
                        "scans/digital renders, where the probe never fires at all). "
                        "PRISM_NORM_STRICT=0 so the verified path is active.",
-        "fp32": fp32, "det_int8": int8,
+        "fp32": fp32, "det_int8": int8, "det_fp16": fp16,
         "acceptance_rate_delta_pp": delta,
+        "acceptance_rate_delta_pp_fp16": delta_fp16,
         "n_pages_with_different_accept_count": len(flips),
+        "n_pages_with_different_accept_count_fp16": len(flips_fp16),
         "pages_changed": flips,
+        "pages_changed_fp16": flips_fp16,
     }
     out = ROOT / "quant" / "probe_rate.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -156,17 +171,22 @@ def main():
     print("\n=== verification probe acceptance (camera/defect captures) ===")
     print("  fp32 det : %4d proposals, %4d accepted (%s)"
           % (fp32["proposals"], fp32["accepted"], fp32["acceptance_rate"]))
-    print("  int8 det : %4d proposals, %4d accepted (%s)"
-          % (int8["proposals"], int8["accepted"], int8["acceptance_rate"]))
-    print("  delta    : %s pp" % delta)
-    print("  pages whose accept count changed: %d" % len(flips))
+    print("  int8 det : %4d proposals, %4d accepted (%s)   delta %s pp, %d pages changed"
+          % (int8["proposals"], int8["accepted"], int8["acceptance_rate"],
+             delta, len(flips)))
+    print("  fp16 det : %4d proposals, %4d accepted (%s)   delta %s pp, %d pages changed"
+          % (fp16["proposals"], fp16["accepted"], fp16["acceptance_rate"],
+             delta_fp16, len(flips_fp16)))
     print("\n  by normalization step:")
-    for k in sorted(set(fp32["by_step"]) | set(int8["by_step"])):
-        a = fp32["by_step"].get(k, {"accepted": 0, "proposals": 0, "rate": None})
-        b = int8["by_step"].get(k, {"accepted": 0, "proposals": 0, "rate": None})
-        print("    %-14s fp32 %2d/%-2d (%s)   int8 %2d/%-2d (%s)"
+    empty = {"accepted": 0, "proposals": 0, "rate": None}
+    for k in sorted(set(fp32["by_step"]) | set(int8["by_step"]) | set(fp16["by_step"])):
+        a = fp32["by_step"].get(k, empty)
+        b = int8["by_step"].get(k, empty)
+        c = fp16["by_step"].get(k, empty)
+        print("    %-14s fp32 %2d/%-2d (%s)   int8 %2d/%-2d (%s)   fp16 %2d/%-2d (%s)"
               % (k, a["accepted"], a["proposals"], a["rate"],
-                 b["accepted"], b["proposals"], b["rate"]))
+                 b["accepted"], b["proposals"], b["rate"],
+                 c["accepted"], c["proposals"], c["rate"]))
     print("\nwrote", out.relative_to(ROOT))
 
 

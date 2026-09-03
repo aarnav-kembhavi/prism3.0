@@ -1,0 +1,5 @@
+{"pid": 27376, "key": "texo_encoder", "caller": "<string>", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 668, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 668, "event": "fp16_to_fp32", "file": "encoder_model_fp16.onnx", "initializers": 160, "attr_tensors": 0, "casts": 1}
+{"pid": 29512, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 29512, "event": "fp16_to_fp32", "file": "encoder_model_fp16.onnx", "initializers": 160, "attr_tensors": 0, "casts": 1}

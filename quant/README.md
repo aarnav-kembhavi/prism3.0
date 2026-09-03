@@ -234,3 +234,63 @@ reintroducing:
   `slanet-plus`, which store theirs in `Constant` **nodes** -- a vacuous pass;
 - keying those by `node.name` collapses all 299 unnamed `Constant` nodes onto
   one dict entry. They are keyed by output tensor name instead.
+
+## Results (Variant A)
+
+Full table in `results_table.md`. Per graph, everything else fp32:
+
+| graph | MB fp32 -> fp16 | mean sim | min | <0.95 | struct | INT8 mean |
+|---|---|---|---|---|---|---|
+| texo_encoder | 54.2 -> 27.1 | **1.00000** | 1.00000 | 0 | 0 | 0.97832 |
+| texo_decoder | 27.7 -> 14.0 | **1.00000** | 1.00000 | 0 | 0 | 0.99835 |
+| ppocr_rec | 21.2 -> 10.7 | 0.99979 | 0.99761 | 0 | 0 | 0.95985 |
+| ppocr_det | 9.9 -> 5.0 | 0.99718 | 0.96344 | 0 | 1 | 0.98952 |
+| ppdoclayout_v3 | 130.5 -> 65.5 | 0.99865 | 0.96982 | 0 | 1 | 0.92700 |
+| slanet_plus | 7.8 -> 4.0 | 0.93656 | 0.49850 | 8 | 10 | *not quantizable* |
+
+fp16 beats INT8 on every graph, and no page drops below 0.95 on any graph
+except slanet-plus. **The entire cost of the sweep is one 3.8 MB graph**, whose
+median is still 1.00000 -- the damage is confined to table cell structure, and
+`fp16_all` (0.93261) is almost exactly `fp16_slanet_plus` (0.93656) alone.
+
+Combinations, measured rather than inferred:
+
+| | stack MB | saved | median s/pg | peak RAM | mean sim | <0.95 | struct |
+|---|---|---|---|---|---|---|---|
+| fp32 baseline | 259.0 | - | 7.377 | 2101 | 1.00000 | 0 | 0 |
+| `fp16_all` (7 graphs) | 130.2 | 128.7 | 11.104 | 3755 | 0.93261 | 8 | 10 |
+| **`fp16_no_slanet` (6)** | **134.0** | **125.0** | 7.858 | 2692 | **0.99583** | **0** | 2 |
+
+`fp16_no_slanet` is the recommended configuration: 48.3% off the stack, zero
+pages below 0.95, median similarity 1.00000, latency within run-to-run noise
+(compare `fp32_repeat` at 7.659).
+
+### Two caveats
+
+- **RAM does not stay flat.** Back-conversion materialises the fp32 model
+  alongside the session, so peak RSS rises 2101 -> 2692 MB on the recommended
+  config (and 3755 MB with slanet-plus included, whose conversion happens in
+  the RapidTable child). Disk halves; memory does not.
+- **The verification probe does not move.** PP-OCRv6 det doubles as the 640px
+  gate in `normalization/verified.py`, where INT8 shifted acceptance +6.0 pp
+  across 12 of 57 camera captures. fp16 det is identical to fp32: 163
+  proposals, 26 accepted, **0.0 pp, 0 pages changed**.
+
+## Variant B (native fp16) does not run on the CPU EP
+
+5 of 7 graphs fail to load, in two distinct ways, and the split correlates
+exactly with whether the graph already contained `Cast(to=float)` nodes:
+
+| graph | pre-existing casts | native fp16 |
+|---|---|---|
+| texo_encoder | 0 | loads |
+| ppocr_det | 0 | loads |
+| ppocr_rec, ppocr_rec_en | 0 | ORT `SimplifiedLayerNormFusion` bug; loads only with `ORT_DISABLE_ALL` |
+| texo_decoder | 3 | `TypeInferenceError` |
+| slanet_plus | 10 | `TypeInferenceError` |
+| ppdoclayout_v3 | 35 | `TypeInferenceError` |
+
+The converter retypes an existing cast's declared output to float16 while
+leaving its `to` attribute at float. Disabling all graph optimizations works
+around the fusion bug but not the type errors, and would cost more latency than
+fp16 could return.

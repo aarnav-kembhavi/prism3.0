@@ -1,0 +1,3 @@
+{"pid": 31556, "key": "ppdoclayout_v3", "caller": "<string>", "file": "PP-DocLayoutV3_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 32696, "key": "ppdoclayout_v3", "caller": "models_interface.py", "file": "PP-DocLayoutV3_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 32696, "event": "fp16_to_fp32", "file": "PP-DocLayoutV3_fp16.onnx", "initializers": 958, "attr_tensors": 0, "casts": 14}

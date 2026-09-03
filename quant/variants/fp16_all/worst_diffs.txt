@@ -1,0 +1,57 @@
+===================================================================================================================================================================
+ color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006   similarity=0.4985
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Lesson 1                                                                       | Lesson 1                                                                      
+ Listen and match.                                                              | Listen and match.                                                             
+   ... 16 identical lines ...                                                   | ...
+ And she's friendly, too.                                                       | And she's friendly, too.                                                      
+                                                                                |                                                                               
+-<table><tr><td></td><td>clever</td><td>r careless</td><td>quiet</td><td>friend |+<table><tr><td>clever careless quiet friendly popular active polite cute helpf
+                                                                                |                                                                               
+ ## Let's write.                                                                | ## Let's write.                                                               
+   ... 4 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ is and                                                                         | is and                                                                        
+
+===================================================================================================================================================================
+ exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003   similarity=0.51829
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ learning Chinese languages in class.                                           | learning Chinese languages in class.                                          
+                                                                                |                                                                               
+   ... 2 identical lines ...                                                    | ...
+ Chinese language test will be in their exams in 2018.                          | Chinese language test will be in their exams in 2018.                         
+                                                                                |                                                                               
+-"Our cooperation with China is growing." said an education officer in Russia.  |+"Our cooperation with China is growing." said an education officer in Russia. 
+-                                                                               |+more important."                                                              
+                                                                                |                                                                               
+ 根据上述内容，判断下列句子正误，正确的在答题卡上将“T”涂黑，错误的在答题卡上将“F”涂黑。                                 | 根据上述内容，判断下列句子正误，正确的在答题卡上将“T”涂黑，错误的在答题卡上将“F”涂黑。                                
+   ... 11 identical lines ...                                                   | ...
+ ## B                                                                           | ## B                                                                          
+                                                                                |                                                                               
+-<table><tr><td>Dearstudents, An·English· talk- will be-held· in·the- school· h |+<table><tr><td>Dearstudents,</td><td>Dearall·students,</td><td>Found</td></tr>
+                                                                                |                                                                               
+ 根据文章内容，请选择最佳选项，并在答题卡上将选定答案的字母标号涂黑。                                             | 根据文章内容，请选择最佳选项，并在答题卡上将选定答案的字母标号涂黑。                                            
+
+===================================================================================================================================================================
+ exam_paper_2016年安徽省中考英语试题（解析）_page_012   similarity=0.78171
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 72.B73.A74.B【解析】                                                               | 72.B73.A74.B【解析】                                                              
+                                                                                |                                                                               
+   ... 12 identical lines ...                                                   | ...
+ Robots seem to be getting cleverer and cleverer. Here are four examples.       | Robots seem to be getting cleverer and cleverer. Here are four examples.      
+                                                                                |                                                                               
+-<table><tr><td>Budgee ·He was created by Five Elements Roboties. ·With two whe |+<table><tr><td>Budgee</td><td>Paro</td></tr><tr><td>·He was created by Five El
+                                                                                |                                                                               
+ <table>                                                                        | <table>                                                                       
+   ... 10 identical lines ...                                                   | ...
+ <tr><td>field to a diary（牛奶场）.</td><td>·In tests, he could tell whether someon | <tr><td>field to a diary（牛奶场）.</td><td>·In tests, he could tell whether someon
+ <tr><td></td><td>paying attention to him or not.</td></tr>                     | <tr><td></td><td>paying attention to him or not.</td></tr>                    
+-</table>                                                                       |+</table></td></tr></table>                                                    
+                                                                                |                                                                               
+ 75. Which robot can help you when you are shopping?                            | 75. Which robot can help you when you are shopping?                           

@@ -1,0 +1,27 @@
+{"pid": 18856, "key": "slanet_plus", "caller": "<string>", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 25200, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 25200, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 24968, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 24968, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 23268, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 23268, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 17940, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 17940, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 19472, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 19472, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 16272, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 16272, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 17772, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 17772, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 18880, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 18880, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 30124, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 30124, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 16680, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 16680, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 26912, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 26912, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 2748, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 2748, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
+{"pid": 17588, "key": "slanet_plus", "caller": "rtable_child.py", "file": "slanet-plus_fp16.onnx", "int8": false, "fp16": true, "precision": "fp16", "runtime": "fp32", "missing": null}
+{"pid": 17588, "event": "fp16_to_fp32", "file": "slanet-plus_fp16.onnx", "initializers": 0, "attr_tensors": 410, "casts": 4}
