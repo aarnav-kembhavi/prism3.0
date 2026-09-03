@@ -1,0 +1,153 @@
+===================================================================================================================================================================
+ exam_paper_2004-2019上海高考英语听力原文和答案_page_010   similarity=0.9201
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Section B                                                                      | Section B                                                                     
+                                                                                |                                                                               
+ (A) 56. A 57. D 58. B 59. D                                                    | (A) 56. A 57. D 58. B 59. D                                                   
+                                                                                |                                                                               
+-(B) 60. D 61. C 62. C                                                          |+(B) 60. D                                                                     
+-                                                                               |+                                                                              
+-                                                                               |+61. C 62. C                                                                   
+                                                                                |                                                                               
+ (C) 63. B 64. D 65. A 66. C                                                    | (C) 63. B 64. D 65. A 66. C                                                   
+   ... 9 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ 74. During the past three years, he has committed himself studying the relatio | 74. During the past three years, he has committed himself studying the relatio
+-between the transmission speed information and the pace of human life.         |+between the transmission speed information and the pace of human life. aid1:[0
+ 75. It is claimed that weight-loss pills have an effective and immediate effec | 75. It is claimed that weight-loss pills have an effective and immediate effec
+-far from the truth.                                                            |+ far from the truth.                                                          
+                                                                                |                                                                               
+ ## V.                                                                          | ## V.                                                                         
+                                                                                |                                                                               
+-8 enoltoe2                                                                     |+8 enoltone                                                                    
+-enoitaeria:                                                                    |+Danoitoeriea:                                                                 
+                                                                                |                                                                               
+ 2016                                                                           | 2016                                                                          
+                                                                                |                                                                               
+-ouO                                                                            |+OUO                                                                           
+                                                                                |                                                                               
+ I . Listening Comprehension                                                    | I . Listening Comprehension                                                   
+   ... 4 identical lines ...                                                    | ...
+ Directions: In Section A, you will hear ten short conversations between two sp | Directions: In Section A, you will hear ten short conversations between two sp
+ each conversation, a question will be asked about what was said. The conversat | each conversation, a question will be asked about what was said. The conversat
+-will be spoken only once. After you hear a conversation and the question about |+will be spoken only once. After you hear a conversation and the question about
+ answers on your paper, and decide which one is the best answer to the question | answers on your paper, and decide which one is the best answer to the question
+                                                                                |                                                                               
+   ... 2 identical lines ...                                                    | ...
+ Q: What does the woman think of the shopping center?                           | Q: What does the woman think of the shopping center?                          
+                                                                                |                                                                               
+-2. M: How long will we stay at the camp?                                       |+dionA                                                                         
+-F: We will stay there for one night. That means we will leave the camp at Aug  |+                                                                              
+-Q: When will the speakers arrive at the camp?                                  |+vsbilod                                                                       
+-                                                                               |+tidinom                                                                       
+-                                                                               |+                                                                              
+-                                                                               |+2. M: How long will we stay at the camp? aIluoy.allob                         
+-                                                                               |+F: We will stay there for one night. That means we will leave the camp at Aug 
+-                                                                               |+Q: When will the speakers arrive at the camp? bromAf                          
+                                                                                |                                                                               
+ 3. M: We are famous for our barbecue pork with the rice, would you like to hav | 3. M: We are famous for our barbecue pork with the rice, would you like to hav
+-F: Uhh, I don't think so. I am not the big fan of barbecue pork.elriem         |+F: Uhh, I don't think so. I am not the big fan of barbecuepork.eltier vools9ga
+-Q: Who is most probably the man? ar rguortt A enottseuO                        |+Q: Who is most probably the man? edt no beand eis af riguortt l enottseuO     
+                                                                                |                                                                               
+ 4. M: Can I just stay here for a just another minute? I really need to look up | 4. M: Can I just stay here for a just another minute? I really need to look up
+ F: Sorry, everyone is supposed to put books back to the shelf when the closing | F: Sorry, everyone is supposed to put books back to the shelf when the closing
+-Q:Where is the conversation most probably taking place?omo skqooq vaaM  to yti |+Q:Where is the conversation most probablytaking place?omo slqoeq vaaMto tioam 
+                                                                                |                                                                               
+-dod5. M: Wasn'tthe show any good?l ad i .looroe srolod sbiatuo risw ot sbam ne |+dord5. M: Wasn'tthe show any good?] ad  .looroe srolod sbiatuo risw o1 sbam ne
+-woF: The show was good. But I could hardly see the stage from my seat. gai obi |+wF: The show was good. But I could hardly see the stage from my seat. yai obi 
+-olloQ:What doesthe woman mean?bosgo                                            |+elloo Q:What does the woman mean? bonsqo a ssoomybbuM od eor meno i wsn snonev
+                                                                                |                                                                               
+-d 6. M:Do you have your breakfast, lunch and dinner at the cafeteria? d wo aoo |+d 6. M: Do you have your breakfast, lunch and dinner at the cafeteria?d ed wo 
+-i F: I'have lunch and dinner there, but I always get breakfast.len erom doun t |+i eF: Ihave lunch and dinner there, but I always get breakfast.len rom dou tdg
+
+===================================================================================================================================================================
+ page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556   similarity=0.92601
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-壬午刃34男民國三十年十二月二十九日酉時辰運戊申年喪父                                                    |+壬午刃34男民國三十年十二月二十九日酉時辰運戊申年喪父。                                                  
+                                                                                |                                                                               
+-丑戌刑月支丑爲天煞胎元與年柱反吟②月支丑爲閑神透劫財爲忌偏財入月支爲墓，偏財在時支巳而巳午有化火之嫌年月①丙火雖生隆冬，但弱中轉旺，傷官透官，喜財通關，喜金 |+丑戌刑月支丑爲天煞，胎元與年柱反吟 ②月支丑爲閑神透劫財爲忌偏財入月支爲墓偏財在時支巳而巳午有化火之嫌年月①丙火雖生隆冬，但弱中轉旺，傷官透官，喜財通關，喜
+                                                                                |                                                                               
+-始元戊                                                                            |+始元戊辰                                                                          
+                                                                                |                                                                               
+ 癸巳                                                                             | 癸巳                                                                            
+                                                                                |                                                                               
+-禄刃養墓2戊寅                                                                        |+禄刃養2戊寅                                                                        
+                                                                                |                                                                               
+ 丙午                                                                             | 丙午                                                                            
+                                                                                |                                                                               
+-丑贷                                                                             |+丑戌                                                                            
+                                                                                |                                                                               
+ 3男民國二十三年十二月一十六巳時戊寅運中父母先后亡                                                      | 3男民國二十三年十二月一十六巳時戊寅運中父母先后亡                                                     
+                                                                                |                                                                               
+-偏財入日支基刑月宮年十偏印胎元刑月支偏財月柱止官坐正官俱爲忌神偏財入月支及H支爲忌神丑戌未三刑月支戌爲天煞                          |+偏財入日支墓刑月宮年十偏印胎元刑月支偏財月柱止官坐正官俱爲忌神偏財入月支及H支爲忌神丑戌未三刑月支戌爲天煞                         
+                                                                                |                                                                               
+-官殺混雜取印化殺生身爲用                                                                   |+官殺混隸取印化殺生身爲用                                                                  
+                                                                                |                                                                               
+-八字務實研究8乙丑庚中戊子3男初通半两父母 年時伏吟胎元偏財刑月支衰胎病                                           |+八字務實研究乙丑庚中戊子男初通两父 年時伏吟胎元偏財刑月支衰 病                                              
+                                                                                |                                                                               
+ 癸丑冠帶                                                                           | 癸丑冠帶                                                                          
+-                                                                               |+                                                                              
+-墓衰                                                                             |+                                                                              
+                                                                                |                                                                               
+ 癸未                                                                             | 癸未                                                                            
+   ... 5 identical lines ...                                                    | ...
+ 長生1丁酉                                                                          | 長生1丁酉                                                                         
+                                                                                |                                                                               
+-32男：民國四十年九月十日丑時。酉運喪父                                                           |+2男：民國四十年九月十日丑時酉運喪父年時伏吟年于至時支爲羊刃初運辛酉爲忌神運正印引至年支爲刃②月柱正官坐正官，俱爲忌神偏財入日支及時支爲忌神，月支爲亡神，外
+                                                                                |                                                                               
+-年時伏吟，年于至時支爲羊刃初運辛酉爲忌神運正印引至年支爲刃。②月柱正官坐正官，俱爲忌神偏財入日支及時支爲忌神，月支爲亡神，外無其他神煞            |+①正官格財官旺喜印化官生身胎元：辛亥                                                            
+-                                                                               |+                                                                              
+-①正官格財官旺喜印化官生身                                                                  |+                                                                              
+-                                                                               |+                                                                              
+-胎元：辛亥                                                                          |+                                                                              
+                                                                                |                                                                               
+ 壬午                                                                             | 壬午                                                                            
+                                                                                |                                                                               
+-银生                                                                             |+生                                                                             
+-                                                                               |+                                                                              
+-                                                                               |+衰胎病                                                                           
+                                                                                |                                                                               
+ 乙丑                                                                             | 乙丑                                                                            
+                                                                                |                                                                               
+-衰胎病                                                                            |+庚年                                                                            
+-                                                                               |+                                                                              
+-庚申                                                                             |+                                                                              
+                                                                                |                                                                               
+ 戊子                                                                             | 戊子                                                                            
+                                                                                |                                                                               
+ 3男初運辛西父母雙                                                                      | 3男初運辛西父母雙                                                                     
+
+===================================================================================================================================================================
+ newspaper_0edcd83c195557b43279fa73edaa59aa_1   similarity=0.94394
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-                                                                               |+SECURITIES AND EXCHANGE COMMISSION [SEC File No. 270105, OMB Control No. 3235-
+-                                                                               |+                                                                              
+ ## Submission for OMB Review;                                                  | ## Submission for OMB Review;                                                 
+ Comment Request                                                                | Comment Request                                                               
+   ... 34 identical lines ...                                                   | ...
+ approximately 5 respondents for a total                                        | approximately 5 respondents for a total                                       
+ of 40 annual burden hours. It is                                               | of 40 annual burden hours. It is                                              
+-estimated that 100% of the total                                               |+estimated that100% of the total                                               
+ reporting burden is prepared by the                                            | reporting burden is prepared by the                                           
+ company.                                                                       | company.                                                                      
+   ... 25 identical lines ...                                                   | ...
+ OMB within 30 days of this notice.                                             | OMB within 30 days of this notice.                                            
+                                                                                |                                                                               
+-Federal Register/ Vol. 80, No. 237/Thursday, December 10, 2015 /Notices SECURI |+Federal Register/Vol. 80, No. 237/ Thursday, December 10, 2015 /Notices       
+                                                                                |                                                                               
+ Dated: December 4, 2015. Robert W. Errett, Deputy Secretary. [FR Doc. 20153106 | Dated: December 4, 2015. Robert W. Errett, Deputy Secretary. [FR Doc. 20153106
+   ... 84 identical lines ...                                                   | ...
+ discussed below.                                                               | discussed below.                                                              
+                                                                                |                                                                               
+-Form T-2 (17 CFR 269.2) is a statement of eligibility of an individual trustee |+Form T2 (17 CFR 269.2) is a statement of eligibility of an individual trustee 
+                                                                                |                                                                               
+ Ån agency may not conduct or sponsor, and a person is not required to respond  | Ån agency may not conduct or sponsor, and a person is not required to respond 
+   ... 7 identical lines ...                                                    | ...
+ Office of Information and Regulatory                                           | Office of Information and Regulatory                                          
+ Affairs, Office of Management and                                              | Affairs, Office of Management and                                             

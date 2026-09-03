@@ -1,0 +1,184 @@
+===================================================================================================================================================================
+ book_zh_CNASGL0072018_extracted_page_48   similarity=0.83252
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ \[                                                                             | \[                                                                            
+ u _ { \perp } = \frac { 0 . 1 } { 3 4 . 8 ~ ^ { * } \sqrt { 3 } } = 0 . 1 6 6  | u _ { \perp } = \frac { 0 . 1 } { 3 4 . 8 ~ ^ { * } \sqrt { 3 } } = 0 . 1 6 6 
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-v = ( 1 / 2 ) ( 1 0 / 1 0 0 ) ^ { - 3 } = 5 0                                  |+\psi = \big ( 1 / 2 \big ) \big ( 1 0 / 1 \big ) ( 1 0 0 \big ) ^ { - 3 } = 5 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 5 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-t t e                                                                          |+t k e                                                                         
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 5 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-I _ { \perp } = \frac { ( 1 \pm 0 . 2 G \cdot ) I _ { \perp } } { R _ { \perp  |+I _ { \perp } = \frac { ( 1 \pm 0 . 2 \zeta \cdot ) I _ { \perp } } { R _ { , 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\pm 0 . 2 5 \cdot I _ { 1 }                                                    |+\Delta = \pm 0 . 2 ^ { 6 } \times I _ { 1 }                                   
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\frac { \Delta } { I _ { * } } \! = \pm 0 . 2 \%                               |+\frac { \Delta } { I _ { : 1 } } = \pm 0 . 2 \%                               
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-u _ { \ast } = 0 . 2 \% / \sqrt { 3 } = 0 . 1 2 \%                             |+u _ { \downarrow } = 0 . 2 ^ { \pi } \mathcal { C } / \sqrt { 3 } = 0 . 1 2 ^ 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-v = ( 1 / 2 ) ( 1 0 / 1 0 0 ) ^ { - 1 } = 5 0                                  |+v = ( 1 / 2 ) ( 1 0 / 1 0 0 ) ^ { - 3 } = 5 0                                 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 3 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-( t ) i t _ { j }                                                              |+( i ) z                                                                       
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-u _ { z } = 0 . 5 \% / \sqrt { 3 } = 0 . 2 9 \%                                |+u _ { \mathrm { ~ i } } = 0 . 5 \% / \sqrt { 3 } = 0 . 2 9 \%                 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\psi = ( 1 / 2 ) ( 1 0 / 1 0 0 ) ^ { \frac { 1 } { 2 } } = 5 0                 |+y = \big ( 1 / 2 \big ) \big ( 1 0 / 1 0 \big ) ^ { - } = 5 0                 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-( t + t )                                                                      |+( i , i _ { j }                                                               
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-u _ { 1 } = \frac { 0 . 1 } { 3 8 } \times 1 0 0 \sqrt { c } = 0 . 2 6 \sqrt { |+u _ { 1 } = \frac { 0 . 1 } { 3 8 } \times 1 0 0 ^ { 5 } \chi = 0 . 2 6 ^ { 7 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-v = \big ( 1 / 2 \big ) \big ( 1 0 / 1 0 0 \big ) ^ { - 3 } = 5 0              |+\nu = \big ( 1 / 2 \big ) \big ( 1 0 / 1 0 0 \big ) ^ { - 3 } = 5 0           
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-: k 6                                                                          |+: k _ { s }                                                                   
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\bar { P } = \frac { U ^ { 2 } } { R } ~ , ~ ~ ~ \Delta \bar { P } = \frac { \ |+\bar { P } = \frac { U ^ { 2 } } { R } ~ , ~ ~ ~ \Delta \bar { P } = \frac { \
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 3 identical lines ...                                                    | ...
+ \frac { \Delta P } { P } = \frac { 2 \Delta U } { U }                          | \frac { \Delta P } { P } = \frac { 2 \Delta U } { U }                         
+ \]                                                                             | \]                                                                            
+
+===================================================================================================================================================================
+ docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14   similarity=0.85258
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (a)                                                                            | (a)                                                                           
+                                                                                |                                                                               
+   ... 21 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\wp = \mathtt { t a n } ^ { - 1 } \left ( \frac { ( v _ { \mathrm { g } } ) _  |+\wp = \mathtt { t a n } ^ { - 1 } \left ( \frac { ( \nu _ { \mathtt { g } } ) 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-Substituting into (48) the vectors κ and $. 2 g$ in polar coordinates (44), an |+Substituting into (48) the vectors κ and $. ~ v _ { g }$ in polar coordinates 
+-the propagation speed $| v _ { g } |$ in terms of a and $1 \dot { o }$         |+the propagation speed $| v _ { g } |$ in terms of a and $\bar { \dot { 0 } }$ 
+ For example, $\varphi$ for the boxscheme is given by                           | For example, $\varphi$ for the boxscheme is given by                          
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\varphi = \mathsf { t a n } ^ { - 1 } ~ \left ( { \frac { \sin \left ( { \frac |+\wp = { \mathtt { t a l } } ^ { - 1 } ~ \left ( { \frac { \sin \left ( { \frac
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\varphi \approx \theta - { \frac { 1 } { 1 2 } } ~ \sin ( 4 \theta ) a ^ { 2 } |+\wp \approx \theta - { \frac { 1 } { 1 2 } } ~ \sin ( 4 \theta ) a ^ { 2 } + O
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-Similarly, the Taylor expansion of $| t _ { E }$ at $\mathbf { \nabla } a = 0$ |+Similarly, the Taylor expansion of $| v _ { g } |$ at $\mathbf { \nabla } a = 
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-| v _ { g } | \approx 1 + \biggl ( \frac { 1 } { 1 6 } ~ \cos ( 4 \theta ) - \ |+| v _ { g } | \approx 1 + \bigg ( \frac { 1 } { 1 6 } ~ \cos ( 4 \theta ) - \f
+ \]                                                                             | \]                                                                            
+
+===================================================================================================================================================================
+ docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7   similarity=0.91072
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Formation of Methanesulfenyl Fluoride                                          | Formation of Methanesulfenyl Fluoride                                         
+                                                                                |                                                                               
+ own. Typical of the results are those afforded by B3LYP/6-                     | own. Typical of the results are those afforded by B3LYP/6-                    
+-$\mathbf { 3 1 + G ^ { i } }$ methods; these indicate an equilibrium geometry  |+$\mathbf { 3 1 + G ^ { * } }$ methods; these indicate an equilibrium geometry 
+-which, like that of $\mathbf { H _ { 2 } } \mathbf { C = S \cdots H C l } ^ {  |+which, like that of H2C=S.…HCl,[9] is a bent planar one with                  
+ the HF axis directed toward the S atom and subtending a                        | the HF axis directed toward the S atom and subtending a                       
+-$\mathbf { C } { = } \mathbf { S } { \cdots } \mathbf { H }$ angle close to $9 |+$\mathbb { C } = \mathbb { S } \cdots \mathbf { H }$ angle close to $9 0 ^ { \
+                                                                                |                                                                               
+ Figure 6. Molecular model of the H2CS..HF complex optimized with the           | Figure 6. Molecular model of the H2CS..HF complex optimized with the          
+   ... 3 identical lines ...                                                    | ...
+ earlier theoretical studies.[29,30] The vibrational properties                 | earlier theoretical studies.[29,30] The vibrational properties                
+ computed for the present model, together with the corresponding properties com | computed for the present model, together with the corresponding properties com
+-subunits $\dot { \mathbf { H } _ { 2 } \mathbf { C } = \mathbf { S } }$ and HF |+subunits $\mathbf { \hat { H } _ { 2 } C = S }$ and HF, the experimental resul
+ the normal and perdeuterated forms of D and for the complex H2C=S..HCl, are gi | the normal and perdeuterated forms of D and for the complex H2C=S..HCl, are gi
+ Where comparisons can be made, there is good agreement                         | Where comparisons can be made, there is good agreement                        
+   ... 2 identical lines ...                                                    | ...
+ found experimentally to be induced by complexation are reproduced by the calcu | found experimentally to be induced by complexation are reproduced by the calcu
+ (HF) shift of $- 4 3 5 . 3 ~ \mathrm { c m } ^ { - 1 }$ is matched theoretical | (HF) shift of $- 4 3 5 . 3 ~ \mathrm { c m } ^ { - 1 }$ is matched theoretical
+-of $- 4 3 7 . 9 ~ \mathrm { c m } ^ { - 1 } .$ . Small blue shifts of the fund |+of $\mathrm { - 4 3 7 . 9 ~ c m ^ { - 1 } . }$ . Small blue shifts of the fund
+-could be observed for the $\mathbf { H } _ { 2 } \mathbf { C = } \mathbb { S } |+could be observed for the $\mathbf { H } _ { 2 } \mathbb { C } = \mathbb { S }
+ of IR absorption, masking by more intense absorptions of                       | of IR absorption, masking by more intense absorptions of                      
+ other species, and wavenumbers falling below the minimum                       | other species, and wavenumbers falling below the minimum                      
+-threshold of the present measurements are then explanations sufficient to acco |+threshold of the present measurements are then explanations sufficient to acco
+-$\mathbf { S } \cdots \mathrm { H F }$ and $\mathbf { D _ { 2 } C = S \cdots D |+$S \cdots \mathbf { H F }$ and $\mathbf { D } _ { 2 } \mathbf { C } { = } \mat
+ these omissions, though, we have little doubt that D has                       | these omissions, though, we have little doubt that D has                      
+ thus been identified correctly.                                                | thus been identified correctly.                                               
+   ... 14 identical lines ...                                                   | ...
+ FULL PAPER                                                                     | FULL PAPER                                                                    
+                                                                                |                                                                               
+-made familiar by analogous studies of other sulfenyl carbonyl compounds, for e |+made familiar by analogous studies of other sulfenyl carbonyl compounds, for e
+-$\mathbf { F C } ( \mathbf { O } ) \mathbf { \dot { S } B r } ^ { [ 4 ] }$ and |+FC(O)SBr,[4] and $\mathbf { C l C ( O ) } \overset { ^ ! } { \mathrm { S B r .
+ allows us to conclude that the vapor is composed of approximately 98% of the s | allows us to conclude that the vapor is composed of approximately 98% of the s
+-quantum chemical calculations. Both forms of $\mathrm { F C } ( \mathbf { O }  |+quantum chemical calculations. Both forms of $\mathrm { F C } ( \mathcal { O }
+ then photodecompose. The main reaction channel involves                        | then photodecompose. The main reaction channel involves                       
+ the elimination of CO with the formation of the hitherto                       | the elimination of CO with the formation of the hitherto                      
+-elusive sulfenyl fluoride CH3SF, thus emulating similar photochemical processe |+elusive sulfenyl fluoride CH3SF, thus emulating similar photochemical processe
+ and                                                                            | and                                                                           
+ In a final step, continued UV-visible irradiation brings                       | In a final step, continued UV-visible irradiation brings                      
+-about a tautomeric change in $\mathbf { C H _ { \mathfrak { I } } S F } ,$ , w |+about a tautomeric change in $\operatorname { C H } _ { \mathfrak { I } } \mat
+-hydrogen atom from the methyl group to form HF and thioformaldehyde, $\mathbf  |+hydrogen atom from the methyl group to form HF and thioformaldehyde, $\mathbf 
+ H2C=SHF.                                                                       | H2C=SHF.                                                                      
+ Scheme 2 summarizes these photochemical events. In addition, there are seconda | Scheme 2 summarizes these photochemical events. In addition, there are seconda
+-the elimination of OCS, together presumably with $\mathrm { C H _ { 3 } F }$ a |+the elimination of OCS, together presumably with $\mathrm { C H } _ { 3 } \bar
+ of loosely bound CO complexes.                                                 | of loosely bound CO complexes.                                                
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\mathrm { F C ( O ) S C l . ^ { [ 3 ] } ~ F C ( O ) S B r . ^ { [ 4 ] } }      |+\mathrm { F C ( O ) S C l , ^ { [ 3 ] } ~ F C ( O ) S B r , ^ { [ 4 ] } }     
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\bar { \mathrm { C l C } ( O ) S B r . } ^ { [ 1 1 ] }                         |+\tilde { \mathrm { C l C } ( O ) S B r . } ^ { [ 1 1 ] }                      
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 7 identical lines ...                                                    | ...
+ by repeated trap-to-trap condensation under vacuum. The purity of the          | by repeated trap-to-trap condensation under vacuum. The purity of the         
+ compound was checked by reference to the IR spectrum of the vapor              | compound was checked by reference to the IR spectrum of the vapor             
+-and to the $^ { i _ { H } , 1 3 C _ { 0 } }$ and 19F NMR spectra of the liquid |+and to the $^ \mathbf { i } _ { \mathrm { H } , ~ 1 3 } C _ { \mathrm { S } }$

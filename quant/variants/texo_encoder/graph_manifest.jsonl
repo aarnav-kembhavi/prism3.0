@@ -1,0 +1,3 @@
+{"pid": 25644, "key": "texo_encoder", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}
+{"pid": 18952, "key": "texo_encoder", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}
+{"pid": 26912, "key": "texo_encoder", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}

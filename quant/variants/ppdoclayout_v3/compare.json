@@ -1,0 +1,75 @@
+{
+  "variant": "ppdoclayout_v3",
+  "n_pages": 30,
+  "mean_similarity": 0.927,
+  "min_similarity": 0.72294,
+  "median_similarity": 0.94463,
+  "threshold": 0.95,
+  "n_below_threshold": 17,
+  "pages_below": [
+    "PPT_StewartCalcET7e_03_02_page_010",
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115",
+    "book_zh_CNASGL0072018_extracted_page_48",
+    "book_zh_GB12082006_extracted_page_8",
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006",
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087",
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185",
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181",
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4",
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7",
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10",
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14",
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010",
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012",
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001",
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556",
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53"
+  ],
+  "n_structural_failures": 3,
+  "structural_failures": {
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": [
+      "CELL COUNT: 103 -> 113",
+      "ROW COUNT: 11 -> 12"
+    ],
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": [
+      "TABLE COUNT: 6 -> 8",
+      "ROW COUNT: 67 -> 66"
+    ],
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": [
+      "CELL COUNT: 28 -> 38",
+      "ROW COUNT: 14 -> 19"
+    ]
+  },
+  "per_page": {
+    "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006": 1.0,
+    "PPT_PresentationSpecification_page_010": 0.99904,
+    "PPT_StewartCalcET7e_03_02_page_010": 0.90049,
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115": 0.938,
+    "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188": 0.9953,
+    "book_zh_CNASGL0072018_extracted_page_48": 0.92715,
+    "book_zh_GB12082006_extracted_page_8": 0.81051,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006": 0.94595,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087": 0.87057,
+    "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003": 0.97084,
+    "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006": 0.97426,
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": 0.94463,
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181": 0.88051,
+    "docstructbench_enbook-zlib-o.O-19221575.pdf_1173": 0.99239,
+    "docstructbench_enbook-zlib-o.O-21353024.pdf_39": 0.9967,
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": 0.92083,
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7": 0.82957,
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10": 0.93096,
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14": 0.89391,
+    "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11": 1.0,
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010": 0.92633,
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": 0.84305,
+    "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003": 0.96826,
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001": 0.80279,
+    "newspaper_0edcd83c195557b43279fa73edaa59aa_1": 0.95643,
+    "notes_1ba14cb325bc448f7201b20502ecf2b5_16": 0.99044,
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556": 0.72294,
+    "page-28657a85-95cc-4bfa-8156-cc98518a0b4c": 1.0,
+    "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927": 1.0,
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53": 0.87826
+  }
+}

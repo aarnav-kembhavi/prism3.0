@@ -1,0 +1,2 @@
+{"pid": 29104, "key": "ppdoclayout_v3", "caller": "<string>", "file": "PP-DocLayoutV3_int8.onnx", "int8": true, "missing": null}
+{"pid": 31704, "key": "ppdoclayout_v3", "caller": "models_interface.py", "file": "PP-DocLayoutV3_int8.onnx", "int8": true, "missing": null}

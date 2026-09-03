@@ -1,0 +1,4 @@
+{"pid": 1352, "key": "ppocr_det", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 30304, "key": "ppocr_det", "caller": "<string>", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 28020, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 6032, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}

@@ -1,0 +1,4 @@
+{"pid": 13416, "key": "ppdoclayout_v3", "caller": "<string>", "file": "PP-DocLayoutV3_int8_heads.onnx", "int8": true, "missing": null}
+{"pid": 616, "key": "ppdoclayout_v3", "caller": "models_interface.py", "file": "PP-DocLayoutV3_int8_heads.onnx", "int8": true, "missing": null}
+{"pid": 17696, "key": "ppdoclayout_v3", "caller": "<string>", "file": "PP-DocLayoutV3_int8_heads.onnx", "int8": true, "missing": null}
+{"pid": 23620, "key": "ppdoclayout_v3", "caller": "models_interface.py", "file": "PP-DocLayoutV3_int8_heads.onnx", "int8": true, "missing": null}

@@ -1,0 +1,3 @@
+{"pid": 23264, "key": "texo_decoder", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 21424, "key": "texo_decoder", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 31944, "key": "texo_decoder", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}

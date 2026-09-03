@@ -1,0 +1,287 @@
+===================================================================================================================================================================
+ page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556   similarity=0.72294
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-壬午刃34男民國三十年十二月二十九日酉時辰運戊申年喪父                                                    |+壬午                                                                            
+                                                                                |                                                                               
+-丑戌刑月支丑爲天煞胎元與年柱反吟②月支丑爲閑神透劫財爲忌偏財入月支爲墓，偏財在時支巳而巳午有化火之嫌年月①丙火雖生隆冬，但弱中轉旺，傷官透官，喜財通關，喜金 |+@八字務實研究.1…34男民國三十年十二月二十九日酉時辰運戊申年喪父。 丑戌刑，月支丑爲天煞胎元與年柱反吟。②月支丑爲閑神，透劫財爲忌偏財入月支爲基，偏财在
+                                                                                |                                                                               
+-始元戊                                                                            |+34男民國三十年十二月二十九日酉時辰運戊申年喪父                                                      
+-                                                                               |+                                                                              
+-                                                                               |+①丙火雖生隆冬，但弱中轉旺傷官透官，喜財通關，喜金水                                                    
+-                                                                               |+                                                                              
+-                                                                               |+胎元：戊辰                                                                         
+                                                                                |                                                                               
+ 癸巳                                                                             | 癸巳                                                                            
+                                                                                |                                                                               
+-禄刃養墓2戊寅                                                                        |+禄刃養2戊寅                                                                        
+                                                                                |                                                                               
+-丙午                                                                             |+两午丁丑                                                                          
+                                                                                |                                                                               
+-丑贷                                                                             |+3男：民國二十三年十二月二十六巳時戊寅運中父母先后亡偏財入日支墓刑月宮年十偏印胎元刑月支之偏財                               
+                                                                                |                                                                               
+-3男民國二十三年十二月一十六巳時戊寅運中父母先后亡                                                      |+月柱正宿坐正官俱爲忌神偏財入支及H支爲忌神，丑戌未三刑月支皮爲天煞                                             
+                                                                                |                                                                               
+-偏財入日支基刑月宮年十偏印胎元刑月支偏財月柱止官坐正官俱爲忌神偏財入月支及H支爲忌神丑戌未三刑月支戌爲天煞                          |+官殺退隸取印化殺生身爲用                                                                  
+                                                                                |                                                                               
+-官殺混雜取印化殺生身爲用                                                                   |+# 年時伏吟胎元偏財刑月支                                                                 
+                                                                                |                                                                               
+-八字務實研究8乙丑庚中戊子3男初通半两父母 年時伏吟胎元偏財刑月支衰胎病                                           |+冠帶                                                                            
+                                                                                |                                                                               
+-癸丑冠帶                                                                           |+癸丑                                                                            
+                                                                                |                                                                               
+ 墓衰                                                                             | 墓衰                                                                            
+   ... 5 identical lines ...                                                    | ...
+ 辛卯                                                                             | 辛卯                                                                            
+                                                                                |                                                                               
+-長生1丁酉                                                                          |+長生一丁酉                                                                         
+                                                                                |                                                                               
+-32男：民國四十年九月十日丑時。酉運喪父                                                           |+32男：民國四十年九月十日丑時酉運喪父。                                                          
+                                                                                |                                                                               
+-年時伏吟，年于至時支爲羊刃初運辛酉爲忌神運正印引至年支爲刃。②月柱正官坐正官，俱爲忌神偏財入日支及時支爲忌神，月支爲亡神，外無其他神煞            |+年時伏吟，年于至時支爲羊刃初運辛酉爲忌神運正印引至年支爲刃。②月柱正官坐正官俱爲忌神偏財入日支及時支爲忌神月支爲亡神外無其他神煞              
+                                                                                |                                                                               
+ ①正官格財官旺喜印化官生身                                                                  | ①正官格財官旺喜印化官生身                                                                 
+                                                                                |                                                                               
+-胎元：辛亥                                                                          |+胎元辛亥                                                                          
+                                                                                |                                                                               
+-壬午                                                                             |+出午                                                                            
+                                                                                |                                                                               
+-银生                                                                             |+長生                                                                            
+                                                                                |                                                                               
+ 乙丑                                                                             | 乙丑                                                                            
+   ... 5 identical lines ...                                                    | ...
+ 戊子                                                                             | 戊子                                                                            
+                                                                                |                                                                               
+-3男初運辛西父母雙                                                                      |+3男初連辛西父母雙                                                                     
+
+===================================================================================================================================================================
+ exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001   similarity=0.80279
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ # The 52nd William Lowell Putnam Mathematical Competition                      | # The 52nd William Lowell Putnam Mathematical Competition                     
+ Saturday, December 7, [99]                                                     | Saturday, December 7, [99]                                                    
+                                                                                |                                                                               
+ A–1 A 2 × 3 rectangle has vertices as (0, 0), (2, 0), (0, 3), and              | A–1 A 2 × 3 rectangle has vertices as (0, 0), (2, 0), (0, 3), and             
+-(2,3). It rotates $. 9 0 ^ { \circ }$ clockwise about the point (2,0). It      |+(2,3). It rotates 90° clockwise about the point (2,0). It                     
+-then rotates $9 0 ^ { \circ }$ clockwise about the point (5, 0), then          |+then rotates 90° clockwise about the point (5,0), then                        
+ 90° clockwise about the point (7,0), and finally, $9 0 ^ { \circ }$            | 90° clockwise about the point (7,0), and finally, $9 0 ^ { \circ }$           
+ clockwise about the point (10,0). (The side originally                         | clockwise about the point (10,0). (The side originally                        
+   ... 3 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ A-2 Let A and B be different n × n matrices with real entries.                 | A-2 Let A and B be different n × n matrices with real entries.                
+-$\mathbf { I f } ~ \mathbf { A } ^ { 3 } = \mathbf { B } ^ { 3 }$ and $\mathbf |+If A3 = B3 and A2B = B2A, d can A2 + B2 be invertible?                        
+                                                                                |                                                                               
+-A-3 Find all real polynomial: s p(x) of degree n ≥ r1 < r2 <  · · < rn $: n \g |+A-3 Find all real polynomials p(x) of degree n 2 for which there exist real nu
+-there exist real numbers such that                                             |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 6 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\begin{array} { r } { 2 . ~ p ^ { \prime } \left ( \frac { \tilde { r } _ { i  |+\begin{array} { r } { \cdot p ^ { \prime } \left ( ~ \frac { \ddot { r } _ { i
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 2 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-where $\cdot p ^ { \prime } ( x )$ denotes the derivative of $p ( x ) .$       |+where p'(x) denotes the derivative of p(x).                                   
+                                                                                |                                                                               
+ A-4 Does there exist an infinite sequence of closed discs                      | A-4 Does there exist an infinite sequence of closed discs                     
+-$D _ { 1 } , D _ { 2 } , D _ { 3 } , \dots$ in the plane, with centers $c _ {  |+D1, D2, D3, . .. in the plane, with centers c1, c2, C3, . . . ,               
+ respectively, such that                                                        | respectively, such that                                                       
+-                                                                               |+1. the c have no limit point in the finite plane,                             
+                                                                                |                                                                               
+-1. the $: c _ { i }$ have no limit point in the finite plane,                  |+2. the sum of the areas of the D is finite, and                               
+-2. the sum of the areas of the $: D _ { i }$ is finite, and                    |+                                                                              
+                                                                                |                                                                               
+ 3. every line in the plane intersects at least one of the                      | 3. every line in the plane intersects at least one of the                     
+-                                                                               |+Di?                                                                           
+                                                                                |                                                                               
+-\[                                                                             |+A5 Find the maximum value of                                                  
+-D : ?                                                                          |+                                                                              
+-\]                                                                             |+                                                                              
+-                                                                               |+                                                                              
+-A-5 Find the maximum value of                                                  |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 1 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-for                                                                            |+for 0 y 1. A6 Let A(n) denote the number of sums of positive integers         
+-                                                                               |+                                                                              
+-\[                                                                             |+                                                                              
+-\cdot 0 \leq y \leq 1 .                                                        |+                                                                              
+-\]                                                                             |+                                                                              
+-                                                                               |+                                                                              
+-A6 Let A(n) denote the number of sums of positive integers                     |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 11 identical lines ...                                                   | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-Let $\cdot B ( n )$ denote the number of $: b _ { 1 } + b _ { 2 } + \cdots + b |+Let B(n) denote the number of b1 + b2 + . + bs which add up to n, with        
+-add up to n, with                                                              |+                                                                              
+-                                                                               |+\[                                                                            
+-                                                                               |+\mathsf { f } ~ b _ { 1 } + b _ { 2 } + \cdots + b _ { s }                    
+-                                                                               |+\]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 1 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-2. each b is in the sequence $1 , 2 , 4 , \dots , g _ { j } , \dots$ . defined |+2. each $\cdot b _ { i }$ is in the sequence $1 , 2 , 4 , \dots , g _ { j } , 
+-by $g _ { 1 } = 1 , g _ { 2 } = 2 ,$ and $\cdot g _ { j } = g _ { j - 1 } + g  |+by g1 = 1, g2 = 2, and gj = g j−1 + g j−2 + 1, and                            
+-                                                                               |+                                                                              
+-\[                                                                             |+                                                                              
+-b _ { 1 } = g _ { k }                                                          |+                                                                              
+-\]                                                                             |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 1 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-3. if b1 = gk then every element in {1, 2,4, . . . , gk}                       |+3. if b1 = gk then every element in {1, 2,4, . . . , gk} appears at least once
+-appears at least once as a b.                                                  |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-1 b i .                                                                        |+n \geq 1 .                                                                    
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-\[                                                                             |+(For example A(7) = 5 because the relevant sums are                           
+-\cdot A ( n ) = B ( n )                                                        |+                                                                              
+-\]                                                                             |+                                                                              
+-                                                                               |+                                                                              
+-\[                                                                             |+                                                                              
+-1 ~ n \geq 1 .                                                                 |+                                                                              
+-\]                                                                             |+                                                                              
+-                                                                               |+                                                                              
+-\[                                                                             |+                                                                              
+-7 , 6 + 1 , 5 + 2 , 4 + 3 , 4 + 2 + 1 ,                                        |+                                                                              
+-\]                                                                             |+                                                                              
+-                                                                               |+                                                                              
+-\[                                                                             |+                                                                              
+-7 , 6 + 1 , 5 + 2 , 4 + 3 , 4 + 2 + 1 , ~ \mathrm { a n d } ~ B ( 7 ) = 5 ~ \m |+                                                                              
+-\]                                                                             |+                                                                              
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 5 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-B-1 For each integer $\cdot n \geq 0 ,$ , let S(n) = n − m2, , where m is the  |+B-1 For each integer $n \geq 0 ,$ , let S(n) = n − m2, where m is the         
+-greatest integer with $m ^ { 2 } \leq n .$ . Define a sequence ${ } ^ { ( a _  |+greatest integer with $m ^ { 2 } \leq n .$ . Define a sequence $( a _ { k } ) 
+-by $a _ { 0 } = A$ and $a _ { k + 1 } = \overline { a _ { k } } + S ( a _ { k  |+by a0 = A and $a _ { k + 1 } = \bar { a _ { k } } + S ( a _ { k } )$ for k ≥ 0
+ positive integers A is this sequence eventually constant?                      | positive integers A is this sequence eventually constant?                     
+                                                                                |                                                                               
+-B-2 Suppose f and g are non-constant, differentiable, realvalued functions def |+\[                                                                            
+-suppose that for each pair of real numbers x and y,                            |+( - \infty , \infty ) .                                                       
+-                                                                               |+\]                                                                            
+-                                                                               |+                                                                              
+-                                                                               |+B-2 Suppose f and g are non-constant, differentiable, realvalued functions def
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 6 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-{ \mathrm { I f ~ } } f ^ { \prime } ( 0 ) = 0 ,                               |+\mathrm { f } ~ f ^ { \prime } ( 0 ) = 0 ,                                    
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-( f ( x ) ) ^ { 2 } + ( g ( x ) ) ^ { 2 } = 1                                  |+( f ( x ) ) ^ { 2 } + ( g ( x ) ) ^ { 2 } = 1 :                               
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+ B–3 Does there exist a real number L such that, if m and n are                 | B–3 Does there exist a real number L such that, if m and n are                
+ integers greater than L, then an m × n rectangle may be                        | integers greater than L, then an m × n rectangle may be                       
+-expressed as a union of $4 \times 6$ and $. 5 \times 7$ rectangles, any        |+expressed as a union of 4 × 6 and $1 5 \times 7$ rectangles, any              
+ two of which intersect at most along their boundaries?                         | two of which intersect at most along their boundaries?                        
+                                                                                |                                                                               
+-B4 Suppose p is an odd prime. Prove that                                       |+B-4 Suppose p is an odd prime. Prove that                                     
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+   ... 1 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-B-5 Let be $. p |$ an odd prime and let $\mathbb { Z } _ { p }$ denote (the fi |+B-5 Let p be an odd prime and let $t \mathbb { Z } _ { p }$ denote (the field 
+ integers modulo p. How many elements are in the set                            | integers modulo p. How many elements are in the set                           
+                                                                                |                                                                               
+   ... 8 identical lines ...                                                    | ...
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+-for all u with $1 0 < | u | \leq c$ and for all I > x > 0 x . (Note:           |+for all u with 0 < |u| < c and for all I > x > 0 °x . (Note:                  
+-sinh                                                                           |+sinh 1                                                                        
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\iota u = ( e ^ { u } - e ^ { - u } ) / \bar { 2 . } )                         |+\mathbf { 1 } u = ( e ^ { u } - e ^ { - u } ) / 2 . )                         
+ \]                                                                             | \]                                                                            
+
+===================================================================================================================================================================
+ book_zh_GB12082006_extracted_page_8   similarity=0.81051
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-GB/T 16927.1—1997 高压试验技术 第一部分：—般试验要求(eqvIEC 60060-1:1989)GB/T 17623—1998 绝缘油中溶 |+GB 1208-2006                                                                  
+                                                                                |                                                                               
+-GB1208-2006                                                                    |+GB/T 16927.1—1997 高压试验技术 第一部分：—般试验要求(eqvIEC 60060-1:1989)GB/T 17623—1998 绝缘油中溶
+-                                                                               |+                                                                              
+-                                                                               |+JB/T 5895--[99] 污移地区绝缘子 使用导则(neq1EC 60815:1986)                               
+                                                                                |                                                                               
+ ## 3 术语和定义                                                                     | ## 3 术语和定义                                                                    
+   ... 1 identical lines ...                                                    | ...
+ GB/T 2900.15—1997确立的以及下列术语和定义适用于本标准。                                           | GB/T 2900.15—1997确立的以及下列术语和定义适用于本标准。                                          
+                                                                                |                                                                               
+-## 3.1 通用定义                                                                    |+3.1 通用定义3.1.1                                                                 
+                                                                                |                                                                               
+-3.1.1                                                                          |+互感器instrument transforme                                                      
+                                                                                |                                                                               
+-互感器 instrument transformer一种为测量仪器、仪表、继电器和其他类似电器供电的变压器。                         |+一种为测量仪器、仅表、继电器和其他类似电器供电的变压器。                                                  
+                                                                                |                                                                               
+ 3.1.2                                                                          | 3.1.2                                                                         
+                                                                                |                                                                               
+-电流互感器current transformecs一种在正常使用条件下其零的互感器。3.1.3一次绕组 primary流过被变换电流的3.1.4       |+电流互感器                                                                         
+                                                                                |                                                                               
+-二次绕组second finding给测量仪器、仅器和其他类似电参提供电速的绕电                                       |+current transfyrme                                                            
+                                                                                |                                                                               
+-3.1.5                                                                          |+一种在正常使用条件下零的互感器。anns.                                                         
+                                                                                |                                                                               
+-二次电路seconcircuit                                                               |+3.1.3一次绕组 primary                                                             
+-                                                                               |+                                                                              
+-                                                                               |+一次绕组primary/epdipg                                                            
+-                                                                               |+                                                                              
+-                                                                               |+3.1.4                                                                         
+-                                                                               |+                                                                              
+-                                                                               |+二次绕组seconfinding                                                              
+-                                                                               |+                                                                              
+-                                                                               |+给测量仪器、仪表 器和其他类3.1.5 E                                                         
+-                                                                               |+                                                                              
+-                                                                               |+二次电路secorcircuit由互感器二次绕供电的外部电路                                                
+                                                                                |                                                                               
+ 3.1.6                                                                          | 3.1.6                                                                         
+                                                                                |                                                                               
+-3.1.7                                                                          |+额定一次电流rA0imary curfenty                                                       
+                                                                                |                                                                               
+-3.1.8                                                                          |+作为电流互感器性3.1.7                                                                 
+                                                                                |                                                                               
+-额定二次电流ratedsydary cacren作为电流互感器性能基次电流值。                                        |+的一次电流值                                                                        
+                                                                                |                                                                               
+-实际电流比actual transfornauon ratio实际一次电流与实标二次电流之比。                                |+顾定二次电流rateddary cacren                                                        
+                                                                                |                                                                               
+-3.1.9                                                                          |+作为电流互感器性能3.1.8                                                                
+                                                                                |                                                                               
+-额定电流比rated transformation ratio额定一次电流与额定二次电流之比。                                |+次电流值。                                                                         
+-                                                                               |+                                                                              
+-                                                                               |+实际电流比 actual transfornauon ratio                                              
+-                                                                               |+                                                                              
+-                                                                               |+实际一次电流与实标二次电流之比。3.1.9额定电流比rated transformation ratio                          
+-                                                                               |+                                                                              
+-                                                                               |+额定一次电流与额定二次电流之比。                                                              
+                                                                                |                                                                               
+ 3.1.10                                                                         | 3.1.10                                                                        
+                                                                                |                                                                               
+-电流误差（比值差） current error (ratio error)                                          |+电流误差（比值差）current error(ratio error)互感器在测量电流时所产生的误差，它是由于实际电流比与额定电流比不相等造成的。     
+                                                                                |                                                                               
+-互感器在测量电流时所产生的误差，它是由于实际电流比与额定电流比不相等造成的。电流误差的百分数用下式表示：                           |+电流误差的百分数用下式表示：                                                                
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+ \text{电流误差}(\%)(K21,-10)×100                                                   | \text{电流误差}(\%)(K21,-10)×100                                                  
+ \]                                                                             | \]                                                                            

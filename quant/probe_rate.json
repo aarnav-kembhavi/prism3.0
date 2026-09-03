@@ -1,0 +1,419 @@
+{
+  "description": "PP-OCRv6 det 640px verification-probe acceptance, fp32 vs INT8, on camera/defect captures (the 30 OmniDocBench eval pages are scans/digital renders, where the probe never fires at all). PRISM_NORM_STRICT=0 so the verified path is active.",
+  "fp32": {
+    "proposals": 163,
+    "accepted": 26,
+    "acceptance_rate": 0.1595,
+    "by_step": {
+      "clahe": {
+        "proposals": 27,
+        "accepted": 13,
+        "rate": 0.4815
+      },
+      "glare": {
+        "proposals": 34,
+        "accepted": 1,
+        "rate": 0.0294
+      },
+      "rectify": {
+        "proposals": 34,
+        "accepted": 7,
+        "rate": 0.2059
+      },
+      "shadow": {
+        "proposals": 34,
+        "accepted": 5,
+        "rate": 0.1471
+      },
+      "white_balance": {
+        "proposals": 34,
+        "accepted": 0,
+        "rate": 0.0
+      }
+    },
+    "per_page": {
+      "1": {
+        "proposals": 4,
+        "accepted": 2
+      },
+      "10": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "11": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "12": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "13": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "16": {
+        "proposals": 5,
+        "accepted": 3
+      },
+      "19": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "20": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "21": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "22": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "23": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "24": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "25": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "26": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "35": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "36": {
+        "proposals": 4,
+        "accepted": 1
+      },
+      "37": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "38": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "39": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "4": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "40": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "41": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "42": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "5": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "6": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "7": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "9": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "glare_grid": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "glare_specular": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "receipt_angled": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "receipt_rotated_90": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "noise_random": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "notes_automata_statediagram": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "notes_economics_cie3": {
+        "proposals": 5,
+        "accepted": 1
+      }
+    },
+    "outcomes": {
+      "rejected": 81,
+      "accepted": 26,
+      "noop": 37,
+      "probe_untrusted_lowres": 19
+    }
+  },
+  "det_int8": {
+    "proposals": 164,
+    "accepted": 36,
+    "acceptance_rate": 0.2195,
+    "by_step": {
+      "clahe": {
+        "proposals": 28,
+        "accepted": 18,
+        "rate": 0.6429
+      },
+      "glare": {
+        "proposals": 34,
+        "accepted": 2,
+        "rate": 0.0588
+      },
+      "rectify": {
+        "proposals": 34,
+        "accepted": 8,
+        "rate": 0.2353
+      },
+      "shadow": {
+        "proposals": 34,
+        "accepted": 7,
+        "rate": 0.2059
+      },
+      "white_balance": {
+        "proposals": 34,
+        "accepted": 1,
+        "rate": 0.0294
+      }
+    },
+    "per_page": {
+      "1": {
+        "proposals": 4,
+        "accepted": 3
+      },
+      "10": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "11": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "12": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "13": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "16": {
+        "proposals": 5,
+        "accepted": 3
+      },
+      "19": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "20": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "21": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "22": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "23": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "24": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "25": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "26": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "35": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "36": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "37": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "38": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "39": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "4": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "40": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "41": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "42": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "5": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "6": {
+        "proposals": 5,
+        "accepted": 0
+      },
+      "7": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "9": {
+        "proposals": 5,
+        "accepted": 2
+      },
+      "glare_grid": {
+        "proposals": 4,
+        "accepted": 1
+      },
+      "glare_specular": {
+        "proposals": 5,
+        "accepted": 1
+      },
+      "receipt_angled": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "receipt_rotated_90": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "noise_random": {
+        "proposals": 4,
+        "accepted": 0
+      },
+      "notes_automata_statediagram": {
+        "proposals": 5,
+        "accepted": 3
+      },
+      "notes_economics_cie3": {
+        "proposals": 5,
+        "accepted": 1
+      }
+    },
+    "outcomes": {
+      "accepted": 36,
+      "rejected": 72,
+      "noop": 37,
+      "probe_untrusted_lowres": 19
+    }
+  },
+  "acceptance_rate_delta_pp": 6.0,
+  "n_pages_with_different_accept_count": 12,
+  "pages_changed": [
+    {
+      "page": "1",
+      "fp32_accepted": 2,
+      "int8_accepted": 3
+    },
+    {
+      "page": "19",
+      "fp32_accepted": 2,
+      "int8_accepted": 1
+    },
+    {
+      "page": "23",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "24",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "25",
+      "fp32_accepted": 0,
+      "int8_accepted": 1
+    },
+    {
+      "page": "26",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "36",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "40",
+      "fp32_accepted": 0,
+      "int8_accepted": 1
+    },
+    {
+      "page": "41",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "9",
+      "fp32_accepted": 1,
+      "int8_accepted": 2
+    },
+    {
+      "page": "glare_grid",
+      "fp32_accepted": 0,
+      "int8_accepted": 1
+    },
+    {
+      "page": "notes_automata_statediagram",
+      "fp32_accepted": 2,
+      "int8_accepted": 3
+    }
+  ]
+}

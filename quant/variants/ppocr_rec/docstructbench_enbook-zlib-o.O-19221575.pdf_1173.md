@@ -1,0 +1,52 @@
+Gotu kola, kava kava, St. John's
+wort, valerian may increase CNS depression. FOOD: None known. LAB VAL-
+UEs: May decrease total free thyroxine
+$( \mathrm { T } _ { 4 } )$ serum levels. May increase seru
+cholesterol, triglycerides, AIT, AST, WBC,
+GGT. May produce false-positive pregnancy test result.
+
+## A. VAILABILITV (Rx)
+
+Tablets: 25 mg, 50 mg, 100 mg, 200 mg,
+300 mg, 400 mg.
+
+Tablets, Extended-Release: 50 mg,
+150 mg, 200 mg, 300 mg, 400 mg.
+
+## A. DMINISTRATION/HANDLING
+PO
+
+Give immediate-release tablets without regard to food. Do not break, crush, dissolve, or divide extended-release tab- Iets. Extended-release tablets should be given without regard to food or with a light meal in evening.
+
+## I. NDICATIONS/ROUTES/DOSAGE
+
+Note: When restarting pts who have been off QUEtiapine for less than 1 wk, titration is not required and maintenance dose can be reinstituted. When restarting pts who have been off QUEtiapine for Ionger than I wk, follow initia titration schedule. When discontinuing, gradual tapering recommended to avoid withdrawal symptoms and minimize risk of relapse.
+
+## Schizophrenia
+
+PO: (Immediate-Release): ADULTS, ELDERLY: Initially, 25 mg twice daily, then increase in 2550-mg increments divided 23 times/day on the second and third days, up to 300400 mg/day in 23 divided doses by the fourth day. Further adjustments of 2550 mg twice daily may be made at intervals of 2 days or Ionger. Maintenance: 150750 mg day (adults); 50200 mg/day (elderly). (Extended-Release): Initially, 300 mg day. May increase at intervals as short as 1 day up to 300 mg/day. Range: 400800 mg day. (Immediate-Release): CHILDREN
+
+QUEtiapine
+
+977
+
+13 VRS AND OLDER: Initially, 25 mg twice daily on day 1, 50 mg twice daily on day 2, then increase by 100 mg/day to target dose of 400 mg twice daily on day 5. May further increase to 800 mg day in increments of 100 mg or less daily. Range: 400800 mg/day. Maximum: 800 mg. Total dose in 3 divided doses. (Extended-Release): Initially, 50 mg once daily on day 1, 100 mg on day 2, until 400 mg once daily is reached on day 5. Range: 400800 mg day. Maximum: 800 mg/day.
+
+## Mania in Bipolar Disorder
+
+PO: (Immediate-Release): ADULTS, ELDERLY: Initially, 50 mg twice daily for 1 day. May increase in increments of 100 mg/day to 200 mg twice daily on day 4. May further increase in increments of 200 mg/day to 800 mg/day on day 6. Range: 400-800 mg/day. (Extended- Release): Initially, 300 mg on day 1 in the evening; 600 mg on day 2 and adjust between 400-800 mg/day thereafter. (Immediate-Release): CHILDREN 10 YRS AND oLDER: 25 mg twice daily on day 1, 50 mg twice daily on day 2, then increase by 100 mg/day until target dose of 400 mg/day reached on day 5. May increase up to 600 mg/day. Range: 400600 mg day. (Extended-Release): 50 mg on day 1; 100 mg on day 2; further increases of 100 mg/day until 400 mg once daily is reached on day 4; Usual range: 400-600 mg once daily.
+
+## Depression in Bipolar Disorder
+
+PO: (Immediate-Release): ADULTS,
+ELDERLy: Initially, 50 mg/day on day 1,
+increase to 100 mg/day on day 2, then
+increase by 100 mg/day up to target dose
+of 300 mg/day. (Extended-Release):
+Initially, 50 mg on day I in the evening,
+100 mg on day 2, 200 mg on day 3, 300
+mg on day 4 and thereafter.
+
+## Adjunctive Therapy in MDD
+
+PO: ADULTS, ELDERLY: (Extended- Release): Initially, 50 mg on days I and 2; then 150 mg on days 3 and 4; then 150300 mg/day thereafter.

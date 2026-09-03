@@ -1,0 +1,96 @@
+===================================================================================================================================================================
+ book_zh_CNASGL0072018_extracted_page_48   similarity=0.98328
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ \[                                                                             | \[                                                                            
+ u _ { \perp } = \frac { 0 . 1 } { 3 4 . 8 ~ ^ { * } \sqrt { 3 } } = 0 . 1 6 6  | u _ { \perp } = \frac { 0 . 1 } { 3 4 . 8 ~ ^ { * } \sqrt { 3 } } = 0 . 1 6 6 
+   ... 25 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\pm 0 . 2 5 \cdot I _ { 1 }                                                    |+\pm \Delta = \pm 0 . 2 5 \times I _ { 1 }                                     
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 27 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\psi = ( 1 / 2 ) ( 1 0 / 1 0 0 ) ^ { \frac { 1 } { 2 } } = 5 0                 |+\psi = ( 1 / 2 ) ( 1 0 / 1 0 ) ^ { \frac { 1 } { 2 } } = 5 0                  
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 1 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-( t + t )                                                                      |+( t + t ,                                                                     
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 5 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-v = \big ( 1 / 2 \big ) \big ( 1 0 / 1 0 0 \big ) ^ { - 3 } = 5 0              |+v = \big ( 1 / 2 \big ) \big ( 1 0 / 1 0 0 \big ) ^ { - 1 } = 5 0             
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 13 identical lines ...                                                   | ...
+ \frac { \Delta P } { P } = \frac { 2 \Delta U } { U }                          | \frac { \Delta P } { P } = \frac { 2 \Delta U } { U }                         
+ \]                                                                             | \]                                                                            
+
+===================================================================================================================================================================
+ docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10   similarity=0.98551
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Octahedral Pyridine Adducts of Dichlorosilane                                  | Octahedral Pyridine Adducts of Dichlorosilane                                 
+                                                                                |                                                                               
+   ... 4 identical lines ...                                                    | ...
+ changes in the charge distribution are evidence for a bonding situation in the | changes in the charge distribution are evidence for a bonding situation in the
+ polar bonds than in the starting molecule $\mathbf { \bar { H } _ { 2 } S i C  | polar bonds than in the starting molecule $\mathbf { \bar { H } _ { 2 } S i C 
+-Table 6. The Si-Cl bond has 26.71 % Si character in $\mathbf { . H _ { 2 } S i |+Table 6. The Si-Cl bond has 26.71 % Si character in $\mathbf { \Delta H _ { 2 
+ and this value decreases to 15.86% and 16.92% for the valence structures A and | and this value decreases to 15.86% and 16.92% for the valence structures A and
+                                                                                |                                                                               
+   ... 3 identical lines ...                                                    | ...
+ synthesised in various aprotic solvents by the direct reaction                 | synthesised in various aprotic solvents by the direct reaction                
+ of $\mathbf { H _ { 2 } S i C l _ { 2 } }$ with pyridine. The first example of | of $\mathbf { H _ { 2 } S i C l _ { 2 } }$ with pyridine. The first example of
+-H2SiCl2.2Rpy compound bearing non-coplanar pyridine                            |+$\mathrm { H } _ { 2 } \mathrm { S i C l } _ { 2 } ~ 2 ~ \bar { \mathrm { R p 
+ rings has been found, although a coplanar arrangement of                       | rings has been found, although a coplanar arrangement of                      
+ the pyridine ligands seems to be the most typical conformation in the solid st | the pyridine ligands seems to be the most typical conformation in the solid st
+ Some of these pyridine adducts (those bearing 4-methyland 4-ethylpyridine) hav | Some of these pyridine adducts (those bearing 4-methyland 4-ethylpyridine) hav
+-hexacoordinate siliconium salts $\mathrm { [ H _ { 2 } S i ( R P y ) _ { 4 } ] |+hexacoordinate siliconium salts $\mathrm { [ H _ { 2 } S i ( R P y ) _ { 4 } ]
+ of which is stabilised by chloroform molecules.                                | of which is stabilised by chloroform molecules.                               
+                                                                                |                                                                               
+   ... 18 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-\mathrm { H _ { 2 } S i C l _ { 2 } \cdot 2 ~ R p y . }                        |+\mathrm { H } _ { 2 } \mathrm { S i C l } _ { 2 } { \cdot } 2 ~ \mathrm { R p 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 48 identical lines ...                                                   | ...
+ H2SiCl2 (Degussa), 4-methylpyridine (Alfa Aesar), 4-ethylpyridine              | H2SiCl2 (Degussa), 4-methylpyridine (Alfa Aesar), 4-ethylpyridine             
+ (Merck), 3-bromopyridine (ABCR), 4-tert-butylpyridine (Fluka), 4-vinyl-        | (Merck), 3-bromopyridine (ABCR), 4-tert-butylpyridine (Fluka), 4-vinyl-       
+
+===================================================================================================================================================================
+ docstructbench_enbook-zlib-o.O-19091739.pdf_181   similarity=0.99531
+===================================================================================================================================================================
+ --- fp32 baseline                                                              | +++ variant                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Examt Cat nnt.                                                                 | Examt Cat nnt.                                                                
+                                                                                |                                                                               
+   ... 18 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-d ~ { \vec { \mathbf { s } } } \times { \dot { \mathbf { r } } } = { \big | }  |+d ~ { \vec { \mathbf { s } } } \times { \dot { \mathbf { r } } } = { \big | } 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 59 identical lines ...                                                   | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-B = - \frac { \mu _ { 0 } I } { 4 \pi a } \! \int _ { \theta _ { 0 } } ^ { \th |+B = - \frac { \mu _ { 0 } I } { 4 \pi a } \! \int _ { \theta _ { * } } ^ { \th
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 3 identical lines ...                                                    | ...
+                                                                                |                                                                               
+ \[                                                                             | \[                                                                            
+-[ \mathrm { M Q ~ ^ 1 T ^ 1 ] = [ M L Q ^ { - 2 } ] [ Q T ^ { ~ 1 } ] / [ L ]  |+[ \mathrm { M Q ~ ^ 1 T ^ 1 ] = [ M L Q ^ { - 2 } ] [ Q T ^ { ~ 1 } ] / [ L ] 
+ \]                                                                             | \]                                                                            
+                                                                                |                                                                               
+   ... 4 identical lines ...                                                    | ...
+ We can use Equation 29.4 to find the magnetic field of any straight current-ca | We can use Equation 29.4 to find the magnetic field of any straight current-ca
+ hence the angles $: \theta$ and $1 \theta _ { z }$ . If the wire in Figure 29. | hence the angles $: \theta$ and $1 \theta _ { z }$ . If the wire in Figure 29.

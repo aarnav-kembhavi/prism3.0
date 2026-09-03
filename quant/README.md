@@ -116,13 +116,22 @@ coordinates.
 
 That gate is invisible on the normal eval path: `benchmarks/run_omnidocbench.py`
 sets `PRISM_NORM_STRICT=1`, and `normalization/pipeline.py` disables the whole
-verified path when it is set. `quant/probe_rate.py` therefore measures it in a
-dedicated harness with `PRISM_NORM_STRICT=0`, running normalization only, once
-per det variant:
+verified path when it is set. It is also invisible on the 30 eval pages themselves: those are scans and
+digital renders, and `detect_capture_modality` routes them past the entire
+Stage-1 correction stack, so no proposal is ever made — measured, 0 proposals in
+both arms. The probe is a **camera-capture** feature. `quant/probe_rate.py`
+therefore runs normalization only, with `PRISM_NORM_STRICT=0`, over the repo's
+57 real camera/defect captures, once per det variant:
 
 ```bash
 python quant/probe_rate.py     # -> quant/probe_rate.json
 ```
+
+Measured result: INT8 det makes the gate **more permissive** — acceptance rises
+from 15.95% (26/163) to 21.95% (36/164), **+6.0 pp**, and 12 of 57 pages change
+how many corrections they accept. Every correction type loosens, CLAHE most
+(48.2% -> 64.3%). This is a behavioural change on camera input, not just a box
+shift, and it is larger than the "few percent" that would have been ignorable.
 
 ## Reading the latency numbers
 

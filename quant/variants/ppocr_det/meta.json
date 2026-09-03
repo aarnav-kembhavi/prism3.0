@@ -1,0 +1,105 @@
+{
+  "variant": "ppocr_det",
+  "PRISM_QUANT": "ppocr_det",
+  "extra_env": [],
+  "returncode": 0,
+  "n_pages": 30,
+  "graphs": {
+    "texo_encoder": {
+      "path": "Texo/model/onnx/encoder_model.onnx",
+      "bytes": 54168538,
+      "mb": 54.17,
+      "int8": false
+    },
+    "texo_decoder": {
+      "path": "Texo/model/onnx/decoder_model_merged.onnx",
+      "bytes": 27718980,
+      "mb": 27.72,
+      "int8": false
+    },
+    "ppocr_rec": {
+      "path": "weights/PP-OCRv6_rec_small.onnx",
+      "bytes": 21234383,
+      "mb": 21.23,
+      "int8": false
+    },
+    "ppocr_det": {
+      "path": "weights/PP-OCRv6_det_small_int8.onnx",
+      "bytes": 2670137,
+      "mb": 2.67,
+      "int8": true
+    },
+    "ppocr_rec_en": {
+      "path": "weights/en_PP-OCRv4_rec.onnx",
+      "bytes": 7652836,
+      "mb": 7.65,
+      "int8": false
+    },
+    "ppdoclayout_v3": {
+      "path": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+      "bytes": 130502049,
+      "mb": 130.5,
+      "int8": false
+    },
+    "slanet_plus": {
+      "path": ".venv_rtable/Lib/site-packages/rapid_table/models/slanet-plus.onnx",
+      "bytes": 7758305,
+      "mb": 7.76,
+      "int8": false
+    }
+  },
+  "total_stack_bytes": 251705228,
+  "total_stack_mb": 251.71,
+  "wall_s": 372.0,
+  "median_latency_s": 11.686,
+  "mean_latency_s": 12.309,
+  "peak_ram_mb_process_tree": 2106.1,
+  "per_page_latency_s": {
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556": 10.128,
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53": 4.474,
+    "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927": 15.786,
+    "page-28657a85-95cc-4bfa-8156-cc98518a0b4c": 11.295,
+    "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11": 6.614,
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7": 19.338,
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10": 25.486,
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14": 10.368,
+    "docstructbench_enbook-zlib-o.O-19221575.pdf_1173": 10.973,
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": 14.71,
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181": 17.119,
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": 22.512,
+    "docstructbench_enbook-zlib-o.O-21353024.pdf_39": 12.078,
+    "notes_1ba14cb325bc448f7201b20502ecf2b5_16": 7.897,
+    "newspaper_0edcd83c195557b43279fa73edaa59aa_1": 16.577,
+    "PPT_StewartCalcET7e_03_02_page_010": 6.718,
+    "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006": 7.244,
+    "book_zh_CNASGL0072018_extracted_page_48": 7.037,
+    "book_zh_GB12082006_extracted_page_8": 7.269,
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115": 12.179,
+    "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188": 11.268,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087": 13.509,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006": 7.91,
+    "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006": 12.383,
+    "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003": 9.887,
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010": 13.238,
+    "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003": 15.653,
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": 12.218,
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001": 17.672,
+    "PPT_PresentationSpecification_page_010": 9.726
+  },
+  "graphs_actually_loaded": {
+    "ppocr_det": [
+      "<string>: PP-OCRv6_det_small_int8.onnx (int8)",
+      "?: PP-OCRv6_det_small_int8.onnx (int8)",
+      "text_worker.py: PP-OCRv6_det_small_int8.onnx (int8)"
+    ]
+  },
+  "requested_int8": [
+    "ppocr_det"
+  ],
+  "int8_load_unproven": [],
+  "probe": {
+    "proposals": 0,
+    "accepted": 0,
+    "acceptance_rate": null
+  }
+}
