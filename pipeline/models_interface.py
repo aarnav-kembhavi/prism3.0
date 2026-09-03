@@ -130,9 +130,13 @@ def _get_rapidocr():
         # metadata; block-level A/B: EN 0.128->0.059, notes 0.200->0.132).
         # Falls back to the English PP-OCRv4 rec (smaller char set) else the
         # default Chinese-dominant v4 stack. PRISM_OCR_V6=0 restores v4.
-        v6_det = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx')
-        v6_rec = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx')
-        en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
+        from pipeline.quant_select import graph_path
+        v6_det = graph_path('ppocr_det',
+                            os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx'))
+        v6_rec = graph_path('ppocr_rec',
+                            os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx'))
+        en_rec  = graph_path('ppocr_rec_en',
+                             os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx'))
         en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
         if (os.environ.get('PRISM_OCR_V6', '1') != '0'
                 and os.path.exists(v6_det) and os.path.exists(v6_rec)):
@@ -208,6 +212,9 @@ def get_ppdoclayout_detector(imgsz: int = 800):
         path = _PPDOCLAYOUT_V3_MODEL_PATH if use_v3 else _PPDOCLAYOUT_MODEL_PATH
         if not os.path.exists(path):
             return None
+        if use_v3:
+            from pipeline.quant_select import graph_path
+            path = graph_path('ppdoclayout_v3', path)
         from pipeline.ppdoclayout_onnx import PPDocLayoutOnnxDetector
         keep_inline = os.environ.get('PRISM_INLINE_FML', '0') != '0'
         print(f"[*] Loading PP-DocLayout{'V3' if use_v3 else '_plus-L'} detector (raw ONNX @ {imgsz}px)")

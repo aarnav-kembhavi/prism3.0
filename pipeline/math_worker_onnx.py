@@ -709,13 +709,14 @@ def _worker_main(conn):
     _math_providers = (ort_providers()
                        if os.environ.get('PRISM_ORT_GPU_MATH', '0') != '0'
                        else ['CPUExecutionProvider'])
+    from pipeline.quant_select import graph_path
     enc_sess = ort.InferenceSession(
-        os.path.join(ONNX_DIR, 'encoder_model.onnx'),
+        graph_path('texo_encoder', os.path.join(ONNX_DIR, 'encoder_model.onnx')),
         sess_options=opts,
         providers=_math_providers,
     )
     dec_sess = ort.InferenceSession(
-        os.path.join(ONNX_DIR, 'decoder_model_merged.onnx'),
+        graph_path('texo_decoder', os.path.join(ONNX_DIR, 'decoder_model_merged.onnx')),
         sess_options=opts,
         providers=_math_providers,
     )

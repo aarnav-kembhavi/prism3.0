@@ -319,8 +319,14 @@ def _worker_main(conn):
     # EN 0.128->0.059, ZH 0.101->0.086, mixed 0.190->0.155, notes
     # 0.200->0.132, and ~2x faster. One engine pair serves EN and CJK, so
     # the dedicated en_PP-OCRv4 rec is bypassed. PRISM_OCR_V6=0 restores v4.
-    v6_det = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx')
-    v6_rec = os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx')
+    # This worker builds its own paths (see "replicated from models_interface"
+    # above), so the quantization selection has to be applied here too -- this
+    # is the process that actually runs page OCR.
+    from pipeline.quant_select import graph_path
+    v6_det = graph_path('ppocr_det',
+                        os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_det_small.onnx'))
+    v6_rec = graph_path('ppocr_rec',
+                        os.path.join(ROOT_DIR, 'weights', 'PP-OCRv6_rec_small.onnx'))
     use_v6 = (os.environ.get('PRISM_OCR_V6', '1') != '0'
               and os.path.exists(v6_det) and os.path.exists(v6_rec))
     if use_v6:
@@ -328,7 +334,8 @@ def _worker_main(conn):
         base_kwargs.update(v6)
         cjk_kwargs.update(v6)
     else:
-        en_rec  = os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx')
+        en_rec  = graph_path('ppocr_rec_en',
+                             os.path.join(ROOT_DIR, 'weights', 'en_PP-OCRv4_rec.onnx'))
         en_dict = os.path.join(ROOT_DIR, 'weights', 'en_dict.txt')
         if os.path.exists(en_rec) and os.path.exists(en_dict):
             base_kwargs['rec_model_path'] = en_rec

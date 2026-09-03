@@ -77,7 +77,13 @@ def _get_session():
         so = ort.SessionOptions()
         so.enable_cpu_mem_arena = False
         so.intra_op_num_threads = 4
-        _session = ort.InferenceSession(_DET_MODEL, so,
+        # The probe shares PP-OCRv6 det with the OCR stage, so a quantized det
+        # changes gate accept/reject behaviour too, not just text boxes.
+        import sys as _sys
+        if ROOT_DIR not in _sys.path:
+            _sys.path.insert(0, ROOT_DIR)
+        from pipeline.quant_select import graph_path
+        _session = ort.InferenceSession(graph_path('ppocr_det', _DET_MODEL), so,
                                         providers=["CPUExecutionProvider"])
     return _session
 

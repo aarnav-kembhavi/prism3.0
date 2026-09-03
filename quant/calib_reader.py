@@ -70,14 +70,23 @@ class LayoutCalibrationReader(CalibrationDataReader):
         self._it = None
 
 
-def head_nodes(model_path: str, hops: int = 6) -> list[str]:
-    """
-    Names of nodes forming the box-regression and classification output heads.
+QUANTIZABLE = {"Conv", "MatMul", "Gemm"}
 
-    Found structurally, by walking backwards from the graph outputs `hops`
-    producer-steps: the last few ops before each output ARE the heads, and this
-    stays correct regardless of the exporter's node naming. Quantizing these is
-    what typically shifts box coordinates and class scores in a detector.
+
+def head_nodes(model_path: str, max_depth: int = 33) -> list[str]:
+    """
+    Names of the box-regression and classification head layers.
+
+    Found structurally rather than by name: BFS backwards from the graph
+    outputs, keeping only ops the quantizer would actually touch
+    (Conv/MatMul/Gemm). Reshape/Cast/Concat plumbing sits between the outputs
+    and the real layers -- excluding those would protect nothing, since they
+    are never quantized in the first place.
+
+    On PP-DocLayoutV3 the first quantizable op is 16 hops back and the head
+    cluster runs to ~33; past that the walk fans into the shared decoder and
+    the HGNetv2 backbone, which we DO want quantized (that is where the 130 MB
+    lives). max_depth is the cutoff between the two.
     """
     model = onnx.load(model_path, load_external_data=False)
     g = model.graph
@@ -85,14 +94,14 @@ def head_nodes(model_path: str, hops: int = 6) -> list[str]:
 
     frontier = {o.name for o in g.output}
     seen, out = set(), []
-    for _ in range(hops):
+    for _ in range(max_depth):
         nxt = set()
         for t in frontier:
             n = producer.get(t)
-            if n is None or n.name in seen:
+            if n is None or id(n) in seen:
                 continue
-            seen.add(n.name)
-            if n.name:
+            seen.add(id(n))
+            if n.op_type in QUANTIZABLE and n.name:
                 out.append(n.name)
             nxt.update(n.input)
         frontier = nxt

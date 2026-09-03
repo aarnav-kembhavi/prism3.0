@@ -76,15 +76,55 @@ def graph_path(key: str, fp32: str | os.PathLike | None = None) -> str:
         return str(base)
 
     if cand.exists():
-        if key not in _announced:
-            _announced.add(key)
-            print(f"[quant] {key}: {cand.name}")
+        _announce(key, cand, True)
         return str(cand)
 
+    _announce(key, base, False, missing=cand.name)
+    return str(base)
+
+
+def _announce(key, path, is_int8, missing=None):
+    """
+    Record the resolution once per process.
+
+    Model loads happen in worker SUBPROCESSES whose stdout is not captured by
+    the benchmark runner, so a print alone cannot prove which graph a stage
+    actually opened. PRISM_QUANT_MANIFEST=<jsonl> makes every process append
+    what it resolved, which is what the sweep audits -- otherwise a silent
+    fp32 fallback would look exactly like "quantization cost us nothing".
+    """
     if key not in _announced:
         _announced.add(key)
-        print(f"[quant] {key}: INT8 graph missing ({cand.name}), using fp32")
-    return str(base)
+        if missing:
+            print(f"[quant] {key}: INT8 graph missing ({missing}), using fp32")
+        elif is_int8:
+            print(f"[quant] {key}: {Path(path).name}")
+
+    man = os.environ.get("PRISM_QUANT_MANIFEST", "")
+    if not man:
+        return
+    import json
+    import inspect
+    # Record the calling module: several stages build their own model paths
+    # (text_worker.py replicates models_interface), so knowing that *some*
+    # process resolved a graph is not enough -- we need to know the stage that
+    # actually runs page OCR resolved it too.
+    caller = "?"
+    try:
+        for fr in inspect.stack()[1:6]:
+            mod = Path(fr.filename).name
+            if mod != "quant_select.py":
+                caller = mod
+                break
+    except Exception:
+        pass
+    try:
+        with open(man, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"pid": os.getpid(), "key": key, "caller": caller,
+                                "file": Path(path).name, "int8": bool(is_int8),
+                                "missing": missing}) + "\n")
+    except OSError:
+        pass
 
 
 def active() -> dict:

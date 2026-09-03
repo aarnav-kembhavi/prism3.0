@@ -1,0 +1,162 @@
+[
+  {
+    "graph": "texo_decoder",
+    "variant": "dynamic",
+    "status": "ok",
+    "preprocess_mode": "no_symbolic",
+    "src": "Texo/model/onnx/decoder_model_merged.onnx",
+    "dst": "Texo/model/onnx/decoder_model_merged_int8.onnx",
+    "src_bytes": 27718980,
+    "dst_bytes": 27782236,
+    "src_mb": 27.72,
+    "dst_mb": 27.78,
+    "shrink_pct": -0.2,
+    "quantize_s": 0.6,
+    "n_nodes_excluded": 0,
+    "calib": null
+  },
+  {
+    "graph": "texo_encoder",
+    "variant": "dynamic",
+    "status": "ok",
+    "preprocess_mode": "full",
+    "src": "Texo/model/onnx/encoder_model.onnx",
+    "dst": "Texo/model/onnx/encoder_model_int8.onnx",
+    "src_bytes": 54168538,
+    "dst_bytes": 13829278,
+    "src_mb": 54.17,
+    "dst_mb": 13.83,
+    "shrink_pct": 74.5,
+    "quantize_s": 1.2,
+    "n_nodes_excluded": 0,
+    "calib": null
+  },
+  {
+    "graph": "texo_decoder",
+    "variant": "dynamic_subgraphs",
+    "status": "ok",
+    "preprocess_mode": "no_symbolic",
+    "src": "Texo/model/onnx/decoder_model_merged.onnx",
+    "dst": "Texo/model/onnx/decoder_model_merged_int8.onnx",
+    "src_bytes": 27718980,
+    "dst_bytes": 7279113,
+    "src_mb": 27.72,
+    "dst_mb": 7.28,
+    "shrink_pct": 73.7,
+    "quantize_s": 1.3,
+    "n_nodes_excluded": 0,
+    "calib": null
+  },
+  {
+    "graph": "ppocr_rec",
+    "variant": "dynamic",
+    "status": "ok",
+    "preprocess_mode": "full",
+    "src": "weights/PP-OCRv6_rec_small.onnx",
+    "dst": "weights/PP-OCRv6_rec_small_int8.onnx",
+    "src_bytes": 21234383,
+    "dst_bytes": 5678473,
+    "src_mb": 21.23,
+    "dst_mb": 5.68,
+    "shrink_pct": 73.3,
+    "quantize_s": 1.6,
+    "n_nodes_excluded": 0,
+    "calib": null
+  },
+  {
+    "graph": "ppocr_det",
+    "variant": "dynamic",
+    "status": "ok",
+    "preprocess_mode": "full",
+    "src": "weights/PP-OCRv6_det_small.onnx",
+    "dst": "weights/PP-OCRv6_det_small_int8.onnx",
+    "src_bytes": 9929594,
+    "dst_bytes": 2670137,
+    "src_mb": 9.93,
+    "dst_mb": 2.67,
+    "shrink_pct": 73.1,
+    "quantize_s": 0.6,
+    "n_nodes_excluded": 0,
+    "calib": null
+  },
+  {
+    "graph": "ppdoclayout_v3",
+    "variant": "static_pertensor",
+    "status": "ok",
+    "preprocess_mode": "no_symbolic",
+    "src": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+    "dst": "models/ppdoclayoutv3/_probe_pertensor.onnx",
+    "src_bytes": 130502049,
+    "dst_bytes": 34129629,
+    "src_mb": 130.5,
+    "dst_mb": 34.13,
+    "shrink_pct": 73.8,
+    "quantize_s": 62.0,
+    "n_nodes_excluded": 0,
+    "per_channel": false,
+    "calib": {
+      "method": "minmax",
+      "n_images": 20,
+      "dir": "quant/calib"
+    }
+  },
+  {
+    "graph": "ppdoclayout_v3",
+    "variant": "static",
+    "status": "ok",
+    "preprocess_mode": "no_symbolic",
+    "src": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+    "dst": "models/ppdoclayoutv3/PP-DocLayoutV3_int8.onnx",
+    "src_bytes": 130502049,
+    "dst_bytes": 35100500,
+    "src_mb": 130.5,
+    "dst_mb": 35.1,
+    "shrink_pct": 73.1,
+    "quantize_s": 103.8,
+    "n_nodes_excluded": 0,
+    "per_channel": true,
+    "op_types_to_quantize": [
+      "Conv",
+      "MatMul",
+      "Gemm"
+    ],
+    "calib": {
+      "method": "minmax",
+      "n_images": 100,
+      "dir": "quant/calib"
+    }
+  },
+  {
+    "graph": "ppdoclayout_v3",
+    "variant": "static_heads_fp32",
+    "status": "ok",
+    "preprocess_mode": "no_symbolic",
+    "src": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+    "dst": "models/ppdoclayoutv3/PP-DocLayoutV3_int8_heads.onnx",
+    "src_bytes": 130502049,
+    "dst_bytes": 37486939,
+    "src_mb": 130.5,
+    "dst_mb": 37.49,
+    "shrink_pct": 71.3,
+    "quantize_s": 110.8,
+    "n_nodes_excluded": 15,
+    "per_channel": true,
+    "op_types_to_quantize": [
+      "Conv",
+      "MatMul",
+      "Gemm"
+    ],
+    "calib": {
+      "method": "minmax",
+      "n_images": 100,
+      "dir": "quant/calib"
+    }
+  },
+  {
+    "graph": "slanet_plus",
+    "variant": "dynamic",
+    "status": "failed_quantize",
+    "error": "InferenceError: [ShapeInferenceError] Inferred shape and existing shape differ in dimension 0: (256) vs (768)",
+    "src_bytes": 7758305
+  }
+]

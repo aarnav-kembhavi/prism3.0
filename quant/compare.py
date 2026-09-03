@@ -22,6 +22,7 @@ import argparse
 import difflib
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
@@ -157,6 +158,12 @@ def side_by_side(name, base_md, var_md, width=78):
 
 
 def main():
+    # Page ids contain CJK; the Windows console codec is cp1252 and raises.
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", required=True, help="name of dir under quant/variants/")
     ap.add_argument("--threshold", type=float, default=0.95)

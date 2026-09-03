@@ -54,11 +54,15 @@ def main():
     env = dict(os.environ)
     env["PRISM_QUANT"] = a.quant
     env["PRISM_PROBE_LOG"] = str(outdir / "probe.jsonl")
+    env["PRISM_QUANT_MANIFEST"] = str(outdir / "graph_manifest.jsonl")
     for kv in a.env:
         k, _, v = kv.partition("=")
         env[k] = v
 
     resolved = resolve_graphs(env)
+    # An explicit PRISM_QUANT_<KEY> override may be given as a repo-relative
+    # path; normalise so downstream size lookups and relative_to() work.
+    resolved = {k: (p if os.path.isabs(p) else str(ROOT / p)) for k, p in resolved.items()}
     print("[*] graphs for '%s':" % a.name)
     for k, p in resolved.items():
         print("      %-16s %s" % (k, Path(p).name))
@@ -101,6 +105,24 @@ def main():
             total += 1
             accepted += bool(rec.get("accepted"))
 
+    manifest = outdir / "graph_manifest.jsonl"
+    loaded = {}
+    if manifest.exists():
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                loaded.setdefault(r["key"], set()).add(
+                    (r["file"], r["int8"], r.get("caller", "?")))
+    want_int8 = set()
+    if a.quant.strip().lower() == "all":
+        want_int8 = set(GRAPHS)
+    elif a.quant.strip():
+        want_int8 = {t.strip() for t in a.quant.split(",") if t.strip()}
+    unproven = sorted(k for k in want_int8
+                      if not any(i for _, i, _c in loaded.get(k, ())))
+    if unproven:
+        print("[!] WARNING: no process recorded loading INT8 for: %s" % ", ".join(unproven))
+
     meta = {
         "variant": a.name,
         "PRISM_QUANT": a.quant,
@@ -119,6 +141,11 @@ def main():
         "mean_latency_s": round(statistics.fmean(lat), 3) if lat else None,
         "peak_ram_mb_process_tree": perf.get("peak_ram_mb_process_tree"),
         "per_page_latency_s": (perf.get("per_page") or {}),
+        "graphs_actually_loaded": {
+            k: sorted(f"{c}: {f}" + (" (int8)" if i else "") for f, i, c in v)
+            for k, v in sorted(loaded.items())},
+        "requested_int8": sorted(want_int8),
+        "int8_load_unproven": unproven,
         "probe": {"proposals": total, "accepted": accepted,
                   "acceptance_rate": round(accepted / total, 4) if total else None},
     }

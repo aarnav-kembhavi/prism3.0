@@ -74,3 +74,9 @@ prism_supplementary_clean/
 # Quantization sweep: per-page pipeline scratch dirs (figure crops etc.).
 # The markdown predictions, perf.json and meta.json next to them ARE tracked.
 quant/**/_tmp_*/
+
+# Quantized ONNX graphs (~102 MB). Regenerable from the tracked fp32 graphs
+# with quant/quantize.py -- see quant/README.md for the exact commands.
+# The fp32 originals are never modified.
+**/*_int8.onnx
+models/ppdoclayoutv3/PP-DocLayoutV3_int8_heads.onnx

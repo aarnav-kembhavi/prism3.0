@@ -25,35 +25,63 @@ def _log(entry):
     LOG.write_text(json.dumps(log, indent=2))
 
 
-def preprocess(src: Path, dst: Path) -> tuple[bool, str]:
-    """quant_pre_process -> (ok, message). Never raises."""
+def preprocess(src: Path, dst: Path) -> tuple[bool, str, str]:
+    """
+    quant_pre_process -> (ok, mode, message). Never raises.
+
+    Tried in order:
+      full            symbolic + onnx shape inference + optimization
+      no_symbolic     skip_symbolic_shape=True
+
+    The fallback exists for merged decoders: symbolic_shape_infer asserts on
+    sequence/optional types inside an `If` subgraph (the with-past vs
+    without-past branch), which is a limitation of the inference pass, not a
+    defect in the graph. skip_symbolic_shape is a documented quant_pre_process
+    parameter and still runs ONNX shape inference and the optimizer -- it is
+    not a bypass of preprocessing. Which mode was used is recorded per graph.
+    If both fail the graph is skipped, never force-quantized.
+    """
     from onnxruntime.quantization.shape_inference import quant_pre_process
-    try:
-        quant_pre_process(str(src), str(dst), skip_optimization=False,
-                          skip_onnx_shape=False, skip_symbolic_shape=False,
-                          auto_merge=True, guess_output_rank=True)
-        return True, "ok"
-    except Exception as e:
-        return False, f"{type(e).__name__}: {e}"
+    attempts = [
+        ("full", dict(skip_optimization=False, skip_onnx_shape=False,
+                      skip_symbolic_shape=False, auto_merge=True,
+                      guess_output_rank=True)),
+        ("no_symbolic", dict(skip_optimization=False, skip_onnx_shape=False,
+                             skip_symbolic_shape=True)),
+    ]
+    errs = []
+    for mode, kw in attempts:
+        try:
+            quant_pre_process(str(src), str(dst), **kw)
+            return True, mode, ("ok" if mode == "full"
+                                else "ok (symbolic shape inference skipped: "
+                                     + errs[0] + ")")
+        except Exception as e:
+            errs.append(f"{type(e).__name__}: {e}".strip().replace("\n", " ")[:200])
+    return False, "none", " | ".join(errs)
 
 
-def run(key, mode, out, exclude_heads, calib_dir, calib_n, calib_method):
+def run(key, mode, out, exclude_heads, calib_dir, calib_n, calib_method,
+        subgraphs=False, per_channel=True, op_types=('Conv', 'MatMul', 'Gemm')):
     from onnxruntime.quantization import (QuantType, quantize_dynamic,
                                           quantize_static, CalibrationMethod, QuantFormat)
     src = ROOT / GRAPHS[key]
-    dst = Path(out) if out else int8_path(key)
-    variant = mode + ("_heads_fp32" if exclude_heads else "")
+    dst = (Path(out) if Path(out).is_absolute() else ROOT / out) if out else int8_path(key)
+    variant = (mode + ("_subgraphs" if subgraphs else "")
+               + ("" if per_channel else "_pertensor")
+               + ("_heads_fp32" if exclude_heads else ""))
     print(f"=== {key} [{variant}] ===\n  src {src}  ({src.stat().st_size/1e6:.1f} MB)\n  dst {dst}")
 
     tmpdir = Path(tempfile.mkdtemp(prefix=f"quant_{key}_"))
     pre = tmpdir / "pre.onnx"
     t0 = time.perf_counter()
-    ok, msg = preprocess(src, pre)
-    print(f"  quant_pre_process: {msg}  ({time.perf_counter()-t0:.1f}s)")
+    ok, pre_mode, msg = preprocess(src, pre)
+    print(f"  quant_pre_process [{pre_mode}]: {msg}  ({time.perf_counter()-t0:.1f}s)")
     if not ok:
         _log({"graph": key, "variant": variant, "status": "skipped_preprocess_failed",
-              "error": msg, "src_bytes": src.stat().st_size})
-        print(f"  SKIPPED -- preprocessing failed, not forcing.")
+              "preprocess_mode": pre_mode, "error": msg,
+              "src_bytes": src.stat().st_size})
+        print("  SKIPPED -- preprocessing failed, not forcing.")
         shutil.rmtree(tmpdir, ignore_errors=True)
         return 2
 
@@ -61,8 +89,14 @@ def run(key, mode, out, exclude_heads, calib_dir, calib_n, calib_method):
     try:
         t0 = time.perf_counter()
         if mode == "dynamic":
+            # EnableSubgraph: the Texo merged decoder is a single top-level `If`
+            # whose two branches hold every MatMul. Without this the quantizer
+            # never descends into them and the graph comes back unchanged.
+            extra = {"MatMulConstBOnly": True}
+            if subgraphs:
+                extra["EnableSubgraph"] = True
             quantize_dynamic(str(pre), str(dst), weight_type=QuantType.QInt8,
-                             per_channel=True, extra_options={"MatMulConstBOnly": True})
+                             per_channel=True, extra_options=extra)
         else:
             sys.path.insert(0, str(ROOT / "quant"))
             from calib_reader import LayoutCalibrationReader, head_nodes
@@ -70,10 +104,15 @@ def run(key, mode, out, exclude_heads, calib_dir, calib_n, calib_method):
                 excluded = head_nodes(str(pre))
                 print(f"  excluding {len(excluded)} head nodes from quantization")
             reader = LayoutCalibrationReader(str(pre), calib_dir, calib_n)
+            # Restrict to weight-bearing ops. Quantizing elementwise Add turns
+            # it into QLinearAdd, which ORT rejects here ("Scale and Zero-point
+            # must be a scalar") and which saves nothing anyway -- Conv/MatMul/
+            # Gemm hold all 130 MB of the RT-DETR weights.
             quantize_static(
                 str(pre), str(dst), reader,
+                op_types_to_quantize=op_types,
                 quant_format=QuantFormat.QDQ,
-                per_channel=True,
+                per_channel=per_channel,
                 weight_type=QuantType.QInt8,
                 activation_type=QuantType.QUInt8,
                 calibrate_method=(CalibrationMethod.Percentile
@@ -93,12 +132,15 @@ def run(key, mode, out, exclude_heads, calib_dir, calib_n, calib_method):
 
     sb, db = src.stat().st_size, dst.stat().st_size
     entry = {"graph": key, "variant": variant, "status": "ok",
+             "preprocess_mode": pre_mode,
              "src": GRAPHS[key], "dst": str(dst.relative_to(ROOT)).replace("\\", "/"),
              "src_bytes": sb, "dst_bytes": db,
              "src_mb": round(sb/1e6, 2), "dst_mb": round(db/1e6, 2),
              "shrink_pct": round(100*(1-db/sb), 1),
              "quantize_s": round(dur, 1),
              "n_nodes_excluded": len(excluded),
+             "per_channel": per_channel,
+             "op_types_to_quantize": list(op_types) if mode == "static" else None,
              "calib": None if mode == "dynamic" else
                       {"method": calib_method, "n_images": calib_n, "dir": calib_dir}}
     _log(entry)
@@ -115,5 +157,10 @@ if __name__ == "__main__":
     ap.add_argument("--calib-dir", default="quant/calib")
     ap.add_argument("--calib-n", type=int, default=100)
     ap.add_argument("--calib-method", default="minmax", choices=["minmax", "percentile"])
+    ap.add_argument("--per-tensor", action="store_true",
+                    help="per_channel=False (QLinearAdd rejects per-channel scales)")
+    ap.add_argument("--subgraphs", action="store_true",
+                    help="extra_options EnableSubgraph=True (needed for If-wrapped graphs)")
     a = ap.parse_args()
-    sys.exit(run(a.graph, a.mode, a.out, a.exclude_heads, a.calib_dir, a.calib_n, a.calib_method))
+    sys.exit(run(a.graph, a.mode, a.out, a.exclude_heads, a.calib_dir, a.calib_n,
+                 a.calib_method, a.subgraphs, not a.per_tensor))

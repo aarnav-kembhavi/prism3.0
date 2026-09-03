@@ -35,7 +35,22 @@ def main():
     from rapid_table import RapidTable, RapidTableInput
     from rapid_table.utils.typings import ModelType
 
-    engine = RapidTable(RapidTableInput(model_type=ModelType.SLANETPLUS, use_ocr=True))
+    # Quantization sweep: PRISM_QUANT may select an INT8 slanet-plus sibling.
+    # quant_select is stdlib-only, so it imports fine from the rtable venv.
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    _kw = {}
+    try:
+        from pipeline.quant_select import graph_path, GRAPHS
+        _slanet = graph_path('slanet_plus')
+        if os.path.basename(_slanet) != os.path.basename(GRAPHS['slanet_plus']):
+            _kw['model_dir_or_path'] = _slanet
+    except Exception as _e:
+        print(f"[quant] slanet_plus selection skipped: {_e}", file=sys.stderr)
+
+    engine = RapidTable(RapidTableInput(model_type=ModelType.SLANETPLUS,
+                                        use_ocr=True, **_kw))
 
     stdin = sys.stdin.buffer
     stdout = sys.stdout.buffer
