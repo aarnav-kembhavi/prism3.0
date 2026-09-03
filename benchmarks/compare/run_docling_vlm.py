@@ -17,6 +17,11 @@ def main():
     n_threads = int(sys.argv[5]) if len(sys.argv) > 5 else 8
     os.environ['OMP_NUM_THREADS'] = str(n_threads)
     os.makedirs(out_dir, exist_ok=True)
+    try:
+        import psutil; psutil.Process().cpu_affinity(list(range(n_threads)))
+        print(f"[{spec_name}] affinity pinned to cores 0-{n_threads-1}")
+    except Exception as _e:
+        print(f"[docling] affinity pin failed: {_e}")
 
     import torch
     torch.set_num_threads(n_threads)
@@ -54,6 +59,16 @@ def main():
     })
     m.mark_load_end(t)
     print(f"[{spec_name}] ready in {m.load_time_s:.1f}s, cold RSS {m.cold_rss_mb:.0f}MB")
+
+    # Warmup (EXCLUDED): materialise the VLM weights on the first image so the
+    # first timed page isn't inflated by lazy model load.
+    try:
+        _w = os.path.join(images_dir, images[0])
+        if os.path.exists(_w):
+            converter.convert(_w)
+            print(f"[{spec_name}] warmup page done (excluded)")
+    except Exception:
+        pass
 
     ok = 0
     for i, img_name in enumerate(images):

@@ -4,7 +4,7 @@
 \subsection{Setup}
 \textbf{Benchmark.} OmniDocBench v1.6~\cite{omnidocbench}: 1651 page images spanning books, textbooks, exam papers, magazines, academic literature, notes, newspapers, research reports and slides, in English and Chinese. We run the \emph{official} evaluation harness unmodified (quick-match matcher; text and reading order scored by normalized edit distance, display formulas by CDM~\cite{cdm} compiled with TeX~Live, tables by TEDS~\cite{teds}). The composite follows the leaderboard convention $\mathrm{Overall}=\big((1-\mathrm{TextEdit})\cdot 100+\mathrm{CDM}+\mathrm{TEDS}\big)/3$. We additionally report the v1.5 subset cut for comparability with rows published against v1.5.
 
-\textbf{Hardware.} All PRISM measurements: a 16-logical-core consumer Windows 11 machine, CPU only, onnxruntime; no quantization beyond TATR INT8. Latency is end-to-end per page including all workers; peak RAM is the maximum working set of the whole process tree.
+\textbf{Hardware.} All PRISM measurements: a 16-logical-core consumer Windows 11 machine, CPU only, onnxruntime; no quantization (all graphs fp32). Latency is end-to-end per page including all workers; peak RAM is the maximum working set of the whole process tree.
 
 \subsection{Main results}
 \label{sec:main_results}
@@ -142,7 +142,7 @@ WSL2 4\,core/8\,GB    & \multicolumn{7}{c}{\emph{[constrained-environment run pe
 
 \begin{table}[t]
 \centering
-\caption{Complete model inventory (ONNX inference graphs). Total 281\,MB; the 30\,MB TATR structure model is a fallback loaded only when SLANet-plus emits no cells, so the common-path resident footprint is 251\,MB. No component exceeds the 124\,MB layout detector; the two generative recognizers (Texo) total 20M parameters.}
+\caption{Complete model inventory (ONNX inference graphs). Total 251\,MB, all graphs stored in fp32 (no quantization). No component exceeds the 124\,MB layout detector; the two generative recognizers (Texo) total 20M parameters.}
 \label{tab:weights}
 \small
 \setlength{\tabcolsep}{5pt}
@@ -156,10 +156,8 @@ OCR recognition & PP-OCRv6-small rec & 21.2\,MB \\
 Formula encoder & Texo (distilled) & 54.2\,MB \\
 Formula decoder & Texo (distilled) & 27.7\,MB \\
 Table structure & SLANet-plus & 7.8\,MB \\
-Table fallback & TATR (INT8) & 29.9\,MB \\
 \midrule
-\multicolumn{2}{l}{\textbf{Total}} & \textbf{281.2\,MB} \\
-\multicolumn{2}{l}{Common-path resident} & 251.3\,MB \\
+\multicolumn{2}{l}{\textbf{Total}} & \textbf{251.3\,MB} \\
 \bottomrule
 \end{tabular}
 \end{table}

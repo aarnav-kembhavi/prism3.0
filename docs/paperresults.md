@@ -7,7 +7,7 @@ main branch), CDM rendered with TeX Live 2026. Predictions:
 
 PRISM configuration: PP-DocLayoutV3 (layout + native reading order) + RapidOCR
 PP-OCRv6-small (unified EN/CJK) + Texo-distill 20M (formulas; OCR-hybrid for
-CJK-text formulas) + SLANet-plus (tables; TATR INT8 fallback), CPU-only,
+CJK-text formulas) + SLANet-plus (tables; coordinate-heuristic fallback), CPU-only,
 ~283 MB total weights.
 `Overall = ((1−TextEdit)·100 + CDM·100 + TEDS·100)/3`.
 
@@ -153,9 +153,8 @@ Model size breakdown:
 | Text OCR | RapidOCR PP-OCRv6-small det + rec (unified EN/CJK) | ONNX | 31 MB |
 | Formula recognition | Texo-distill 20M (encoder + merged decoder) | ONNX FP32 | 79 MB |
 | Table structure | SLANet-plus (RapidTable) | ONNX | 7.4 MB |
-| Table structure fallback | TATR structure-recognition v1.1-all | ONNX INT8 | 30 MB |
 | Angle cls + dicts | ch_ppocr_mobile cls etc. | ONNX | ~1 MB |
-| **Total** | | | **~283 MB** |
+| **Total** | | | **~253 MB** |
 
 For scale: Marker's OCR alone (Surya) is a ~650M-param VLM; MinerU-Pipeline
 ships a multi-model GPU stack; the leaderboard VLMs are 0.9B–241B.

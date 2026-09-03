@@ -150,7 +150,6 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
     from pipeline.layout_utils import xyxy_to_pil_crop
     from pipeline.latex_builder import save_tex
     from pipeline.detection_postprocess import postprocess_detections
-    from pipeline.tatr_worker_onnx import TATROnnxWorker
     from pipeline.page_core import Workers, build_document, MATH_CLASSES, IMAGE_CLASSES
     from pipeline.tex_to_md import tex_to_omnidocbench_md
 
@@ -186,11 +185,9 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
     ocr_worker = _OCRCls()
     math_worker = _MathCls()
-    tatr_worker = TATROnnxWorker()
     print(f'[*] Starting workers ({"single" if _single else "dual"}-worker)...')
     ocr_worker.start()
     math_worker.start()
-    tatr_worker.start()
     print('[*] Workers ready.')
 
     # ── Perf instrumentation: peak process-tree RSS + per-page latency ────────
@@ -304,7 +301,7 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
             # Stage 3: extraction + assembly (shared with orchestrate.py)
             is_cjk  = stem in (cjk_pages  or set())
             is_mixed = stem in (mixed_pages or set())
-            workers = Workers(ocr=ocr_worker, math=math_worker, tatr=tatr_worker)
+            workers = Workers(ocr=ocr_worker, math=math_worker)
             if _stage_on:
                 from pipeline import page_core as _pc
                 _pc.stage_times.clear()
@@ -433,7 +430,6 @@ def _run_prism_on_images(image_paths: list[str], pred_dir: str, cjk_pages: set =
 
     ocr_worker.stop()
     math_worker.stop()
-    tatr_worker.stop()
     return results
 
 

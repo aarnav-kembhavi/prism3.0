@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 rtable_worker.py — parent-side handle for the RapidTable (SLANet-plus) child
-process living in .venv_rtable. SLANet-plus replaces TATR as the primary table
-structure recognizer (7.4 MB vs 30 MB; validated +29 TEDS on a stratified
-60-table A/B, catastrophic tables -0.01 -> 0.57). TATR remains the fallback
-when the child is unavailable or returns empty HTML.
+process living in .venv_rtable. SLANet-plus (7.4 MB) is the primary table
+structure recognizer (validated +29 TEDS on a stratified 60-table A/B,
+catastrophic tables -0.01 -> 0.57). The OCR worker's coordinate heuristic is
+the fallback when the child is unavailable or returns empty HTML.
 
 Enable/disable with PRISM_RTABLE (default on). The child runs its own
 PP-OCRv6-small det/rec on the table crop, so cell content no longer depends on

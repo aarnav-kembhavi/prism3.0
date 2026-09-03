@@ -7,7 +7,8 @@ by pipeline/rtable_worker.py over a length-prefixed stdio protocol:
     parent -> child:  4-byte big-endian length, then PNG bytes of the crop
     child  -> parent: 4-byte big-endian length, then UTF-8 JSON {"html": ...}
 
-An empty html means recognition failed and the caller should fall back to TATR.
+An empty html means recognition failed and the caller should fall back to the
+coordinate heuristic.
 """
 import sys
 import os

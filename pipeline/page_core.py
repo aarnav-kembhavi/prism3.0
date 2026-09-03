@@ -57,15 +57,13 @@ LIST_ITEM_CLASS = "List-item"
 
 @dataclass
 class Workers:
-    """Bundle of the three specialist subprocess workers.
+    """Bundle of the specialist subprocess workers.
 
     ocr  — TextOCRWorker or TextOCRWorkerDual
     math — MathOCRWorkerOnnx or MathOCRWorkerOnnxDual
-    tatr — TATROnnxWorker or None (falls back to the coordinate heuristic)
     """
     ocr:  Any
     math: Any
-    tatr: Any = None
 
 
 def _adjust_figure_paths(parts: list[str]) -> list[str]:
@@ -91,7 +89,7 @@ def _get_rtable():
                 w.start()
                 _rtable = w
             except Exception as e:
-                print(f"  [rtable] unavailable, using TATR: {e}")
+                print(f"  [rtable] unavailable, using coordinate heuristic: {e}")
                 _rtable = False
         else:
             _rtable = False
@@ -99,14 +97,14 @@ def _get_rtable():
 
 
 def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
-    """Table structure recognition via RapidTable (SLANet-plus), TATR fallback.
+    """Table structure recognition via RapidTable (SLANet-plus).
 
     SLANet-plus predicts structure and runs its own cell OCR on the crop
     (validated: catastrophic tables -0.01 -> 0.57 TEDS, good tables unchanged).
-    TATR + token assignment remains the fallback path, and after that the
-    coordinate heuristic.
+    When SLANet returns no cells, the OCR worker's coordinate heuristic is the
+    fallback.
 
-    CJK pages route the TATR-path cell OCR through the CJK engine — otherwise
+    CJK pages route the fallback cell OCR through the CJK engine — otherwise
     Chinese cell text is recognized by the English model and collapses full
     TEDS (structure stays fine, content is garbage).
     """
@@ -131,7 +129,7 @@ def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list
             except Exception as e:
                 print(f"  [rtable] v6-ocr tokens failed, using internal OCR: {e}")
         results = []
-        pending = []  # indices that need the TATR fallback
+        pending = []  # indices that need the coordinate-heuristic fallback
         for i, crop in enumerate(table_crops):
             html = rtable.build_table_html(crop, ocr_tokens=tokens_list[i])
             if html and html.count('<td') >= 1:
@@ -140,14 +138,14 @@ def _extract_tables(table_crops, workers: Workers, is_cjk: bool = False) -> list
                 results.append(None)
                 pending.append(i)
         if pending:
-            fallback = _extract_tables_tatr(
+            fallback = _extract_tables_fallback(
                 [table_crops[i] for i in pending], workers, is_cjk=is_cjk)
             for i, res in zip(pending, fallback):
                 results[i] = res
         results = [r or '' for r in results]
         _append_geom_tables(results, table_crops, workers, is_cjk)
         return results
-    return _extract_tables_tatr(table_crops, workers, is_cjk=is_cjk)
+    return _extract_tables_fallback(table_crops, workers, is_cjk=is_cjk)
 
 
 def _html_escape(s: str) -> str:
@@ -250,34 +248,9 @@ def _append_geom_tables(results, table_crops, workers, is_cjk):
             results[i] = (results[i] + '\n\n' + geom) if results[i] else geom
 
 
-def _extract_tables_tatr(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
-    _cjk_tbl = os.environ.get('PRISM_CJK_TABLE_OCR', '1') != '0'  # A/B toggle
-    if workers.tatr is not None:
-        if is_cjk and _cjk_tbl and hasattr(workers.ocr, 'run_table_tokens_batch_cjk'):
-            tokens_list = workers.ocr.run_table_tokens_batch_cjk(table_crops)
-        else:
-            tokens_list = workers.ocr.run_table_tokens_batch(table_crops)
-        results = []
-        for crop, tokens in zip(table_crops, tokens_list):
-            result = None
-            if tokens:
-                try:
-                    result = workers.tatr.build_table_html(crop, tokens, crop.width)
-                except Exception as e:
-                    print(f"  [TATR] error: {e}")
-            if not result and tokens:
-                from pipeline.models_interface import _table_heuristic
-                heuristic_tokens = [
-                    {'text': t['text'], 'x1': t['x1'], 'x2': t['x2'],
-                     'y1': t['y1'], 'y2': t['y2'],
-                     'cx': (t['x1'] + t['x2']) / 2, 'cy': (t['y1'] + t['y2']) / 2,
-                     'h': t['y2'] - t['y1'], 'w': t['x2'] - t['x1']}
-                    for t in tokens
-                ]
-                result = _table_heuristic(heuristic_tokens, crop.width)
-            results.append(result or '')
-        return results
-    # No TATR available — coordinate heuristic from the OCR worker.
+def _extract_tables_fallback(table_crops, workers: Workers, is_cjk: bool = False) -> list[str]:
+    """Coordinate-heuristic fallback for crops where SLANet-plus returns no cells:
+    the OCR worker clusters its own token boxes into a grid."""
     return workers.ocr.run_table_batch(table_crops)
 
 

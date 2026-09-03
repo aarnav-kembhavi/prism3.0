@@ -151,7 +151,7 @@ specialists → assemble in reading order → LaTeX → Markdown**.
   (7.4 MB) via stdio child in `.venv_rtable` (`rtable_worker.py` ↔
   `rtable_child.py`, length-prefixed PNG→JSON; protocol v2 can inject external
   OCR tokens — measured NO gain, off by default `PRISM_RTABLE_OCR_V6=0`).
-  TATR INT8 fallback (30 MB) when SLANet returns no cells.
+  OCR coordinate-heuristic fallback when SLANet returns no cells.
 - **Rescues** (page_core): uncovered-text rescue (`PRISM_TEXT_RESCUE=1`,
   full-page line OCR, orphan lines → synthetic Text dets); empty-page rescue
   (<30 chars → whole-page OCR).
@@ -173,7 +173,7 @@ specialists → assemble in reading order → LaTeX → Markdown**.
   stripper once truncated tables at a literal %).
 
 ### GPU mode (optional, for the latency study only)
-`PRISM_ORT_GPU=1` → CUDA EP in layout/TATR/OCR (via `onnx_config.ort_providers`
+`PRISM_ORT_GPU=1` → CUDA EP in layout/OCR (via `onnx_config.ort_providers`
 + text_worker monkeypatch). Needs `venvs/gpu` python (onnxruntime-gpu==1.20.1
 + nvidia-*-cu12 wheels; the driver supports CUDA 12 only, NOT 13).
 **Math worker stays on CPU** (`PRISM_ORT_GPU_MATH=0`): autoregressive decode is

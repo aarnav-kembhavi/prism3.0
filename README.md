@@ -23,7 +23,7 @@ pipelines.
 
 | Path | Contents |
 |---|---|
-| `pipeline/` | The parser: orchestration, layout (PP-DocLayoutV3), OCR workers, formula (Texo + geometry + render repair), tables (RapidTable/TATR), assembly, emission |
+| `pipeline/` | The parser: orchestration, layout (PP-DocLayoutV3), OCR workers, formula (Texo + geometry + render repair), tables (RapidTable/SLANet-plus), assembly, emission |
 | `normalization/` | Capture-modality classifier + recognition-verified correction stack |
 | `benchmarks/` | OmniDocBench / Fox runners and report tooling |
 | `models/`, `weights/` | ONNX inference models (~283 MB total) |

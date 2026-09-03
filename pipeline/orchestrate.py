@@ -56,12 +56,10 @@ from pipeline.models_interface import (
 )
 from pipeline.text_worker import TextOCRWorker
 from pipeline.math_worker_onnx import MathOCRWorkerOnnx as MathOCRWorker
-from pipeline.tatr_worker_onnx import TATROnnxWorker
 
 # Subprocess workers — populated by main(); None means in-process fallback.
 _ocr_worker:  "TextOCRWorker | None" = None
 _math_worker: "MathOCRWorker | None" = None
-_tatr_worker: "TATROnnxWorker | None" = None
 from pipeline.layout_utils import xyxy_to_pil_crop, detect_column_count
 from pipeline.latex_builder import save_tex
 from pipeline.detection_postprocess import postprocess_detections
@@ -166,19 +164,17 @@ def _build_workers_bundle() -> Workers:
     """Bundle the active workers for page_core. Falls back to in-process
     adapters when subprocess workers weren't launched (--no-ocr-worker)."""
     if _ocr_worker is not None:
-        return Workers(ocr=_ocr_worker, math=_math_worker, tatr=_tatr_worker)
-    return Workers(ocr=_InProcessOCR(), math=_InProcessMath(), tatr=None)
+        return Workers(ocr=_ocr_worker, math=_math_worker)
+    return Workers(ocr=_InProcessOCR(), math=_InProcessMath())
 
 
 def _launch_workers():
     """Start all subprocess workers (called in a background thread)."""
-    global _ocr_worker, _math_worker, _tatr_worker
+    global _ocr_worker, _math_worker
     _ocr_worker = TextOCRWorker()
     _ocr_worker.start()
     _math_worker = MathOCRWorker()
     _math_worker.start()
-    _tatr_worker = TATROnnxWorker()
-    _tatr_worker.start()
 
 
 def main():
@@ -209,8 +205,6 @@ def main():
         _ocr_worker.stop()
     if _math_worker is not None:
         _math_worker.stop()
-    if _tatr_worker is not None:
-        _tatr_worker.stop()
 
 
 def _process_one(image_path_str: str, args, worker_thread):

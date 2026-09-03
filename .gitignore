@@ -64,3 +64,9 @@ figures/*.png
 
 # 300dpi preview rasters the figure generators drop next to themselves
 scripts/figures/*.png
+
+# Paper supplementary bundles (~309 MB, regenerable from the repo + models).
+# The zip exceeds GitHub's 100 MB blob limit; the unpacked copy duplicates
+# PP-DocLayoutV3.onnx and the PP-OCRv6 graphs already tracked in LFS.
+prism_supplementary.zip
+prism_supplementary_clean/

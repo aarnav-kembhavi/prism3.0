@@ -175,7 +175,7 @@ pre-existing predictions from an earlier comparison pass:
 
 ## Latency hardening — Phase 0 inventory (2026-07-08)
 - **CPU**: 11th Gen Intel Core i7-11800H @ 2.30GHz, **8 physical / 16 logical** (HT), homogeneous (Tiger Lake-H, no P/E). Affinity to distinct physical cores = even logical IDs (4->[0,2,4,6], 8->[0,2,4,6,8,10,12,14], 16=all logical incl. HT since only 8 physical exist).
-- **Thread control**: PRISM_ONNX_THREADS=N -> ORT intra_op_num_threads (onnx_config.py); apply_thread_env() sets OMP/OPENBLAS. Workers (1 OCR + 1 math + on-demand TATR) separate from ORT threads. psutil.cpu_affinity() works; launch via `start /affinity` so children inherit. **Default budget = min(4, cpu//2) = 4 threads/session -> Table 4 was already at 4 ORT threads.**
+- **Thread control**: PRISM_ONNX_THREADS=N -> ORT intra_op_num_threads (onnx_config.py); apply_thread_env() sets OMP/OPENBLAS. Workers (1 OCR + 1 math) separate from ORT threads. psutil.cpu_affinity() works; launch via `start /affinity` so children inherit. **Default budget = min(4, cpu//2) = 4 threads/session -> Table 4 was already at 4 ORT threads.**
 - **Table 4 (tab:perf)** = preds/odb_full_v20/perf.json (median 5.908 s/pg, mean 7.156, p90 12.712, p95 15.561, p99 19.987, p99.9 34.716, max 74.205; RAM whole-tree @0.3s: median 1877.1MB, p95 2210.7, peak 2702.7; wall 11815s/1651pg). Latency=end-to-end/page; RAM=summed RSS process tree.
 - **WSL2**: available (v2.7.10, kernel 6.18, Ubuntu, WSL2). For Phase 2 constrained run.
 - **CAVEAT (must state in paper)**: thread-capping and WSL2 both keep THIS CPU's clocks+cache, so numbers are an OPTIMISTIC LOWER BOUND vs genuine low-end silicon. NOT an edge-device emulation.

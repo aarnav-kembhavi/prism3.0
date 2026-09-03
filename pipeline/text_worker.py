@@ -52,10 +52,26 @@ def _escape_latex(text: str) -> str:
     return text
 
 
+def _latin_letters() -> frozenset:
+    """Accented Latin letters: Latin-1 Supplement, Extended-A/-B, Extended
+    Additional. Built once at import; membership test is a set lookup."""
+    ranges = ((0x00C0, 0x00FF), (0x0100, 0x017F), (0x0180, 0x024F), (0x1E00, 0x1EFF))
+    return frozenset(chr(cp) for lo, hi in ranges for cp in range(lo, hi + 1)
+                     if chr(cp).isalpha())
+
+
+_LATIN_LETTERS = _latin_letters()
+
+
 def _filter_nonascii(text: str) -> str:
+    """Drop non-Latin OCR artifacts (stray CJK, symbol noise) from the EN
+    engine's output, but keep accented Latin letters: dropping those deleted
+    every diacritic on Spanish/French/German pages (für->fr, Saß->Sa,
+    Psicología->Psicologa) even though PP-OCRv6 recognises them correctly."""
     if all(ord(c) < 128 for c in text):
         return text
-    filtered = ''.join(c for c in text if ord(c) < 128)
+    filtered = ''.join(c for c in text
+                       if ord(c) < 128 or c in _LATIN_LETTERS)
     return ' '.join(filtered.split())
 
 
@@ -238,7 +254,7 @@ def _tokens_from_result(result, img_w):
 
 
 def _tokens_full(result, img_w):
-    """Return tokens with x1/x2/y1/y2 for use with TATR."""
+    """Return tokens with x1/x2/y1/y2 for table structure recognition."""
     import re as _re
     if not result:
         return []
@@ -252,7 +268,7 @@ def _tokens_full(result, img_w):
             xs = [pt[0] for pt in bbox]; ys = [pt[1] for pt in bbox]
             x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
             # PRISM_TBL_V2: keep full-width tokens — dropping them deleted
-            # header rows / long cells in narrow tables; the TATR path now
+            # header rows / long cells in narrow tables; the table path now
             # splits tokens across column boundaries instead.
             if os.environ.get('PRISM_TBL_V2', '1') == '0' and (x2 - x1) > 0.8 * img_w:
                 continue
@@ -492,7 +508,7 @@ def _worker_main(conn):
 
         elif task in ('table_tokens', 'table_tokens_cjk'):
             # Like 'table' but returns raw token dicts (x1/x2/y1/y2/text) so
-            # the caller can pass them to TATR for structure recognition.
+            # the caller can pass them to the coordinate heuristic for structure recognition.
             # CJK pages must use the CJK engine or Chinese cell text is garbage.
             crop_arrays = payload
             crops = [Image.fromarray(a) for a in crop_arrays]
@@ -594,7 +610,7 @@ class TextOCRWorker:
         return self._conn.recv()
 
     def run_table_tokens_batch(self, crops):
-        """Return raw token dicts (x1/x2/y1/y2/text) per crop for TATR."""
+        """Return raw token dicts (x1/x2/y1/y2/text) per crop for table structure recognition."""
         if not crops:
             return []
         self._conn.send(('table_tokens', self._serialize(crops)))

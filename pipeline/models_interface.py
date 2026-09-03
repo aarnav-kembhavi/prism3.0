@@ -770,9 +770,7 @@ def _tokens_from_ocr_result(result, img_w: int) -> list:
 
 def run_table_extraction(crop: Image.Image) -> str:
     """Extract table structure: RapidTable child if available, else RapidOCR
-    tokens + coordinate heuristic. (The old pipeline.tatr_worker import was
-    dead after cleanup — TATR now lives in tatr_worker_onnx as a Workers
-    member, not reachable from here.)"""
+    tokens + coordinate heuristic."""
     global table_latencies
     try:
         t_start = time.perf_counter()

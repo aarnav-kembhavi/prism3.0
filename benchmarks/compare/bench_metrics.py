@@ -37,7 +37,7 @@ import psutil
 
 
 class MetricsTracker:
-    def __init__(self, interval: float = 0.1):
+    def __init__(self, interval: float = 0.3):
         self.interval = interval
         self._proc = psutil.Process(os.getpid())
         self._peak_rss = 0.0

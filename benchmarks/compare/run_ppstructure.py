@@ -17,6 +17,11 @@ def main():
     config = sys.argv[5] if len(sys.argv) > 5 else 'server'   # 'server' | 'mobile'
     os.environ['OMP_NUM_THREADS'] = str(n_threads)
     os.makedirs(out_dir, exist_ok=True)
+    try:
+        import psutil; psutil.Process().cpu_affinity(list(range(n_threads)))
+        print(f"[ppstructure] affinity pinned to cores 0-{n_threads-1}")
+    except Exception as _e:
+        print(f"[ppstructure] affinity pin failed: {_e}")
 
     import paddle
     paddle.set_device('cpu')
@@ -44,6 +49,16 @@ def main():
     pipe = PPStructureV3(**kw)
     m.mark_load_end(t)
     print(f"[ppstructure] loaded in {m.load_time_s:.1f}s, cold RSS {m.cold_rss_mb:.0f}MB")
+
+    # Warmup (EXCLUDED from per-page latency): fully materialise lazily-loaded
+    # models on the first image so page-1 timing isn't inflated by model load.
+    try:
+        _w = os.path.join(images_dir, images[0])
+        if os.path.exists(_w):
+            list(pipe.predict(_w))
+            print("[ppstructure] warmup page done (excluded)")
+    except Exception:
+        pass
 
     ok = 0
     for i, img_name in enumerate(images):
