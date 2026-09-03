@@ -1,0 +1,6 @@
+{"pid": 11620, "key": "texo_decoder", "caller": "<string>", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 11620, "key": "ppocr_det", "caller": "<string>", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 18356, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 23848, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 7160, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 17984, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}

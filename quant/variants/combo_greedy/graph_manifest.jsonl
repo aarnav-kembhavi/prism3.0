@@ -1,0 +1,12 @@
+{"pid": 27536, "key": "texo_encoder", "caller": "<string>", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}
+{"pid": 27536, "key": "texo_decoder", "caller": "<string>", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 27536, "key": "ppocr_rec", "caller": "<string>", "file": "PP-OCRv6_rec_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 27536, "key": "ppocr_det", "caller": "<string>", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 28972, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 28972, "key": "ppocr_rec", "caller": "text_worker.py", "file": "PP-OCRv6_rec_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 29576, "key": "ppocr_det", "caller": "text_worker.py", "file": "PP-OCRv6_det_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 29576, "key": "ppocr_rec", "caller": "text_worker.py", "file": "PP-OCRv6_rec_small_int8.onnx", "int8": true, "missing": null}
+{"pid": 29416, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}
+{"pid": 29416, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}
+{"pid": 6352, "key": "texo_encoder", "caller": "math_worker_onnx.py", "file": "encoder_model_int8.onnx", "int8": true, "missing": null}
+{"pid": 6352, "key": "texo_decoder", "caller": "math_worker_onnx.py", "file": "decoder_model_merged_int8.onnx", "int8": true, "missing": null}

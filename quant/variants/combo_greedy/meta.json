@@ -1,0 +1,119 @@
+{
+  "variant": "combo_greedy",
+  "PRISM_QUANT": "texo_decoder,texo_encoder,ppocr_rec,ppocr_det",
+  "extra_env": [],
+  "returncode": 0,
+  "n_pages": 30,
+  "graphs": {
+    "texo_encoder": {
+      "path": "Texo/model/onnx/encoder_model_int8.onnx",
+      "bytes": 13829278,
+      "mb": 13.83,
+      "int8": true
+    },
+    "texo_decoder": {
+      "path": "Texo/model/onnx/decoder_model_merged_int8.onnx",
+      "bytes": 7279113,
+      "mb": 7.28,
+      "int8": true
+    },
+    "ppocr_rec": {
+      "path": "weights/PP-OCRv6_rec_small_int8.onnx",
+      "bytes": 5678473,
+      "mb": 5.68,
+      "int8": true
+    },
+    "ppocr_det": {
+      "path": "weights/PP-OCRv6_det_small_int8.onnx",
+      "bytes": 2670137,
+      "mb": 2.67,
+      "int8": true
+    },
+    "ppocr_rec_en": {
+      "path": "weights/en_PP-OCRv4_rec.onnx",
+      "bytes": 7652836,
+      "mb": 7.65,
+      "int8": false
+    },
+    "ppdoclayout_v3": {
+      "path": "models/ppdoclayoutv3/PP-DocLayoutV3.onnx",
+      "bytes": 130502049,
+      "mb": 130.5,
+      "int8": false
+    },
+    "slanet_plus": {
+      "path": ".venv_rtable/Lib/site-packages/rapid_table/models/slanet-plus.onnx",
+      "bytes": 7758305,
+      "mb": 7.76,
+      "int8": false
+    }
+  },
+  "total_stack_bytes": 175370191,
+  "total_stack_mb": 175.37,
+  "wall_s": 1218.2,
+  "median_latency_s": 33.544,
+  "mean_latency_s": 40.504,
+  "peak_ram_mb_process_tree": 1855.5,
+  "per_page_latency_s": {
+    "page-07088b2f-f9d6-4c38-9c97-d7f98bc3d556": 24.066,
+    "page-3ecc67a1-9b19-4fb9-b74d-acbb73db5c53": 8.431,
+    "page-28c45f5f-7e0d-464a-89ec-8de3a4abb927": 46.291,
+    "page-28657a85-95cc-4bfa-8156-cc98518a0b4c": 29.626,
+    "eastmoney_59cde7e939acc3124df9d3f2c85b5a0ec41b9da1157d5be38e098672022b47cb.pdf_11": 19.418,
+    "docstructbench_llm-raw-scihub-o.O-chem.200700118.pdf_7": 85.071,
+    "docstructbench_llm-raw-scihub-o.O-chem.200701412.pdf_10": 122.541,
+    "docstructbench_llm-raw-scihub-o.O-j.jcp.2010.12.006.pdf_14": 33.635,
+    "docstructbench_enbook-zlib-o.O-19221575.pdf_1173": 40.502,
+    "docstructbench_dianzishu_zhongwenzaixian-o.O-61520814.pdf_185": 49.425,
+    "docstructbench_enbook-zlib-o.O-19091739.pdf_181": 71.866,
+    "docstructbench_llm-raw-scihub-o.O-bf03175144.pdf_4": 111.08,
+    "docstructbench_enbook-zlib-o.O-21353024.pdf_39": 44.414,
+    "notes_1ba14cb325bc448f7201b20502ecf2b5_16": 16.754,
+    "newspaper_0edcd83c195557b43279fa73edaa59aa_1": 67.206,
+    "PPT_StewartCalcET7e_03_02_page_010": 11.234,
+    "PPT_LEP power point presentation-English-FINAL-10-31-07_page_006": 14.454,
+    "book_zh_CNASGL0072018_extracted_page_48": 24.394,
+    "book_zh_GB12082006_extracted_page_8": 19.553,
+    "book_en_40.Puzzles.and.Problems.in.Probability.and.Mathematical.Statistics,.Schwarz,.Springer,.2008_page_115": 46.132,
+    "book_en_[搬书匠#893][Pyomo—Optimization Modeling in Python].2012.英文版_page_188": 43.839,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点四年级英语下册_课本_人教新起点英语4B电子课本_page_087": 29.698,
+    "color_textbook_zhonggaokao_小学_13.人教新起点英语（4-5年级）_人教新起点五年级英语上册_课本_人教新起点英语5A电子课本_page_006": 11.93,
+    "color_textbook_教材全解1+1二年级下册英语上海牛津版_page_006": 33.453,
+    "color_textbook_zhonggaokao_小学_KET听说读写逐项突破_KET听说读写逐项突破之轻松搞定KET写作25分 【10讲 褚连一】_第04讲第四课KET分类词汇训练二_第四课KET分类词汇训练二_page_003": 21.515,
+    "exam_paper_2004-2019上海高考英语听力原文和答案_page_010": 34.119,
+    "exam_paper_2018年广西北海、钦州、南宁、来宾、崇左、防城港、北部湾经济区中考英语试题（空白卷）_page_003": 37.729,
+    "exam_paper_2016年安徽省中考英语试题（解析）_page_012": 28.713,
+    "exam_paper_en-file-putnam-archive_1991_Problems_1991_page_001": 72.177,
+    "PPT_PresentationSpecification_page_010": 15.868
+  },
+  "graphs_actually_loaded": {
+    "ppocr_det": [
+      "<string>: PP-OCRv6_det_small_int8.onnx (int8)",
+      "text_worker.py: PP-OCRv6_det_small_int8.onnx (int8)"
+    ],
+    "ppocr_rec": [
+      "<string>: PP-OCRv6_rec_small_int8.onnx (int8)",
+      "text_worker.py: PP-OCRv6_rec_small_int8.onnx (int8)"
+    ],
+    "texo_decoder": [
+      "<string>: decoder_model_merged_int8.onnx (int8)",
+      "math_worker_onnx.py: decoder_model_merged_int8.onnx (int8)"
+    ],
+    "texo_encoder": [
+      "<string>: encoder_model_int8.onnx (int8)",
+      "math_worker_onnx.py: encoder_model_int8.onnx (int8)"
+    ]
+  },
+  "requested_int8": [
+    "ppocr_det",
+    "ppocr_rec",
+    "texo_decoder",
+    "texo_encoder"
+  ],
+  "int8_load_unproven": [],
+  "probe": {
+    "proposals": 0,
+    "accepted": 0,
+    "acceptance_rate": null
+  }
+}
