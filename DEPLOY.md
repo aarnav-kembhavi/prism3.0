@@ -95,6 +95,38 @@ memory limit. That is the main reason for `--memory 4Gi`.
 slanet-plus is deliberately left fp32: the fp16 sweep measured mean similarity
 0.937 for it against 0.996+ for every other graph (see `quant/README.md`).
 
+## Measured
+
+Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00003-flm`)
+
+| | |
+|---|---|
+| Image size | **684.2 MB** |
+| Startup (container ready) | **28.7 s** — 3.6 s back-conversion + 24.9 s warm-up |
+| Back-conversion peak RSS | 334–464 MB |
+| Startup peak RSS | 1557 MB |
+| Warm, per page | **17.4 s** median (3 runs: 17.24 / 17.40 / 17.66) |
+| Peak RSS during a request | **1796 MB** |
+| 2-page PDF | 107.3 s (~53.7 s/page; dense math pages) |
+
+Output parity against the same files run locally on Windows:
+
+| file | local | Cloud Run | identical |
+|---|---|---|---|
+| `ieee_p4_twocol_figure.png` | 3407 chars | 3407 chars | **byte-for-byte** |
+| 2-page PDF | 13891 chars | 13891 chars | **byte-for-byte** |
+
+Cloud Run is roughly 2x slower per page than the 16-core dev machine (8.5 s
+local vs 17.4 s on 4 vCPU), which is the expected shape for a CPU-bound
+pipeline.
+
+`deploy/client_check.py` runs these checks:
+
+```bash
+python deploy/client_check.py "$URL" compare page.png local.md
+python deploy/client_check.py "$URL" parse   doc.pdf --out out.md
+```
+
 ## Notes
 
 - **Python 3.12, not 3.11.** `pyproject.toml` sets `requires-python = ">=3.12"`
@@ -107,3 +139,18 @@ slanet-plus is deliberately left fp32: the fp16 sweep measured mean similarity
 - **SLANet-plus is pre-fetched at build time**, so nothing downloads at start.
 - `libgl1`, `libglib2.0-0` (and `libgomp1`, `libsm6`, `libxext6`, `libxrender1`)
   are required or `import cv2` / onnxruntime fail with unhelpful loader errors.
+- **`.gcloudignore` is load-bearing.** `gcloud builds submit` does not read
+  `.dockerignore`; without a `.gcloudignore` it derives the upload context from
+  `.gitignore`, under which the fp16 graphs are ignored — so the build would
+  fail at `COPY`. It must also re-include the `Dockerfile` itself (a local
+  `docker build` always sends it; the remote build does not), and must exclude
+  `benchmarks/compare`, whose paths are deep enough to crash gcloud on Windows
+  MAX_PATH. Keep it in sync with `.dockerignore`.
+- **The in-build smoke test is not optional.** Two Linux-port failures got past
+  every static existence check and were only caught by running a page:
+  `math_worker_onnx.py` loads its tokenizer from `Texo/model/` (the parent of
+  `onnx/`), and `run_omnidocbench.py` gates the layout detector on the presence
+  of the *old* plus-L model this image replaces — its off-path opens a layout
+  cache whose default path is `''`. Hence `PRISM_USE_PPDL_LAYOUT=1`, set both
+  in the image and at `serve.py` import so the smoke test and the server share
+  one configuration.

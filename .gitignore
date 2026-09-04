@@ -86,3 +86,6 @@ models/ppdoclayoutv3/PP-DocLayoutV3_int8_heads.onnx
 
 # Local fp32 graphs materialised from the fp16 siblings at server startup.
 _fp32cache/
+
+# Local reference output captured for the Cloud Run parity check.
+_local_img.md

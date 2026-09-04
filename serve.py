@@ -57,6 +57,27 @@ FP16_GRAPHS = ["texo_encoder", "texo_decoder", "ppocr_rec",
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
+
+def _configure_env() -> None:
+    """
+    Pipeline flags this deployment cannot leave at their defaults.
+
+    run_omnidocbench.py decides whether to use the layout detector at all by
+    testing for the OLD models/ppdoclayout/ppdoclayout_plus_l.onnx, which this
+    image does not ship. The default therefore resolves to "off", and the
+    off-path opens a pre-computed layout cache whose default path is the empty
+    string -- FileNotFoundError: ''. Caught by the in-build smoke test.
+
+    Applied at import so deploy/smoke_test.py runs the same configuration the
+    server does, rather than only the server being correct.
+    """
+    os.environ.setdefault("PRISM_USE_PPDL_LAYOUT", "1")
+    os.environ.setdefault("PRISM_PPDL_V3", "1")
+    os.environ.setdefault("PRISM_SINGLE_WORKER", "1")
+
+
+_configure_env()
+
 _ready = False
 _ready_error: str | None = None
 _run_lock = threading.Lock()

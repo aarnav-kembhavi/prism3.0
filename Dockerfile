@@ -82,7 +82,9 @@ RUN /usr/local/bin/python -m venv /app/venvs/rtable \
 # ── application source ──────────────────────────────────────────────────────
 COPY pipeline/      /app/pipeline/
 COPY normalization/ /app/normalization/
-COPY benchmarks/    /app/benchmarks/
+# Only the harness entry point; the rest of benchmarks/ is competitor output.
+COPY benchmarks/__init__.py          /app/benchmarks/
+COPY benchmarks/run_omnidocbench.py  /app/benchmarks/
 COPY serve.py       /app/serve.py
 
 # ── model graphs, baked in ──────────────────────────────────────────────────
@@ -102,6 +104,14 @@ COPY Texo/model/onnx/generation_config.json  /app/Texo/model/onnx/
 COPY Texo/model/onnx/special_tokens_map.json /app/Texo/model/onnx/
 COPY Texo/model/onnx/tokenizer.json          /app/Texo/model/onnx/
 COPY Texo/model/onnx/tokenizer_config.json   /app/Texo/model/onnx/
+# math_worker_onnx.py reads the tokenizer from Texo/model/ -- the PARENT of
+# onnx/ -- not from the onnx directory. Missing it fails the math worker at
+# startup with a bare "No such file or directory (os error 2)".
+COPY Texo/model/tokenizer.json          /app/Texo/model/
+COPY Texo/model/tokenizer_config.json   /app/Texo/model/
+COPY Texo/model/special_tokens_map.json /app/Texo/model/
+COPY Texo/model/config.json             /app/Texo/model/
+COPY Texo/model/generation_config.json  /app/Texo/model/
 
 # One real page for the startup warm-up, so /health only goes green after the
 # pipeline has actually produced output once. It lives in deploy/ rather than
@@ -114,15 +124,29 @@ COPY deploy/warmup.png /app/deploy/warmup.png
 RUN /app/venvs/rtable/bin/python -c "from rapid_table import RapidTable, RapidTableInput; from rapid_table.utils.typings import ModelType; RapidTable(RapidTableInput(model_type=ModelType.SLANETPLUS)); print('slanet-plus cached')" \
     && find /app/venvs/rtable -name 'slanet-plus*.onnx' -exec ls -la {} \;
 
-# Build-time sanity: the imports most likely to break on a first Linux port,
-# plus proof that the pipeline package and its fp16 graphs are all present.
-RUN python -c "import cv2, onnxruntime, onnx, numpy; print('main env ok', cv2.__version__, onnxruntime.__version__)" \
-    && /app/venvs/rtable/bin/python -c "import onnx, rapid_table; print('rtable env ok')" \
-    && python -c "import pipeline.quant_select as q, pathlib; miss=[k for k in ['texo_encoder','texo_decoder','ppocr_rec','ppocr_det','ppdoclayout_v3'] if not q.fp16_path(k).exists()]; assert not miss, f'missing fp16 graphs: {miss}'; print('fp16 graphs present')"
+# Build-time sanity: the imports most likely to break on a first Linux port.
+RUN python -c "import cv2, onnxruntime, onnx, numpy; print('main env ok', cv2.__version__, onnxruntime.__version__)"     && /app/venvs/rtable/bin/python -c "import onnx, rapid_table; print('rtable env ok')"
 
-ENV PORT=8080 \
-    PRISM_SINGLE_WORKER=1 \
-    PRISM_FP32_CACHE=/tmp/prism_fp32
+# Runtime environment, set BEFORE the smoke test so the test runs under the
+# same configuration production does. PRISM_USE_PPDL_LAYOUT is not optional:
+# run_omnidocbench.py defaults it from the presence of the OLD plus-L layout
+# model, which this image does not ship, and its "off" path opens a layout
+# cache file whose default path is the empty string.
+ENV PORT=8080
+ENV PRISM_SINGLE_WORKER=1
+ENV PRISM_FP32_CACHE=/tmp/prism_fp32
+ENV PRISM_USE_PPDL_LAYOUT=1
+ENV PRISM_PPDL_V3=1
+
+# End-to-end smoke test, in the build: the real startup path plus one full
+# page, failing the build if no markdown comes out. Static existence checks
+# are not enough -- the first deployed revision passed every one of them and
+# still died at startup because the math worker reads its tokenizer from a
+# different directory than the ONNX graphs. The scratch cache is written
+# outside /app and removed in the same layer so it never lands in the image.
+COPY deploy/smoke_test.py /app/deploy/smoke_test.py
+RUN PRISM_FP32_CACHE=/tmp/buildcheck python /app/deploy/smoke_test.py && rm -rf /tmp/buildcheck
+
 EXPOSE 8080
 
 CMD ["python", "/app/serve.py"]
