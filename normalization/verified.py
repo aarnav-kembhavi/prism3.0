@@ -65,9 +65,24 @@ def _log_proposal(record):
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def _resolved_det_model() -> str:
+    """The det graph this module will actually load (fp32, int8 or fp16)."""
+    import sys as _sys
+    if ROOT_DIR not in _sys.path:
+        _sys.path.insert(0, ROOT_DIR)
+    try:
+        from pipeline.quant_select import graph_path
+        return graph_path("ppocr_det", _DET_MODEL)
+    except Exception:
+        return _DET_MODEL
+
+
 def available() -> bool:
+    # Checks the resolved graph, not _DET_MODEL: an image that ships only the
+    # fp16 sibling has no fp32 det file, and testing that would switch the
+    # whole verified path off without saying so.
     return (os.environ.get("PRISM_NORM_VERIFY", "1") != "0"
-            and os.path.exists(_DET_MODEL))
+            and os.path.exists(_resolved_det_model()))
 
 
 def _get_session():
@@ -82,8 +97,7 @@ def _get_session():
         import sys as _sys
         if ROOT_DIR not in _sys.path:
             _sys.path.insert(0, ROOT_DIR)
-        from pipeline.quant_select import graph_path
-        _session = ort.InferenceSession(graph_path('ppocr_det', _DET_MODEL), so,
+        _session = ort.InferenceSession(_resolved_det_model(), so,
                                         providers=["CPUExecutionProvider"])
     return _session
 

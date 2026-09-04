@@ -210,11 +210,15 @@ def get_ppdoclayout_detector(imgsz: int = 800):
     if _ppdoclayout_detector is None:
         use_v3 = os.environ.get('PRISM_PPDL_V3', '1') != '0'
         path = _PPDOCLAYOUT_V3_MODEL_PATH if use_v3 else _PPDOCLAYOUT_MODEL_PATH
-        if not os.path.exists(path):
-            return None
         if use_v3:
             from pipeline.quant_select import graph_path
             path = graph_path('ppdoclayout_v3', path)
+        # Check the graph we are actually going to open, not the fp32 one it
+        # was derived from: a deployment that ships only the reduced-precision
+        # sibling has no fp32 file, and checking that first silently returned
+        # None here -- i.e. no layout model at all, with no error.
+        if not os.path.exists(path):
+            return None
         from pipeline.ppdoclayout_onnx import PPDocLayoutOnnxDetector
         keep_inline = os.environ.get('PRISM_INLINE_FML', '0') != '0'
         print(f"[*] Loading PP-DocLayout{'V3' if use_v3 else '_plus-L'} detector (raw ONNX @ {imgsz}px)")

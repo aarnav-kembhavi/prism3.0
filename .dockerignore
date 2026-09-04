@@ -1,0 +1,51 @@
+# Keep the build context small: the working tree is tens of GB (preds 16 GB,
+# .git 11.7 GB, venvs 10 GB, data 5 GB) and the image needs about 130 MB of it.
+#
+# Pattern: exclude everything, then re-include. Docker will not descend into an
+# excluded DIRECTORY, so each parent has to be re-included before a nested file
+# can be — hence the "!dir" / "dir/*" / "!dir/file" triples below.
+
+*
+
+!pyproject.toml
+!README.md
+!serve.py
+!pipeline
+!normalization
+!benchmarks
+!deploy
+
+# fp16 OCR graphs + the English charset, nothing else from weights/
+!weights
+weights/*
+!weights/PP-OCRv6_det_small_fp16.onnx
+!weights/PP-OCRv6_rec_small_fp16.onnx
+!weights/en_PP-OCRv4_rec_fp16.onnx
+!weights/en_dict.txt
+
+# fp16 layout graph only
+!models
+models/*
+!models/ppdoclayoutv3
+models/ppdoclayoutv3/*
+!models/ppdoclayoutv3/PP-DocLayoutV3_fp16.onnx
+
+# fp16 Texo graphs + tokenizer/config JSON
+!Texo
+Texo/*
+!Texo/model
+Texo/model/*
+!Texo/model/onnx
+Texo/model/onnx/*
+!Texo/model/onnx/encoder_model_fp16.onnx
+!Texo/model/onnx/decoder_model_merged_fp16.onnx
+!Texo/model/onnx/config.json
+!Texo/model/onnx/generation_config.json
+!Texo/model/onnx/special_tokens_map.json
+!Texo/model/onnx/tokenizer_config.json
+!Texo/model/onnx/tokenizer.json
+
+# Noise inside the re-included trees
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
