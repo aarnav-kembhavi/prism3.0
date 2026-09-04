@@ -102,12 +102,18 @@ Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00003
 | | |
 |---|---|
 | Image size | **684.2 MB** |
-| Startup (container ready) | **28.7 s** — 3.6 s back-conversion + 24.9 s warm-up |
-| Back-conversion peak RSS | 334–464 MB |
-| Startup peak RSS | 1557 MB |
-| Warm, per page | **17.4 s** median (3 runs: 17.24 / 17.40 / 17.66) |
+| Cold start (container ready) | **25.6 s** — 2.6-3.7 s back-conversion + ~22 s warm-up |
+| Cold first request, end to end | **41.8 s** (25.6 s start + 14.0 s page) |
+| Warm, per page | **17.4 s** median (17.24 / 17.40 / 17.66); 14.0-17.0 s observed range |
 | Peak RSS during a request | **1796 MB** |
+| Startup peak RSS | 1546-1557 MB |
+| Back-conversion peak RSS | 334-491 MB |
 | 2-page PDF | 107.3 s (~53.7 s/page; dense math pages) |
+
+Cold start was measured by leaving the service idle for 17 minutes so it scaled
+to zero, then timing one request; the logs confirm a fresh container
+(`READY in 25.58s`) rather than a reused instance. `--cpu-boost` matters here:
+model load is entirely CPU-bound and happens before the port is served.
 
 Output parity against the same files run locally on Windows:
 
