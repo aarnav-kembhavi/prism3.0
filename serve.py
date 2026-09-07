@@ -32,12 +32,14 @@ Design notes that are not obvious:
 import asyncio
 import io
 import os
+import uuid
 import sys
 import tempfile
 import threading
 import time
 import shutil
 import logging
+from collections import OrderedDict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -104,6 +106,34 @@ _parse_sem = asyncio.Semaphore(1)
 _progress: dict = {"state": "idle", "page": 0, "pages": 0,
                    "started": None, "waiting": 0}
 _progress_lock = threading.Lock()
+
+
+# Rasterised source pages, kept so the UI can show the page beside its output.
+#
+# The original UI put the input page next to the result (web/index.html at
+# a7a367b, <img id="input-preview">). For an image upload the browser already
+# holds the file and can render it locally, but a PDF has to be rasterised, and
+# only the server can do that -- so the pages it already produced are kept for
+# a short while and served back rather than thrown away.
+#
+# /tmp is a tmpfs on Cloud Run, so this is RAM: only the most recent documents
+# are retained, and the oldest is deleted as soon as a new one arrives.
+_PAGE_CACHE_DOCS = 2
+_page_cache: "OrderedDict[str, dict]" = OrderedDict()
+_page_lock = threading.Lock()
+
+
+def _cache_pages(paths: list[str]) -> str:
+    """Register a document's page images and return its token."""
+    token = uuid.uuid4().hex[:16]
+    with _page_lock:
+        _page_cache[token] = {"paths": list(paths)}
+        while len(_page_cache) > _PAGE_CACHE_DOCS:
+            _, old = _page_cache.popitem(last=False)
+            d = Path(old["paths"][0]).parent if old["paths"] else None
+            if d:
+                shutil.rmtree(d, ignore_errors=True)
+    return token
 
 
 def _set_progress(**kw) -> None:
@@ -327,8 +357,8 @@ def rasterize_pdf(data: bytes, dpi: int = 200) -> list[str]:
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 
 from fastapi import FastAPI, File, HTTPException, UploadFile   # noqa: E402
-from fastapi.responses import (HTMLResponse, JSONResponse,  # noqa: E402
-                               PlainTextResponse)
+from fastapi.responses import (FileResponse, HTMLResponse,  # noqa: E402
+                               JSONResponse, PlainTextResponse)
 
 app = FastAPI(title="PRISM", docs_url=None, redoc_url=None)
 
@@ -401,6 +431,28 @@ def health():
     if not _ready:
         raise HTTPException(503, _ready_error or "models still loading")
     return JSONResponse({"status": "ok", **_startup_stats})
+
+
+@app.get("/page/{token}/{index}")
+def page_image(token: str, index: int):
+    """
+    One rasterised source page, so the UI can show it beside its output.
+
+    Only needed for PDFs -- for an image upload the browser renders the file it
+    already has. Without this the left pane would have nothing to show for a
+    PDF and the two-pane layout would collapse back to one.
+    """
+    with _page_lock:
+        doc = _page_cache.get(token)
+    if not doc or not (0 <= index < len(doc["paths"])):
+        raise HTTPException(404, "No such page.")
+    p = Path(doc["paths"][index])
+    if not p.exists():
+        raise HTTPException(404, "Page expired.")
+    media = "image/png" if p.suffix.lower() == ".png" else "application/octet-stream"
+    if p.suffix.lower() in (".jpg", ".jpeg"):
+        media = "image/jpeg"
+    return FileResponse(str(p), media_type=media)
 
 
 @app.get("/progress")
@@ -484,7 +536,17 @@ async def parse(file: UploadFile = File(...)):
         body = "\n\n".join(
             (f"<!-- page {i + 1} -->\n{md}" if len(pages) > 1 else md)
             for i, md in enumerate(pages))
-        return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
+        # Keep the source pages and hand back a token for them. The BODY is
+        # unchanged -- still just markdown -- so the /parse contract holds;
+        # the token rides in headers, which the UI reads to fill its left pane.
+        token = _cache_pages(tmp_paths)
+        tmp_dir = None                    # ownership passes to the page cache
+        return PlainTextResponse(
+            body, media_type="text/markdown; charset=utf-8",
+            headers={"X-Prism-Doc": token,
+                     "X-Prism-Pages": str(len(tmp_paths)),
+                     "Access-Control-Expose-Headers":
+                         "X-Prism-Doc, X-Prism-Pages"})
     except HTTPException:
         raise
     except Exception as exc:

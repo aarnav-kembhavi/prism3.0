@@ -59,11 +59,22 @@ def main() -> int:
         print("FAIL: GET / content-type is %r, expected text/html" % ctype)
         return 1
     missing = [m for m in ('<html', 'id="drop-zone"', 'id="rendered-md"',
-                           "fetch('/parse'", "fetch('/progress'")
+                           'id="page-stack"', "fetch('/parse'",
+                           "fetch('/progress'")
                if m not in r.text]
     if missing:
         print("FAIL: UI is missing %s" % missing)
         return 1
+
+    # The two-pane split is the layout of the original app.py UI. Assert the
+    # scaffolding survived the rebuild, so a regression to a single full-width
+    # pane fails the build rather than shipping.
+    panes = r.text.count('<div class="pane">')
+    if r.text.count('<div class="split">') != 1 or panes != 2:
+        print("FAIL: expected one .split with two .pane children, got "
+              "%d split / %d panes" % (r.text.count('<div class="split">'), panes))
+        return 1
+    print("layout    -> .split with %d panes" % panes)
 
     r = client.get("/health")
     print("GET /health-> %d" % r.status_code)

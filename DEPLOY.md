@@ -42,7 +42,7 @@ gcloud run deploy prism \
     --concurrency 4 \
     --timeout 900 \
     --min-instances 0 \
-    --max-instances 3 \
+    --max-instances 1 \
     --cpu-boost \
     --allow-unauthenticated \
     --session-affinity
@@ -55,7 +55,7 @@ gcloud run deploy prism \
 | `--concurrency 4` | Page loads, `/health` and progress polls must not queue behind a 17 s parse. Memory is protected by an `asyncio.Semaphore(1)` around the parse itself, not by this number — see Concurrency below |
 | `--timeout 900` | A dense multi-page PDF takes minutes |
 | `--min-instances 0` | Scale to zero; cold start is the trade-off |
-| `--max-instances 3` | Cost ceiling while testing |
+| `--max-instances 1` | **Not a cost knob.** `/progress` and the `/page` cache are per-instance state; with more than one instance the source pane 404s and progress reports `idle` — see Concurrency below |
 | `--cpu-boost` | Model load is CPU-bound, and it all happens before the first request |
 | `--allow-unauthenticated` | Public endpoint |
 | `--session-affinity` | `/progress` is per-instance state; without affinity a poll can land on a different instance than the parse and report `idle` |
@@ -99,15 +99,35 @@ slanet-plus is deliberately left fp32: the fp16 sweep measured mean similarity
 
 ## The UI
 
-`GET /` serves the same page `app.py` does, rebuilt for this service by
-`deploy/build_ui.py` (markup and all ~10 KB of CSS kept verbatim; only the
-client logic is replaced). `app.py`'s JS drives `/upload` -> `/status` ->
-`/pdf`, which needs a LaTeX toolchain this image deliberately does not carry,
-so the client targets `/parse` and renders the markdown with marked + KaTeX.
+`GET /` serves `app.py`'s page, rebuilt by `deploy/build_ui.py`. The original
+**two-pane layout is preserved**: `<div class="split">` with two `<div
+class="pane">` children and their `.pane-bar`s are original bytes, as is all
+~10 KB of the page's CSS. Only the pane CONTENTS change, and only because
+neither original pane can work here:
+
+| `web/index.html` @ `2e62b83` | here | why |
+|---|---|---|
+| left: **LaTeX Source**, `<pre id="latex-pre">` | **Source Page**, A4 sheets | shows the input page, as the first UI did (`#input-preview` @ `a7a367b`) |
+| right: **PDF Preview**, `<iframe id="pdf-viewer">` | **Markdown**, rendered | the iframe is fed by `/pdf/{job_id}`, which needs xelatex; no TeX in this image |
+
+The Copy button is lifted out of the source pane and reinserted in the markdown
+pane programmatically, so its SVG stays byte-identical rather than retyped.
 
 ```bash
 python deploy/build_ui.py        # web/index.html -> deploy/ui.html
 ```
+
+The in-build smoke test asserts `GET /` returns one `.split` with exactly two
+`.pane` children, so a regression to a single full-width pane fails the build.
+
+### Source pages
+
+`GET /page/{token}/{n}` serves a rasterised source page. `/parse` keeps its
+pages instead of deleting them and returns the token in `X-Prism-Doc` /
+`X-Prism-Pages` headers — the response BODY is still just markdown, so the
+`/parse` contract is unchanged. An image upload falls back to the local file
+the browser already holds; a PDF has no such fallback, which is why the route
+exists.
 
 ## Concurrency
 
@@ -120,24 +140,40 @@ the page, `/health` and every progress poll would queue behind a 17-second
 parse and the app would look hung. Measured on the live service, with a parse
 running: **389 ms median** across `/health` and `/progress`.
 
-`--session-affinity` matters. `/progress` is per-instance state, so a poll that
-lands on a different instance than the parse reports `idle`. Affinity pins a
-client to one instance. Verified locally, where there is exactly one instance:
-a second parse arriving 1.5 s into the first reports `waiting=1` for 10 s, then
-starts with its own elapsed clock when the first finishes (11.9 s and 22.4 s
-end to end).
+**`--max-instances 1`, and this is not a cost decision.** Both `/progress` and
+the `/page` cache are per-instance process state. At `--max-instances 3` Cloud
+Run cold-started three instances inside 70 s (three `READY in` lines) and
+`--session-affinity`, which is best-effort, did not hold while instances were
+being created. The measured result: the progress line read "Starting…" for 92 s
+during a live parse, and the source-page image 404'd into a broken-image icon —
+the restored two-pane layout collapsed to one usable pane.
+
+Extra instances buy nothing here anyway: the semaphore already serialises
+parses to one at a time, so a second instance only helps *simultaneous* users,
+at triple the memory, and it is precisely what stops the queue message in
+requirement 6 from ever appearing. To scale horizontally, the page cache and
+progress state need a shared store (GCS or Redis) rather than process memory —
+a real change, not a flag.
+
+`--session-affinity` is kept as well; it costs nothing and helps when more than
+one instance does exist.
+
+Queue behaviour verified locally, where there is exactly one instance: a second
+parse arriving 1.5 s into the first reports `waiting=1` for 10 s, then starts
+with its own elapsed clock when the first finishes (11.9 s and 22.4 s end to
+end).
 
 ## Measured
 
-Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00005-fxw`)
+Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00007-4vm`)
 
 | | |
 |---|---|
 | Image size | **684.2 MB** |
-| Cold start (container ready) | **25.9 s** — 3.8 s back-conversion + ~22 s warm-up |
+| Cold start (container ready) | **26.8 s** — 3.7 s back-conversion + 23.1 s warm-up |
 | Cold `GET /` (first hit after scale-to-zero) | **27.9 s** |
-| Warm `GET /` | **0.49 s** |
-| Warm parse, per page | **13.6 s** median (13.56 / 13.57 / 14.19) |
+| Warm `GET /` | **0.29 s** |
+| Warm parse, per page | **14.0 s** median (13.92 / 14.09) |
 | Parse right after a cold page load | **13.8 s** — already warm |
 | `/health` + `/progress` while a parse runs | **389 ms** median |
 | Peak RSS during a parse | **~2.0 GB** (1965-1998 MB) |
