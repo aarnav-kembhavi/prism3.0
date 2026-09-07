@@ -129,34 +129,38 @@ end to end).
 
 ## Measured
 
-Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00003-flm`)
+Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00005-fxw`)
 
 | | |
 |---|---|
 | Image size | **684.2 MB** |
-| Cold start (container ready) | **25.6 s** — 2.6-3.7 s back-conversion + ~22 s warm-up |
-| Cold first request, end to end | **41.8 s** (25.6 s start + 14.0 s page) |
-| Warm, per page | **17.4 s** median (17.24 / 17.40 / 17.66); 14.0-17.0 s observed range |
-| Peak RSS during a request | **1796 MB** |
-| Startup peak RSS | 1546-1557 MB |
-| Back-conversion peak RSS | 334-491 MB |
-| 2-page PDF | 107.3 s (~53.7 s/page; dense math pages) |
+| Cold start (container ready) | **25.9 s** — 3.8 s back-conversion + ~22 s warm-up |
+| Cold `GET /` (first hit after scale-to-zero) | **27.9 s** |
+| Warm `GET /` | **0.49 s** |
+| Warm parse, per page | **13.6 s** median (13.56 / 13.57 / 14.19) |
+| Parse right after a cold page load | **13.8 s** — already warm |
+| `/health` + `/progress` while a parse runs | **389 ms** median |
+| Peak RSS during a parse | **~2.0 GB** (1965-1998 MB) |
+| Startup peak RSS | 1575-1720 MB |
+| 2-page PDF (API-only revision) | 107.3 s (~53.7 s/page; dense maths) |
 
-Cold start was measured by leaving the service idle for 17 minutes so it scaled
-to zero, then timing one request; the logs confirm a fresh container
-(`READY in 25.58s`) rather than a reused instance. `--cpu-boost` matters here:
-model load is entirely CPU-bound and happens before the port is served.
+**The UI absorbs the cold start.** On the API-only revision the first request
+after scale-to-zero cost 41.8 s (25.6 s start + a 14 s page). With the UI the
+page load pays the 27.9 s, and by the time anyone has picked a file the
+instance is warm, so the parse itself is 13.8 s. Cold start is now paid where a
+spinner is expected rather than in the middle of a conversion.
 
-Output parity against the same files run locally on Windows:
+Cold start is measured by idling 17 minutes to force scale to zero, then
+timing the first request; the logs confirm a fresh container
+(`READY in 25.88s`) rather than a reused instance.
+
+Output parity against the same files run locally on Windows, on the API-only
+revision:
 
 | file | local | Cloud Run | identical |
 |---|---|---|---|
 | `ieee_p4_twocol_figure.png` | 3407 chars | 3407 chars | **byte-for-byte** |
 | 2-page PDF | 13891 chars | 13891 chars | **byte-for-byte** |
-
-Cloud Run is roughly 2x slower per page than the 16-core dev machine (8.5 s
-local vs 17.4 s on 4 vCPU), which is the expected shape for a CPU-bound
-pipeline.
 
 `deploy/client_check.py` runs these checks:
 
