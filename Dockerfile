@@ -61,7 +61,8 @@ RUN pip install --upgrade pip \
         "uvicorn[standard]>=0.30" \
         "python-multipart>=0.0.9" \
         "pypdfium2>=4.30" \
-        "onnx>=1.16"
+        "onnx>=1.16" \
+        "httpx>=0.27"
 
 # ── RapidTable child virtual environment ────────────────────────────────────
 # Versions from SETUP.md ("Versions known to work"). Built from the base
@@ -113,10 +114,11 @@ COPY Texo/model/special_tokens_map.json /app/Texo/model/
 COPY Texo/model/config.json             /app/Texo/model/
 COPY Texo/model/generation_config.json  /app/Texo/model/
 
-# One real page for the startup warm-up, so /health only goes green after the
-# pipeline has actually produced output once. It lives in deploy/ rather than
-# test_images/ so the build context can exclude that tree wholesale.
-COPY deploy/warmup.png /app/deploy/warmup.png
+# deploy/ carries the UI page served at GET /, the warm-up image (so /health
+# only goes green after the pipeline has actually produced output once), and
+# the smoke test below. It lives here rather than in web/ or test_images/ so
+# the build context can exclude those trees wholesale.
+COPY deploy/ /app/deploy/
 
 # Pre-fetch SLANet-plus into the child venv now: rapid_table would otherwise
 # download it on first use, and nothing should hit the network at container
@@ -144,7 +146,6 @@ ENV PRISM_PPDL_V3=1
 # still died at startup because the math worker reads its tokenizer from a
 # different directory than the ONNX graphs. The scratch cache is written
 # outside /app and removed in the same layer so it never lands in the image.
-COPY deploy/smoke_test.py /app/deploy/smoke_test.py
 RUN PRISM_FP32_CACHE=/tmp/buildcheck python /app/deploy/smoke_test.py && rm -rf /tmp/buildcheck
 
 EXPOSE 8080

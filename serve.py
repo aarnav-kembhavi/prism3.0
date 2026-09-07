@@ -1,8 +1,10 @@
 """
 PRISM HTTP service for Cloud Run.
 
-    POST /parse    PDF or image upload -> markdown
-    GET  /health   200 only once the models are loaded and a warm-up page ran
+    GET  /          the PRISM web UI (single self-contained page)
+    POST /parse     PDF or image upload -> markdown
+    GET  /health    200 only once the models are loaded and a warm-up page ran
+    GET  /progress  what the server is doing right now, for the UI
 
 Design notes that are not obvious:
 
@@ -27,6 +29,7 @@ Design notes that are not obvious:
   container is killed. Request bodies are capped at 32 MB upstream, so uploads
   over 30 MB are refused explicitly rather than truncated silently.
 """
+import asyncio
 import io
 import os
 import sys
@@ -82,6 +85,38 @@ _ready = False
 _ready_error: str | None = None
 _run_lock = threading.Lock()
 _startup_stats: dict = {}
+
+# One parse at a time, enforced HERE rather than by Cloud Run --concurrency.
+#
+# A parse holds ~1.8 GB resident, and the materialised fp32 graphs occupy
+# another 251 MB of tmpfs against the same limit, so two concurrent parses
+# would exceed 4Gi. Cloud Run's --concurrency would enforce that, but it is
+# far too blunt once a UI is attached: at --concurrency 1 the page itself, its
+# assets, /health and every progress poll all queue behind a 17-second parse,
+# and the app looks hung. Cloud Run runs at --concurrency 4 so those pass
+# straight through; this semaphore is what actually protects memory.
+_parse_sem = asyncio.Semaphore(1)
+
+# Live state for the UI. There is no live stage information to be had from the
+# pipeline through this entry point, so the UI is given only things that are
+# actually true: whether a parse is running or queued behind one, how many are
+# waiting, and which page of a multi-page PDF is in flight.
+_progress: dict = {"state": "idle", "page": 0, "pages": 0,
+                   "started": None, "waiting": 0}
+_progress_lock = threading.Lock()
+
+
+def _set_progress(**kw) -> None:
+    with _progress_lock:
+        _progress.update(kw)
+
+
+def _progress_snapshot() -> dict:
+    with _progress_lock:
+        snap = dict(_progress)
+    started = snap.pop("started", None)
+    snap["elapsed_s"] = round(time.perf_counter() - started, 1) if started else 0.0
+    return snap
 
 
 # ── memory sampling ──────────────────────────────────────────────────────────
@@ -242,17 +277,32 @@ def warm_up() -> dict:
             "warmup_chars": len(md[0] if md else "")}
 
 
-def run_pipeline(image_paths: list[str]) -> list[str]:
-    """Run PRISM over page images, in order. Returns one markdown per page."""
+def run_pipeline(image_paths: list[str], on_page=None) -> list[str]:
+    """
+    Run PRISM over page images, in order. Returns one markdown per page.
+
+    Called once PER PAGE rather than once for the whole list, so multi-page
+    PDFs can report real progress ("page 3 of 7") instead of a spinner that
+    sits still for two minutes. The workers are persistent singletons, so the
+    per-call cost is a scratch directory and a sampler thread, not a model
+    reload.
+    """
     from benchmarks.run_omnidocbench import _run_prism_on_images
 
-    work = Path(tempfile.mkdtemp(prefix="prism_req_"))
-    try:
-        with _run_lock:                       # workers are not re-entrant
-            out = _run_prism_on_images([str(p) for p in image_paths], str(work))
-        return [out.get(Path(p).stem, "") for p in image_paths]
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    out: list[str] = []
+    for i, p in enumerate(image_paths):
+        if on_page:
+            on_page(i, len(image_paths))
+        work = Path(tempfile.mkdtemp(prefix="prism_req_"))
+        try:
+            with _run_lock:                   # workers are not re-entrant
+                res = _run_prism_on_images([str(p)], str(work))
+            out.append(res.get(Path(p).stem, ""))
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+    if on_page:
+        on_page(len(image_paths), len(image_paths))
+    return out
 
 
 def rasterize_pdf(data: bytes, dpi: int = 200) -> list[str]:
@@ -277,7 +327,8 @@ def rasterize_pdf(data: bytes, dpi: int = 200) -> list[str]:
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 
 from fastapi import FastAPI, File, HTTPException, UploadFile   # noqa: E402
-from fastapi.responses import JSONResponse, PlainTextResponse  # noqa: E402
+from fastapi.responses import (HTMLResponse, JSONResponse,  # noqa: E402
+                               PlainTextResponse)
 
 app = FastAPI(title="PRISM", docs_url=None, redoc_url=None)
 
@@ -330,11 +381,38 @@ def _shutdown() -> None:
             pass
 
 
+def _ui_html() -> str:
+    """The single-file UI. deploy/ui.html in the image, web/ in a checkout."""
+    for cand in (ROOT / "deploy" / "ui.html", ROOT / "web" / "index.html"):
+        if cand.exists():
+            return cand.read_text(encoding="utf-8")
+    raise HTTPException(500, "UI asset missing")
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    # Deliberately NOT gated on _ready: if startup failed, the page should
+    # load and say so rather than the browser showing a bare 503.
+    return HTMLResponse(_ui_html())
+
+
 @app.get("/health")
 def health():
     if not _ready:
         raise HTTPException(503, _ready_error or "models still loading")
     return JSONResponse({"status": "ok", **_startup_stats})
+
+
+@app.get("/progress")
+def progress():
+    """
+    What the server is actually doing right now.
+
+    Cheap and outside the semaphore, so it answers instantly while a parse
+    holds the lock -- that is the whole point of running Cloud Run at
+    --concurrency 4 rather than 1.
+    """
+    return JSONResponse({"ready": _ready, **_progress_snapshot()})
 
 
 @app.post("/parse")
@@ -363,20 +441,39 @@ async def parse(file: UploadFile = File(...)):
     tmp_paths: list[str] = []
     tmp_dir = None
     t0 = time.perf_counter()
+    queued = False
     try:
-        with PeakRSS() as rss:
-            if suffix == ".pdf":
-                tmp_paths = rasterize_pdf(bytes(data))
-                if not tmp_paths:
-                    raise HTTPException(400, "PDF contains no pages.")
-                tmp_dir = Path(tmp_paths[0]).parent
-            else:
-                tmp_dir = Path(tempfile.mkdtemp(prefix="prism_img_"))
-                p = tmp_dir / f"upload{suffix}"
-                p.write_bytes(bytes(data))
-                tmp_paths = [str(p)]
+        # Only the parse itself is serialised. Everything above -- upload,
+        # validation, size check -- and every other route stays free.
+        if _parse_sem.locked():
+            queued = True
+            _set_progress(waiting=_progress_snapshot().get("waiting", 0) + 1)
+            log.info("parse queued | file=%s", file.filename)
+        async with _parse_sem:
+            if queued:
+                _set_progress(waiting=max(_progress_snapshot().get("waiting", 1) - 1, 0))
+            with PeakRSS() as rss:
+                if suffix == ".pdf":
+                    tmp_paths = rasterize_pdf(bytes(data))
+                    if not tmp_paths:
+                        raise HTTPException(400, "PDF contains no pages.")
+                    tmp_dir = Path(tmp_paths[0]).parent
+                else:
+                    tmp_dir = Path(tempfile.mkdtemp(prefix="prism_img_"))
+                    p = tmp_dir / f"upload{suffix}"
+                    p.write_bytes(bytes(data))
+                    tmp_paths = [str(p)]
 
-            pages = run_pipeline(tmp_paths)
+                _set_progress(state="running", page=0, pages=len(tmp_paths),
+                              started=time.perf_counter())
+
+                def _on_page(done, total):
+                    _set_progress(state="running", page=done + 1 if done < total else total,
+                                  pages=total)
+
+                # The pipeline is synchronous and CPU-bound; run it off the
+                # event loop so /progress and /health keep responding.
+                pages = await asyncio.to_thread(run_pipeline, tmp_paths, _on_page)
 
         wall = time.perf_counter() - t0
         log.info("parse ok | file=%s pages=%d bytes=%d wall=%.2fs "
@@ -396,6 +493,7 @@ async def parse(file: UploadFile = File(...)):
                   file.filename, time.perf_counter() - t0, traceback.format_exc())
         raise HTTPException(500, f"{type(exc).__name__}: {exc}")
     finally:
+        _set_progress(state="idle", page=0, pages=0, started=None)
         if tmp_dir:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

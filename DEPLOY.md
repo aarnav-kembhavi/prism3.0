@@ -39,24 +39,26 @@ gcloud run deploy prism \
     --region asia-south1 \
     --memory 4Gi \
     --cpu 4 \
-    --concurrency 1 \
+    --concurrency 4 \
     --timeout 900 \
     --min-instances 0 \
     --max-instances 3 \
     --cpu-boost \
-    --allow-unauthenticated
+    --allow-unauthenticated \
+    --session-affinity
 ```
 
 | Flag | Why |
 |---|---|
 | `--memory 4Gi` | Startup peaks well above 2 GiB once the fp32 graphs are materialised; 2 GiB OOMs |
 | `--cpu 4` | The pipeline is CPU-bound end to end |
-| `--concurrency 1` | **Critical.** Default is 80. One request holds GBs of resident model and saturates the CPU, so anything above 1 OOMs the instance |
+| `--concurrency 4` | Page loads, `/health` and progress polls must not queue behind a 17 s parse. Memory is protected by an `asyncio.Semaphore(1)` around the parse itself, not by this number — see Concurrency below |
 | `--timeout 900` | A dense multi-page PDF takes minutes |
 | `--min-instances 0` | Scale to zero; cold start is the trade-off |
 | `--max-instances 3` | Cost ceiling while testing |
 | `--cpu-boost` | Model load is CPU-bound, and it all happens before the first request |
 | `--allow-unauthenticated` | Public endpoint |
+| `--session-affinity` | `/progress` is per-instance state; without affinity a poll can land on a different instance than the parse and report `idle` |
 
 ## Use
 
@@ -94,6 +96,36 @@ memory limit. That is the main reason for `--memory 4Gi`.
 
 slanet-plus is deliberately left fp32: the fp16 sweep measured mean similarity
 0.937 for it against 0.996+ for every other graph (see `quant/README.md`).
+
+## The UI
+
+`GET /` serves the same page `app.py` does, rebuilt for this service by
+`deploy/build_ui.py` (markup and all ~10 KB of CSS kept verbatim; only the
+client logic is replaced). `app.py`'s JS drives `/upload` -> `/status` ->
+`/pdf`, which needs a LaTeX toolchain this image deliberately does not carry,
+so the client targets `/parse` and renders the markdown with marked + KaTeX.
+
+```bash
+python deploy/build_ui.py        # web/index.html -> deploy/ui.html
+```
+
+## Concurrency
+
+`--concurrency 4`, with an `asyncio.Semaphore(1)` around the parse only.
+
+A parse holds ~1.8 GB resident and the materialised fp32 graphs take another
+251 MB of tmpfs against the same limit, so two concurrent parses would exceed
+4Gi. `--concurrency 1` enforces that but is the wrong tool once a UI exists:
+the page, `/health` and every progress poll would queue behind a 17-second
+parse and the app would look hung. Measured on the live service, with a parse
+running: **389 ms median** across `/health` and `/progress`.
+
+`--session-affinity` matters. `/progress` is per-instance state, so a poll that
+lands on a different instance than the parse reports `idle`. Affinity pins a
+client to one instance. Verified locally, where there is exactly one instance:
+a second parse arriving 1.5 s into the first reports `waiting=1` for 10 s, then
+starts with its own elapsed clock when the first finishes (11.9 s and 22.4 s
+end to end).
 
 ## Measured
 

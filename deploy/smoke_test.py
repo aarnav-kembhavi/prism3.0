@@ -41,6 +41,42 @@ def main() -> int:
               % (warm["warmup_chars"], MIN_CHARS))
         return 1
 
+    # The UI is served from this same app, so a broken or missing page should
+    # fail the build too. TestClient is NOT used as a context manager on
+    # purpose: that would re-run the startup event and reload every model.
+    from fastapi.testclient import TestClient
+
+    serve._ready = True          # startup already ran, in-process, above
+    client = TestClient(serve.app)
+
+    r = client.get("/")
+    ctype = r.headers.get("content-type", "")
+    print("GET /      -> %d %s, %d bytes" % (r.status_code, ctype, len(r.text)))
+    if r.status_code != 200:
+        print("FAIL: GET / returned %d" % r.status_code)
+        return 1
+    if "text/html" not in ctype:
+        print("FAIL: GET / content-type is %r, expected text/html" % ctype)
+        return 1
+    missing = [m for m in ('<html', 'id="drop-zone"', 'id="rendered-md"',
+                           "fetch('/parse'", "fetch('/progress'")
+               if m not in r.text]
+    if missing:
+        print("FAIL: UI is missing %s" % missing)
+        return 1
+
+    r = client.get("/health")
+    print("GET /health-> %d" % r.status_code)
+    if r.status_code != 200:
+        print("FAIL: /health returned %d" % r.status_code)
+        return 1
+
+    r = client.get("/progress")
+    print("GET /progress -> %d %s" % (r.status_code, r.json()))
+    if r.status_code != 200:
+        print("FAIL: /progress returned %d" % r.status_code)
+        return 1
+
     print("SMOKE TEST PASSED")
     return 0
 
