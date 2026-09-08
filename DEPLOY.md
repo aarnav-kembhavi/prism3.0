@@ -41,7 +41,7 @@ Every flag below is non-default and load-bearing:
 gcloud run deploy prism \
     --image "$IMG" \
     --region asia-south1 \
-    --memory 4Gi \
+    --memory 8Gi \
     --cpu 4 \
     --concurrency 4 \
     --timeout 900 \
@@ -54,7 +54,7 @@ gcloud run deploy prism \
 
 | Flag | Why |
 |---|---|
-| `--memory 4Gi` | Startup peaks well above 2 GiB once the fp32 graphs are materialised; 2 GiB OOMs |
+| `--memory 8Gi` | A `/upload` job measured 2687 MB peak -- `orchestrate.py` loads a second full model set alongside the resident workers -- plus 251 MB of tmpfs graphs. 4Gi fit that with ~1.2 GB spare, which is too thin a margin to hold across page types; 8Gi is headroom bought deliberately rather than tuned |
 | `--cpu 4` | The pipeline is CPU-bound end to end |
 | `--concurrency 4` | Page loads, `/health` and every `/status/{id}` poll must not queue behind a running job. Memory is protected by an `asyncio.Semaphore(1)` around the parse itself, not by this number — see Concurrency below |
 | `--timeout 900` | A dense multi-page PDF takes minutes |
@@ -105,7 +105,8 @@ port is served, and points the pipeline at those files through the per-graph
 `PRISM_FP16_<KEY>` override. Workers then open ordinary fp32 graphs.
 
 `/tmp` on Cloud Run is a tmpfs, so the materialised graphs count against the
-memory limit. That is the main reason for `--memory 4Gi`.
+memory limit. That, plus the second model set a `/upload` job spawns, is why
+`--memory` is 8Gi.
 
 slanet-plus is deliberately left fp32: the fp16 sweep measured mean similarity
 0.937 for it against 0.996+ for every other graph (see `quant/README.md`).
@@ -152,9 +153,9 @@ original's design, not a regression introduced here.
 
 `app.py` serialises its jobs with `_worker_busy`; `serve.py` serialises
 `/parse` with a semaphore. The two knew nothing about each other, so a
-`/upload` job and a `/parse` could have run two pipelines at once and exceeded
-4Gi. `serve.py` now claims `app.py`'s flag using `app.py`'s own protocol —
-lock, test, set, `_pump_queue()` on release — rather than editing `app.py`.
+`/upload` job and a `/parse` could have run two pipelines at once, doubling the
+2.7 GB high-water mark. `serve.py` now claims `app.py`'s flag using its own
+protocol -- lock, test, set, `_pump_queue()` on release -- rather than editing it.
 
 The in-build smoke test asserts `GET /` contains the original's own ids and
 routes (`#latex-pre`, `#pdf-viewer`, `#drop-zone`, `fetch('/upload'`,
@@ -227,8 +228,9 @@ compile that succeeded and produced holes.
 `--concurrency 4`, with an `asyncio.Semaphore(1)` around the parse only.
 
 A parse holds ~1.8 GB resident and the materialised fp32 graphs take another
-251 MB of tmpfs against the same limit, so two concurrent pipelines would
-exceed 4Gi. `--concurrency 1` enforces that but is the wrong tool once a UI
+251 MB of tmpfs against the same limit, and a `/upload` job peaks at 2.7 GB, so
+concurrent pipelines are still serialised on purpose rather than left to the
+memory limit. `--concurrency 1` enforces that but is the wrong tool once a UI
 exists: the page, `/health` and every `/status/{id}` poll would queue behind a
 17-second job and the app would look hung. Measured on the live service, with a
 job running: **389 ms median** across `/health` and `/progress`.
@@ -332,8 +334,9 @@ paracol, ragged2e` — `paracol` present, so the visual-fidelity two-column path
 Peak RSS during a `/upload` job, measured in the build: **2687 MB**. That is
 the deployment's real high-water mark — `orchestrate.py` loads its own full
 model set while `serve.py` still holds the persistent workers resident. Plus
-251 MB of materialised graphs in tmpfs, about 2.9 GB against 4096, so
-`--memory 4Gi` stands unchanged.
+251 MB of materialised graphs in tmpfs, about 2.9 GB. That fits inside 4Gi, but
+only with ~1.2 GB to spare, so the service is deployed at **8Gi** to give the
+second model set room without anyone tuning it per page type.
 
 ### `--no-cpu-throttling` is not optional here
 
