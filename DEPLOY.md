@@ -288,6 +288,30 @@ On disk inside the image: TinyTeX **233 MB** (129 packages), Noto Sans CJK
 (`texlive-xetex` + `texlive-latex-extra` + `texlive-lang-chinese` +
 `fonts-noto-cjk`) was estimated at 1.8-2.3 GB — roughly 15x this.
 
+### Reproducing the image size
+
+`gcloud artifacts docker images list --format='...imageSizeBytes'` returns **0**
+for these images, so the sizes above come from summing the manifest instead —
+config plus every layer, which is the compressed pull size:
+
+```bash
+PROJECT=$(gcloud config get-value project)
+REPO="asia-south1-docker.pkg.dev/$PROJECT/prism/prism"
+TAG=v7
+
+DIG=$(gcloud artifacts docker images list "$REPO" --include-tags --format=json \
+      | python -c "import sys,json,os;t=os.environ['TAG'];print(next(i['version'] for i in json.load(sys.stdin) if t in (i.get('tags') or [])))")
+
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+     -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+     "https://$(echo $REPO | cut -d/ -f1)/v2/$PROJECT/prism/prism/manifests/$DIG" \
+  | python -c "import sys,json;m=json.load(sys.stdin);print('%.1f MB in %d layers' % ((m['config']['size']+sum(l['size'] for l in m['layers']))/1e6, len(m['layers'])))"
+```
+
+v6 reports `684.2 MB in 35 layers`, v7 `820.4 MB in 44 layers`. The
+uncompressed figures quoted above (TinyTeX 233 MB, Noto 38 MB) are `du -sh`
+inside the build, printed by the Dockerfile's TeX layers.
+
 ### One page, end to end through the UI
 
 `POST /upload` → `GET /status/{id}` → `GET /pdf/{id}`, on
