@@ -21,6 +21,12 @@
 !normalization
 !deploy
 
+# The UI, unmodified from git: app.py @ d91c6b1, web/index.html @ 2e62b83.
+!app.py
+!web
+web/*
+!web/index.html
+
 # Only the harness entry point. benchmarks/compare is 390 MB of competitor
 # output with paths deep enough to break Windows MAX_PATH during upload, and
 # run_omnidocbench.py imports nothing from its own package.

@@ -80,6 +80,77 @@ RUN /usr/local/bin/python -m venv /app/venvs/rtable \
         "Levenshtein>=0.25.0" \
         "onnx>=1.16"
 
+# ── TeX, for the PDF pane ───────────────────────────────────────────────────
+# app.py compiles the pipeline's main.tex and serves the PDF at /pdf/{id}; the
+# UI's right pane is that PDF. TinyTeX rather than Debian's texlive because the
+# only route to paracol in Debian is texlive-latex-extra, ~1.6 GB for one .sty.
+# Here every package below is asked for by name and deploy/texcheck.py compiles
+# real pipeline output to prove nothing is missing.
+#
+# xz-utils is TinyTeX's, not ours: install-bin-unix.sh unpacks a .tar.xz and
+# exits with a bare "xz is required" without it.
+#
+# fonts-noto-cjk, not -extra: -extra is the rarely-used families. Only the Sans
+# family is kept -- one .ttc covers SC/TC/JP/KR -- and NotoSerifCJK is deleted,
+# since the generated preamble asks for one CJK family and gets Sans.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wget \
+        perl \
+        xz-utils \
+        fontconfig \
+        fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /usr/share/fonts/opentype/noto/NotoSerifCJK*.ttc \
+    && fc-cache -f \
+    && fc-list | grep -c "Noto Sans CJK SC" \
+    && du -sh /usr/share/fonts/opentype/noto/
+
+# install-bin-unix.sh fetches the TinyTeX-1 bundle (~54 MB compressed): the
+# binaries, tlmgr, and a small base set. TinyTeX turns off docfiles and
+# srcfiles, which is most of what a texlive install weighs.
+ENV TINYTEX_DIR=/opt
+RUN wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh \
+    && ln -s /opt/.TinyTeX/bin/*-linux /opt/texbin \
+    && /opt/texbin/tlmgr --version
+ENV PATH="${PATH}:/opt/texbin"
+
+# Exactly what pipeline/latex_builder.py's preambles load, plus the engines and
+# their dependencies. tlmgr pulls each package's own dependencies.
+#   latex/latex-bin/pdftex/xetex  the two engines app.py:85 chooses between
+#   lm                            fontspec's default font under xelatex
+#   ragged2e, everysel            once the "ms" bundle, split out in TL 2023;
+#                                 "ms" is no longer a package and errors here
+#   graphics/-def/-cfg            graphicx
+#   xecjk                         the CJK path; needs fontspec
+#
+# xecjk is installed --no-depends on purpose. Its TeX Live dependency chain is
+# collection-langcjk: it pulls the pTeX/upTeX/LuaTeX-ja engines and the wadalab
+# and uhc font sets, ~25 MB of Japanese and Korean typesetting that nothing in
+# this pipeline can reach. The small ctex-kit companions it may load are named
+# explicitly instead -- ctex among them, because xeCJK.sty:56 does
+# \RequirePackage{ctexpatch} and without it xelatex stops on a missing
+# ctexhook.sty. That was found exactly the way this is meant to work: the build
+# failed and named the file.
+RUN tlmgr install \
+        latex latex-bin latex-fonts pdftex xetex \
+        fontspec lm amsmath amsfonts geometry \
+        graphics graphics-def graphics-cfg \
+        booktabs ragged2e everysel paracol \
+        tools etoolbox xkeyval iftex unicode-data ec filehook \
+        l3kernel l3packages \
+    && tlmgr install --no-depends xecjk ctex xcjk2uni zhmetrics zhnumber xpinyin \
+    && fmtutil-sys --byfmt xelatex \
+    && fmtutil-sys --byfmt pdflatex \
+    && echo "tex packages installed: $(tlmgr info --list --only-installed 2>/dev/null | wc -l)" \
+    && du -sh /opt/.TinyTeX
+
+# app.py shells out to "xelatex" by name; this shadows /opt/texbin/xelatex to
+# supply the CJK font the generated preamble never sets. See the script.
+COPY deploy/xelatex-cjk.sh /usr/local/bin/xelatex
+RUN chmod +x /usr/local/bin/xelatex \
+    && [ "$(command -v xelatex)" = /usr/local/bin/xelatex ] \
+    && command -v pdflatex
+
 # ── application source ──────────────────────────────────────────────────────
 COPY pipeline/      /app/pipeline/
 COPY normalization/ /app/normalization/
@@ -87,6 +158,9 @@ COPY normalization/ /app/normalization/
 COPY benchmarks/__init__.py          /app/benchmarks/
 COPY benchmarks/run_omnidocbench.py  /app/benchmarks/
 COPY serve.py       /app/serve.py
+# The UI, unmodified: app.py @ d91c6b1 and web/index.html @ 2e62b83.
+COPY app.py         /app/app.py
+COPY web/index.html /app/web/index.html
 
 # ── model graphs, baked in ──────────────────────────────────────────────────
 # fp16 only: about half the bytes of the fp32 stack (126 MB vs 251 MB). The
@@ -114,11 +188,18 @@ COPY Texo/model/special_tokens_map.json /app/Texo/model/
 COPY Texo/model/config.json             /app/Texo/model/
 COPY Texo/model/generation_config.json  /app/Texo/model/
 
-# deploy/ carries the UI page served at GET /, the warm-up image (so /health
-# only goes green after the pipeline has actually produced output once), and
-# the smoke test below. It lives here rather than in web/ or test_images/ so
-# the build context can exclude those trees wholesale.
+# deploy/ carries the warm-up image (so /health only goes green after the
+# pipeline has actually produced output once), the smoke test below, and the
+# texcheck fixtures -- real pipeline main.tex output. It lives here rather than
+# in test_images/ or outputs/ so the build context can exclude those wholesale.
 COPY deploy/ /app/deploy/
+
+# app.py:25 writes uploads to <repo>/_web_uploads and orchestrate.py:213
+# hardcodes <repo>/outputs. Both are redirected to the tmpfs with symlinks
+# rather than by editing either file. serve.py creates the targets at import,
+# before app.py is imported, since a dangling symlink defeats mkdir(exist_ok).
+RUN ln -s /tmp/prism_uploads /app/_web_uploads \
+    && ln -s /tmp/prism_outputs /app/outputs
 
 # Pre-fetch SLANet-plus into the child venv now: rapid_table would otherwise
 # download it on first use, and nothing should hit the network at container
@@ -140,13 +221,22 @@ ENV PRISM_FP32_CACHE=/tmp/prism_fp32
 ENV PRISM_USE_PPDL_LAYOUT=1
 ENV PRISM_PPDL_V3=1
 
-# End-to-end smoke test, in the build: the real startup path plus one full
-# page, failing the build if no markdown comes out. Static existence checks
-# are not enough -- the first deployed revision passed every one of them and
-# still died at startup because the math worker reads its tokenizer from a
-# different directory than the ONNX graphs. The scratch cache is written
+# Compile real generated documents with the TeX installed above: a Latin page
+# whose preamble emits paracol (the visual-fidelity path app.py:64 turns on for
+# every web job) and a CJK page. Fails on a missing package, and equally on a
+# compile that "succeeds" while dropping glyphs -- a PDF with holes in it is
+# the failure mode a plain exit-code check would ship.
+RUN python /app/deploy/texcheck.py
+
+# End-to-end smoke test, in the build: the real startup path, one full page,
+# then the original UI's own route chain -- POST /upload, GET /status/{id},
+# GET /pdf/{id} -- asserting a PDF with a real page count comes back. Static
+# existence checks are not enough: the first deployed revision passed every one
+# of them and still died at startup because the math worker reads its tokenizer
+# from a different directory than the ONNX graphs. The scratch cache is written
 # outside /app and removed in the same layer so it never lands in the image.
-RUN PRISM_FP32_CACHE=/tmp/buildcheck python /app/deploy/smoke_test.py && rm -rf /tmp/buildcheck
+RUN PRISM_FP32_CACHE=/tmp/buildcheck python /app/deploy/smoke_test.py \
+    && rm -rf /tmp/buildcheck /tmp/prism_outputs /tmp/prism_uploads
 
 EXPOSE 8080
 

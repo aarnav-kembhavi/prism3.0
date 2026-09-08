@@ -1,10 +1,14 @@
 """
 PRISM HTTP service for Cloud Run.
 
-    GET  /          the PRISM web UI (single self-contained page)
-    POST /parse     PDF or image upload -> markdown
-    GET  /health    200 only once the models are loaded and a warm-up page ran
-    GET  /progress  what the server is doing right now, for the UI
+    GET  /          the PRISM web UI            } app.py, verbatim
+    POST /upload    image -> job id                }   (web/index.html @ 2e62b83,
+    GET  /status/{id}  job state                   }    app.py @ d91c6b1); this
+    GET  /pdf/{id}     compiled PDF                }    module registers none of
+    GET  /latex/{id}   main.tex                    }    them itself
+    POST /parse     PDF or image upload -> markdown   } this module
+    GET  /health    200 only once models are loaded   }
+    GET  /progress  what the server is doing now      }
 
 Design notes that are not obvious:
 
@@ -32,14 +36,12 @@ Design notes that are not obvious:
 import asyncio
 import io
 import os
-import uuid
 import sys
 import tempfile
 import threading
 import time
 import shutil
 import logging
-from collections import OrderedDict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -80,6 +82,17 @@ def _configure_env() -> None:
     os.environ.setdefault("PRISM_PPDL_V3", "1")
     os.environ.setdefault("PRISM_SINGLE_WORKER", "1")
 
+    # In the image /app/_web_uploads and /app/outputs are symlinks into the
+    # tmpfs, because app.py:25 and orchestrate.py:213 hardcode those two paths
+    # and neither file is deployment code. A symlink whose target does not
+    # exist is not a directory, so app.py's UPLOAD_DIR.mkdir(exist_ok=True)
+    # would raise at import -- create the targets first. Only in the image:
+    # a local checkout has real directories and no /tmp.
+    if os.name == "posix" and str(ROOT) == "/app":
+        for link in (ROOT / "_web_uploads", ROOT / "outputs"):
+            if link.is_symlink():
+                os.makedirs(os.readlink(str(link)), exist_ok=True)
+
 
 _configure_env()
 
@@ -106,34 +119,6 @@ _parse_sem = asyncio.Semaphore(1)
 _progress: dict = {"state": "idle", "page": 0, "pages": 0,
                    "started": None, "waiting": 0}
 _progress_lock = threading.Lock()
-
-
-# Rasterised source pages, kept so the UI can show the page beside its output.
-#
-# The original UI put the input page next to the result (web/index.html at
-# a7a367b, <img id="input-preview">). For an image upload the browser already
-# holds the file and can render it locally, but a PDF has to be rasterised, and
-# only the server can do that -- so the pages it already produced are kept for
-# a short while and served back rather than thrown away.
-#
-# /tmp is a tmpfs on Cloud Run, so this is RAM: only the most recent documents
-# are retained, and the oldest is deleted as soon as a new one arrives.
-_PAGE_CACHE_DOCS = 2
-_page_cache: "OrderedDict[str, dict]" = OrderedDict()
-_page_lock = threading.Lock()
-
-
-def _cache_pages(paths: list[str]) -> str:
-    """Register a document's page images and return its token."""
-    token = uuid.uuid4().hex[:16]
-    with _page_lock:
-        _page_cache[token] = {"paths": list(paths)}
-        while len(_page_cache) > _PAGE_CACHE_DOCS:
-            _, old = _page_cache.popitem(last=False)
-            d = Path(old["paths"][0]).parent if old["paths"] else None
-            if d:
-                shutil.rmtree(d, ignore_errors=True)
-    return token
 
 
 def _set_progress(**kw) -> None:
@@ -357,10 +342,58 @@ def rasterize_pdf(data: bytes, dpi: int = 200) -> list[str]:
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 
 from fastapi import FastAPI, File, HTTPException, UploadFile   # noqa: E402
-from fastapi.responses import (FileResponse, HTMLResponse,  # noqa: E402
-                               JSONResponse, PlainTextResponse)
+from fastapi.responses import JSONResponse, PlainTextResponse  # noqa: E402
 
 app = FastAPI(title="PRISM", docs_url=None, redoc_url=None)
+
+# The UI and its routes come from app.py as committed at d91c6b1 (2026-07-14),
+# serving web/index.html as committed at 2e62b83 (2026-06-29). Neither file is
+# modified: app.py is imported and its router spliced in whole, so GET /,
+# /upload, /status/{id}, /pdf/{id} and /latex/{id} are the originals. It is
+# included FIRST so its GET / wins -- this module registers no "/" of its own.
+#
+# app.py runs the pipeline as an `orchestrate.py` subprocess per job, which
+# inherits os.environ and therefore the PRISM_FP16_<KEY> overrides that
+# materialize_fp32_graphs() sets. That is the whole reason it works here
+# unchanged.
+import app as legacy                                              # noqa: E402
+
+# Only app.py's OWN routes. legacy.app.router also carries the /docs,
+# /redoc and /openapi.json routes FastAPI attaches to every app, and this
+# service disables those deliberately (docs_url=None above).
+for _route in legacy.app.router.routes:
+    if getattr(getattr(_route, "endpoint", None), "__module__", None) == "app":
+        app.router.routes.append(_route)
+
+
+def _claim_legacy_worker():
+    """
+    Hold app.py's single-worker flag for the duration of a /parse.
+
+    app.py serialises its own jobs with `_worker_busy`, and this module
+    serialises /parse with a semaphore, but the two knew nothing about each
+    other: a /upload job and a /parse could run two pipelines at once and blow
+    through 4Gi. This claims app.py's flag using app.py's own protocol -- lock,
+    test, set, and _pump_queue() on release -- rather than editing app.py.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _guard():
+        while True:
+            with legacy._lock:
+                if not legacy._worker_busy:
+                    legacy._worker_busy = True
+                    break
+            time.sleep(0.2)
+        try:
+            yield
+        finally:
+            with legacy._lock:
+                legacy._worker_busy = False
+            legacy._pump_queue()
+
+    return _guard()
 
 
 @app.on_event("startup")
@@ -411,48 +444,11 @@ def _shutdown() -> None:
             pass
 
 
-def _ui_html() -> str:
-    """The single-file UI. deploy/ui.html in the image, web/ in a checkout."""
-    for cand in (ROOT / "deploy" / "ui.html", ROOT / "web" / "index.html"):
-        if cand.exists():
-            return cand.read_text(encoding="utf-8")
-    raise HTTPException(500, "UI asset missing")
-
-
-@app.get("/", response_class=HTMLResponse)
-def index():
-    # Deliberately NOT gated on _ready: if startup failed, the page should
-    # load and say so rather than the browser showing a bare 503.
-    return HTMLResponse(_ui_html())
-
-
 @app.get("/health")
 def health():
     if not _ready:
         raise HTTPException(503, _ready_error or "models still loading")
     return JSONResponse({"status": "ok", **_startup_stats})
-
-
-@app.get("/page/{token}/{index}")
-def page_image(token: str, index: int):
-    """
-    One rasterised source page, so the UI can show it beside its output.
-
-    Only needed for PDFs -- for an image upload the browser renders the file it
-    already has. Without this the left pane would have nothing to show for a
-    PDF and the two-pane layout would collapse back to one.
-    """
-    with _page_lock:
-        doc = _page_cache.get(token)
-    if not doc or not (0 <= index < len(doc["paths"])):
-        raise HTTPException(404, "No such page.")
-    p = Path(doc["paths"][index])
-    if not p.exists():
-        raise HTTPException(404, "Page expired.")
-    media = "image/png" if p.suffix.lower() == ".png" else "application/octet-stream"
-    if p.suffix.lower() in (".jpg", ".jpeg"):
-        media = "image/jpeg"
-    return FileResponse(str(p), media_type=media)
 
 
 @app.get("/progress")
@@ -525,7 +521,11 @@ async def parse(file: UploadFile = File(...)):
 
                 # The pipeline is synchronous and CPU-bound; run it off the
                 # event loop so /progress and /health keep responding.
-                pages = await asyncio.to_thread(run_pipeline, tmp_paths, _on_page)
+                def _guarded():
+                    with _claim_legacy_worker():
+                        return run_pipeline(tmp_paths, _on_page)
+
+                pages = await asyncio.to_thread(_guarded)
 
         wall = time.perf_counter() - t0
         log.info("parse ok | file=%s pages=%d bytes=%d wall=%.2fs "
@@ -536,17 +536,7 @@ async def parse(file: UploadFile = File(...)):
         body = "\n\n".join(
             (f"<!-- page {i + 1} -->\n{md}" if len(pages) > 1 else md)
             for i, md in enumerate(pages))
-        # Keep the source pages and hand back a token for them. The BODY is
-        # unchanged -- still just markdown -- so the /parse contract holds;
-        # the token rides in headers, which the UI reads to fill its left pane.
-        token = _cache_pages(tmp_paths)
-        tmp_dir = None                    # ownership passes to the page cache
-        return PlainTextResponse(
-            body, media_type="text/markdown; charset=utf-8",
-            headers={"X-Prism-Doc": token,
-                     "X-Prism-Pages": str(len(tmp_paths)),
-                     "Access-Control-Expose-Headers":
-                         "X-Prism-Doc, X-Prism-Pages"})
+        return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
     except HTTPException:
         raise
     except Exception as exc:

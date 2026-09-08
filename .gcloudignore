@@ -1,8 +1,5 @@
-# gcloud uses THIS file, not .dockerignore or .gitignore, to build the upload
-# context. It must mirror .dockerignore -- note the fp16 graphs are gitignored,
-# so the default .gitignore-derived behaviour would omit exactly what the image
-# needs, and the build would fail at COPY.
 .git
+.git/**
 # Keep the build context small: the working tree is tens of GB (preds 16 GB,
 # .git 11.7 GB, venvs 10 GB, data 5 GB) and the image needs about 130 MB of it.
 #
@@ -25,6 +22,12 @@
 !pipeline
 !normalization
 !deploy
+
+# The UI, unmodified from git: app.py @ d91c6b1, web/index.html @ 2e62b83.
+!app.py
+!web
+web/*
+!web/index.html
 
 # Only the harness entry point. benchmarks/compare is 390 MB of competitor
 # output with paths deep enough to break Windows MAX_PATH during upload, and
