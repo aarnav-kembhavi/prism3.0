@@ -24,10 +24,14 @@ gcloud artifacts repositories create prism \
 
 ```bash
 PROJECT=$(gcloud config get-value project)
-IMG="asia-south1-docker.pkg.dev/$PROJECT/prism/prism:v1"
+IMG="asia-south1-docker.pkg.dev/$PROJECT/prism/prism:v7"   # currently deployed
 
-gcloud builds submit --tag "$IMG" --timeout=2400s --region=asia-south1
+gcloud builds submit --tag "$IMG" --timeout=3600s --region=asia-south1
 ```
+
+The build runs `deploy/texcheck.py` and then `deploy/smoke_test.py`, so a TeX
+install that cannot compile, or a UI that is not the original page, fails the
+build rather than the deploy. Expect about 7 minutes.
 
 ## Deploy
 
@@ -52,11 +56,12 @@ gcloud run deploy prism \
 |---|---|
 | `--memory 4Gi` | Startup peaks well above 2 GiB once the fp32 graphs are materialised; 2 GiB OOMs |
 | `--cpu 4` | The pipeline is CPU-bound end to end |
-| `--concurrency 4` | Page loads, `/health` and progress polls must not queue behind a 17 s parse. Memory is protected by an `asyncio.Semaphore(1)` around the parse itself, not by this number — see Concurrency below |
+| `--concurrency 4` | Page loads, `/health` and every `/status/{id}` poll must not queue behind a running job. Memory is protected by an `asyncio.Semaphore(1)` around the parse itself, not by this number — see Concurrency below |
 | `--timeout 900` | A dense multi-page PDF takes minutes |
 | `--min-instances 0` | Scale to zero; cold start is the trade-off |
 | `--max-instances 1` | **Not a cost knob.** `app.py`'s job registry is a per-instance dict; with more than one instance a `/status/{id}` poll can land on an instance that never saw the upload and the job is lost — see Concurrency below |
 | `--cpu-boost` | Model load is CPU-bound, and it all happens before the first request |
+| `--no-cpu-throttling` | **Load-bearing, 18x.** `app.py` hands each job to a detached background thread and returns immediately, so with Cloud Run's default (CPU only during a request) the instance is throttled for the entire pipeline run: the same page took 435 s throttled and 23.9 s unthrottled. Costs CPU for the instance's whole lifetime rather than per request — see Measured |
 | `--allow-unauthenticated` | Public endpoint |
 | `--session-affinity` | Best-effort help for the same problem; not sufficient alone, which is why max-instances is pinned |
 
@@ -261,45 +266,70 @@ message.
 
 ## Measured
 
-Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00007-4vm`)
+Service: <https://prism-379257840013.asia-south1.run.app> (revision `prism-00009-qsn`)
+
+| | v6 (no TeX) | **v7** |
+|---|---|---|
+| Image size, compressed | 684.2 MB | **820.4 MB** |
+| TeX cost | — | **+136.2 MB** |
+| Cold start (container ready) | 26.8 s | **23.6 s** — 2.5 s back-conversion + 21.1 s warm-up |
+| Cold `GET /` (first hit after scale-to-zero) | 27.9 s | **25.7 s** |
+| Warm `GET /` | 0.29 s | **0.33 s** |
+| Startup peak RSS | 1575-1720 MB | **1530-1590 MB** |
+
+**The TeX did not cost cold start.** 820 MB pulls no slower than 684 MB here,
+and startup does the same work either way — nothing TeX-related runs before the
+port is served. Cold start is measured by idling 18 minutes to force scale to
+zero, then timing the first request; the logs confirm a fresh container
+(`READY in 23.60s`) rather than a reused instance.
+
+On disk inside the image: TinyTeX **233 MB** (129 packages), Noto Sans CJK
+**38 MB** after deleting the Serif family. For comparison, the Debian route
+(`texlive-xetex` + `texlive-latex-extra` + `texlive-lang-chinese` +
+`fonts-noto-cjk`) was estimated at 1.8-2.3 GB — roughly 15x this.
+
+### One page, end to end through the UI
+
+`POST /upload` → `GET /status/{id}` → `GET /pdf/{id}`, on
+`ieee_p4_twocol_figure.png` (two-column, so the preamble emits `paracol`):
 
 | | |
 |---|---|
-| Image size | **684.2 MB** |
-| Cold start (container ready) | **26.8 s** — 3.7 s back-conversion + 23.1 s warm-up |
-| Cold `GET /` (first hit after scale-to-zero) | **27.9 s** |
-| Warm `GET /` | **0.29 s** |
-| Warm parse, per page | **14.0 s** median (13.92 / 14.09) |
-| Parse right after a cold page load | **13.8 s** — already warm |
-| `/health` + `/progress` while a parse runs | **389 ms** median |
-| Peak RSS during a parse | **~2.0 GB** (1965-1998 MB) |
-| Startup peak RSS | 1575-1720 MB |
-| 2-page PDF (API-only revision) | 107.3 s (~53.7 s/page; dense maths) |
+| Pipeline (`orchestrate.py` subprocess) | **20.9 s** |
+| LaTeX → PDF (`pdflatex`) | **2.3 s** |
+| Total, upload to `done` | **23.9 s** |
+| PDF | 312 207 bytes, 1 page, 3448 text chars |
+| `main.tex` | 4043 chars |
 
-**The UI absorbs the cold start.** On the API-only revision the first request
-after scale-to-zero cost 41.8 s (25.6 s start + a 14 s page). With the UI the
-page load pays the 27.9 s, and by the time anyone has picked a file the
-instance is warm, so the parse itself is 13.8 s. Cold start is now paid where a
-spinner is expected rather than in the middle of a conversion.
+Preamble actually served: `amsmath, booktabs, geometry, graphicx, inputenc,
+paracol, ragged2e` — `paracol` present, so the visual-fidelity two-column path
+(`PRISM_VISUAL_FIDELITY=1`, set by `app.py:64` for every web job) compiles.
 
-Cold start is measured by idling 17 minutes to force scale to zero, then
-timing the first request; the logs confirm a fresh container
-(`READY in 25.88s`) rather than a reused instance.
+Peak RSS during a `/upload` job, measured in the build: **2687 MB**. That is
+the deployment's real high-water mark — `orchestrate.py` loads its own full
+model set while `serve.py` still holds the persistent workers resident. Plus
+251 MB of materialised graphs in tmpfs, about 2.9 GB against 4096, so
+`--memory 4Gi` stands unchanged.
 
-Output parity against the same files run locally on Windows, on the API-only
-revision:
+### `--no-cpu-throttling` is not optional here
 
-| file | local | Cloud Run | identical |
-|---|---|---|---|
-| `ieee_p4_twocol_figure.png` | 3407 chars | 3407 chars | **byte-for-byte** |
-| 2-page PDF | 13891 chars | 13891 chars | **byte-for-byte** |
+The same page took **435 s** on the first deployment and **23.9 s** after
+adding `--no-cpu-throttling`: **18x**. The PDF was byte-identical both times
+(312 207 bytes), so this is purely CPU starvation, not different work.
 
-`deploy/client_check.py` runs these checks:
+Cloud Run's default allocates CPU only while a request is in flight. `app.py`
+returns the `job_id` immediately and does the work in a **detached background
+thread**, so from the platform's side nothing is in flight for the whole
+pipeline run and the instance drops to a sliver of CPU. The 2 s `/status` polls
+were the only thing giving it any CPU at all.
 
-```bash
-python deploy/client_check.py "$URL" compare page.png local.md
-python deploy/client_check.py "$URL" parse   doc.pdf --out out.md
-```
+This is not tunable from the app layer without moving `app.py`'s worker into
+the request — which is the file being kept verbatim. The v6 API did not have
+the problem because `/parse` does its work *inside* the request
+(`await asyncio.to_thread(...)`), so CPU stayed allocated throughout.
+
+The cost: CPU is billed for an instance's whole lifetime rather than per
+request. `--min-instances 0` still applies, so it scales to zero when idle.
 
 ## Notes
 
